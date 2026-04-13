@@ -1,7 +1,27 @@
 import 'package:flutter/material.dart';
+import '../widgets/calendar_navigation_bar.dart';
 
-class DailyCalendarScreen extends StatelessWidget {
+class DailyCalendarScreen extends StatefulWidget {
   const DailyCalendarScreen({super.key});
+
+  @override
+  State<DailyCalendarScreen> createState() => _DailyCalendarScreenState();
+}
+
+class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
+  DateTime _focusedDate = DateTime.now();
+
+  void _goToPreviousDay() {
+    setState(() {
+      _focusedDate = _focusedDate.subtract(const Duration(days: 1));
+    });
+  }
+
+  void _goToNextDay() {
+    setState(() {
+      _focusedDate = _focusedDate.add(const Duration(days: 1));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +41,13 @@ class DailyCalendarScreen extends StatelessWidget {
               const SizedBox(height: 16),
               const _ViewSwitcher(),
               const SizedBox(height: 24),
-              const _DateNavigationRow(),
+              CalendarNavigationBar(
+                focusedDate: _focusedDate,
+                viewType: CalendarViewType.day,
+                onPrevious: _goToPreviousDay,
+                onNext: _goToNextDay,
+                onFilterTap: () {},
+              ),
               const SizedBox(height: 20),
               Expanded(
                 child: Container(
@@ -96,35 +122,6 @@ class _ViewSwitcher extends StatelessWidget {
           _SegmentButton(label: 'Måned'),
         ],
       ),
-    );
-  }
-}
-
-class _DateNavigationRow extends StatelessWidget {
-  const _DateNavigationRow();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: const [
-        Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black),
-        Expanded(
-          child: Center(
-            child: Text(
-              'Onsdag d. 28. maj',
-              style: TextStyle(
-                fontFamily: 'Italiana',
-                fontSize: 32,
-                fontWeight: FontWeight.w400,
-                color: Colors.black,
-              ),
-            ),
-          ),
-        ),
-        Icon(Icons.filter_alt_outlined, size: 24, color: Colors.black),
-        SizedBox(width: 8),
-        Icon(Icons.arrow_forward_ios, size: 20, color: Colors.black),
-      ],
     );
   }
 }
