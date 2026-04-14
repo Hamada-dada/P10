@@ -1,26 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:overblik/screens/daily_calendar_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'core/supabase_config.dart';
 import 'core/theme/app_theme.dart';
 import 'screens/create_activity_screen.dart';
+import 'screens/daily_calendar_screen.dart';
 import 'screens/family_screen.dart';
 import 'screens/monthly_calendar_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/rewards_screen.dart';
 import 'screens/weekly_calendar_screen.dart';
-import 'core/supabase_config.dart';
-import 'core/supabase_config.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 
 void main() async {
-  runApp(const OverblikApp());
-WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
 
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
   );
-  runApp(const MyApp());
+
+  runApp(const OverblikApp());
 }
 
 class OverblikApp extends StatelessWidget {
