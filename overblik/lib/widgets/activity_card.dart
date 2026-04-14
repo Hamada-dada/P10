@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
+import '../models/activity.dart';
 
 class ActivityCard extends StatelessWidget {
-  final String startTime;
-  final String endTime;
-  final String title;
-  final String emoji;
-  final bool isChanged;
+  final Activity activity;
   final VoidCallback? onTap;
 
   const ActivityCard({
     super.key,
-    required this.startTime,
-    required this.endTime,
-    required this.title,
-    required this.emoji,
-    this.isChanged = false,
+    required this.activity,
     this.onTap,
   });
+
+  String _formatTime(DateTime dateTime) {
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +27,7 @@ class ActivityCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           border: Border.all(
-            color: isChanged ? Colors.red : const Color(0xFFA2E5AD),
+            color: activity.isImportant ? Colors.red : const Color(0xFFA2E5AD),
             width: 2,
           ),
         ),
@@ -38,7 +37,7 @@ class ActivityCard extends StatelessWidget {
             SizedBox(
               width: 64,
               child: Text(
-                '$startTime\n$endTime',
+                '${_formatTime(activity.startTime)}\n${_formatTime(activity.endTime)}',
                 style: const TextStyle(
                   fontFamily: 'Italiana',
                   fontSize: 20,
@@ -50,7 +49,7 @@ class ActivityCard extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: Text(
-                '$title $emoji',
+                '${activity.title} ${activity.emoji}',
                 style: const TextStyle(
                   fontFamily: 'Italiana',
                   fontSize: 24,

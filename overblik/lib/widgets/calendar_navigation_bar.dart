@@ -11,6 +11,7 @@ class CalendarNavigationBar extends StatelessWidget {
   final CalendarViewType viewType;
   final VoidCallback? onPrevious;
   final VoidCallback? onNext;
+  final VoidCallback? onToday;
   final VoidCallback? onFilterTap;
   final bool showFilter;
 
@@ -20,6 +21,7 @@ class CalendarNavigationBar extends StatelessWidget {
     required this.viewType,
     this.onPrevious,
     this.onNext,
+    this.onToday,
     this.onFilterTap,
     this.showFilter = true,
   });
@@ -76,35 +78,53 @@ class CalendarNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        IconButton(
-          onPressed: onPrevious,
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black),
+        Row(
+          children: [
+            IconButton(
+              onPressed: onPrevious,
+              icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black),
+            ),
+            Expanded(
+              child: Center(
+                child: Text(
+                  _buildTitle(),
+                  style: const TextStyle(
+                    fontFamily: 'Italiana',
+                    fontSize: 32,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+            ),
+            if (showFilter)
+              IconButton(
+                onPressed: onFilterTap,
+                icon: const Icon(Icons.filter_alt_outlined, size: 24, color: Colors.black),
+              )
+            else
+              const SizedBox(width: 48),
+            IconButton(
+              onPressed: onNext,
+              icon: const Icon(Icons.arrow_forward_ios, size: 20, color: Colors.black),
+            ),
+          ],
         ),
-        Expanded(
-          child: Center(
-            child: Text(
-              _buildTitle(),
-              style: const TextStyle(
-                fontFamily: 'Italiana',
-                fontSize: 32,
-                fontWeight: FontWeight.w400,
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.center,
+          child: TextButton(
+            onPressed: onToday,
+            child: const Text(
+              'I dag',
+              style: TextStyle(
                 color: Colors.black,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-        ),
-        if (showFilter)
-          IconButton(
-            onPressed: onFilterTap,
-            icon: const Icon(Icons.filter_alt_outlined, size: 24, color: Colors.black),
-          )
-        else
-          const SizedBox(width: 48),
-        IconButton(
-          onPressed: onNext,
-          icon: const Icon(Icons.arrow_forward_ios, size: 20, color: Colors.black),
         ),
       ],
     );
