@@ -32,10 +32,10 @@ class ActivityCard extends StatelessWidget {
           ),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
-              width: 64,
+              width: 72,
               child: Text(
                 '${_formatTime(activity.startTime)}\n${_formatTime(activity.endTime)}',
                 style: const TextStyle(

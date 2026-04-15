@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/activity.dart';
+import '../services/activity_service.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/calendar_navigation_bar.dart';
+import '../widgets/view_switcher.dart';
+import 'activity_detail_screen.dart';
 
 class DailyCalendarScreen extends StatefulWidget {
   const DailyCalendarScreen({super.key});
@@ -11,113 +14,11 @@ class DailyCalendarScreen extends StatefulWidget {
 }
 
 class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
+  final ActivityService _activityService = const ActivityService();
   DateTime _focusedDate = DateTime.now();
 
-  late final List<Activity> _activities = [
-    Activity(
-      id: '1',
-      title: 'Morgenmad',
-      emoji: '🍳',
-      startTime: DateTime(
-        _focusedDate.year,
-        _focusedDate.month,
-        _focusedDate.day,
-        7,
-        0,
-      ),
-      endTime: DateTime(
-        _focusedDate.year,
-        _focusedDate.month,
-        _focusedDate.day,
-        7,
-        15,
-      ),
-    ),
-    Activity(
-      id: '2',
-      title: 'Skole',
-      emoji: '🏫',
-      startTime: DateTime(
-        _focusedDate.year,
-        _focusedDate.month,
-        _focusedDate.day,
-        8,
-        0,
-      ),
-      endTime: DateTime(
-        _focusedDate.year,
-        _focusedDate.month,
-        _focusedDate.day,
-        15,
-        30,
-      ),
-    ),
-    Activity(
-      id: '3',
-      title: 'Aftale med Peter',
-      emoji: '🎮',
-      startTime: DateTime(
-        _focusedDate.year,
-        _focusedDate.month,
-        _focusedDate.day,
-        16,
-        0,
-      ),
-      endTime: DateTime(
-        _focusedDate.year,
-        _focusedDate.month,
-        _focusedDate.day,
-        17,
-        30,
-      ),
-      isImportant: true,
-    ),
-    Activity(
-      id: '4',
-      title: 'Takeout',
-      emoji: '😋',
-      startTime: DateTime(
-        _focusedDate.year,
-        _focusedDate.month,
-        _focusedDate.day,
-        18,
-        0,
-      ),
-      endTime: DateTime(
-        _focusedDate.year,
-        _focusedDate.month,
-        _focusedDate.day,
-        18,
-        45,
-      ),
-    ),
-    Activity(
-      id: '5',
-      title: 'Lektier',
-      emoji: '📘',
-      startTime: DateTime(
-        _focusedDate.year,
-        _focusedDate.month,
-        _focusedDate.day,
-        20,
-        0,
-      ),
-      endTime: DateTime(
-        _focusedDate.year,
-        _focusedDate.month,
-        _focusedDate.day,
-        21,
-        0,
-      ),
-    ),
-  ];
-
   List<Activity> get _activitiesForFocusedDate {
-    return _activities.where((activity) {
-      return activity.startTime.year == _focusedDate.year &&
-          activity.startTime.month == _focusedDate.month &&
-          activity.startTime.day == _focusedDate.day;
-    }).toList();
+    return _activityService.getActivitiesForDate(_focusedDate);
   }
 
   void _goToPreviousDay() {
@@ -138,10 +39,13 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
     });
   }
 
-  String _formatTime(DateTime dateTime) {
-    final hour = dateTime.hour.toString().padLeft(2, '0');
-    final minute = dateTime.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
+  void _openActivityDetail(Activity activity) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ActivityDetailScreen(activity: activity),
+      ),
+    );
   }
 
   @override
@@ -162,7 +66,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
               const SizedBox(height: 16),
               const _ScreenTitle(),
               const SizedBox(height: 16),
-              const _ViewSwitcher(),
+              const ViewSwitcher(selectedView: CalendarScreenType.day),
               const SizedBox(height: 24),
               CalendarNavigationBar(
                 focusedDate: _focusedDate,
@@ -175,20 +79,16 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
               const SizedBox(height: 20),
               Expanded(
                 child: Container(
-                  color: Colors.white,
                   padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
+                  ),
                   child: activities.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'Ingen aktiviteter',
-                            style: TextStyle(
-                              fontFamily: 'Italiana',
-                              fontSize: 24,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.black,
-                            ),
-                          ),
-                        )
+                      ? const _EmptyActivitiesView()
                       : ListView.builder(
                           itemCount: activities.length,
                           itemBuilder: (context, index) {
@@ -196,7 +96,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
 
                             return ActivityCard(
                               activity: activity,
-                              onTap: () {},
+                              onTap: () => _openActivityDetail(activity),
                             );
                           },
                         ),
@@ -217,7 +117,14 @@ class _TopHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(Icons.arrow_back, size: 32, color: Colors.black),
+        IconButton(
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(
+            Icons.arrow_back,
+            size: 32,
+            color: Colors.black,
+          ),
+        ),
         const Spacer(),
         CircleAvatar(
           radius: 24,
@@ -239,10 +146,10 @@ class _ScreenTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Center(
       child: Text(
-        'Kalender',
+        'Daglige Kalender',
         style: TextStyle(
           fontFamily: 'Italiana',
-          fontSize: 48,
+          fontSize: 42,
           fontWeight: FontWeight.w400,
           color: Colors.black,
         ),
@@ -251,56 +158,19 @@ class _ScreenTitle extends StatelessWidget {
   }
 }
 
-class _ViewSwitcher extends StatelessWidget {
-  const _ViewSwitcher();
+class _EmptyActivitiesView extends StatelessWidget {
+  const _EmptyActivitiesView();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color.fromRGBO(118, 118, 128, 0.12),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Row(
-        children: const [
-          _SegmentButton(label: 'Dag', selected: true),
-          _SegmentButton(label: 'Uge'),
-          _SegmentButton(label: 'Måned'),
-        ],
-      ),
-    );
-  }
-}
-
-class _SegmentButton extends StatelessWidget {
-  final String label;
-  final bool selected;
-
-  const _SegmentButton({
-    required this.label,
-    this.selected = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        decoration: selected
-            ? BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              )
-            : null,
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 14,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-          ),
+    return const Center(
+      child: Text(
+        'Ingen aktiviteter',
+        style: TextStyle(
+          fontFamily: 'Italiana',
+          fontSize: 24,
+          fontWeight: FontWeight.w400,
+          color: Colors.black,
         ),
       ),
     );

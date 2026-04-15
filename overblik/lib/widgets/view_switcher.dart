@@ -1,21 +1,39 @@
 import 'package:flutter/material.dart';
 
-enum CalendarView { day, week, month }
+enum CalendarScreenType {
+  day,
+  week,
+  month,
+}
 
 class ViewSwitcher extends StatelessWidget {
-  final CalendarView selectedView;
-  final ValueChanged<CalendarView>? onChanged;
+  final CalendarScreenType selectedView;
 
   const ViewSwitcher({
     super.key,
     required this.selectedView,
-    this.onChanged,
   });
+
+  void _handleTap(BuildContext context, CalendarScreenType targetView) {
+    if (targetView == selectedView) return;
+
+    switch (targetView) {
+      case CalendarScreenType.day:
+        Navigator.pushReplacementNamed(context, '/');
+        break;
+      case CalendarScreenType.week:
+        Navigator.pushReplacementNamed(context, '/weekly');
+        break;
+      case CalendarScreenType.month:
+        Navigator.pushReplacementNamed(context, '/monthly');
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 40,
+      height: 44,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: const Color.fromRGBO(118, 118, 128, 0.12),
@@ -23,20 +41,20 @@ class ViewSwitcher extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _SegmentButton(
+          _Segment(
             label: 'Dag',
-            selected: selectedView == CalendarView.day,
-            onTap: () => onChanged?.call(CalendarView.day),
+            isSelected: selectedView == CalendarScreenType.day,
+            onTap: () => _handleTap(context, CalendarScreenType.day),
           ),
-          _SegmentButton(
+          _Segment(
             label: 'Uge',
-            selected: selectedView == CalendarView.week,
-            onTap: () => onChanged?.call(CalendarView.week),
+            isSelected: selectedView == CalendarScreenType.week,
+            onTap: () => _handleTap(context, CalendarScreenType.week),
           ),
-          _SegmentButton(
+          _Segment(
             label: 'Måned',
-            selected: selectedView == CalendarView.month,
-            onTap: () => onChanged?.call(CalendarView.month),
+            isSelected: selectedView == CalendarScreenType.month,
+            onTap: () => _handleTap(context, CalendarScreenType.month),
           ),
         ],
       ),
@@ -44,36 +62,41 @@ class ViewSwitcher extends StatelessWidget {
   }
 }
 
-class _SegmentButton extends StatelessWidget {
+class _Segment extends StatelessWidget {
   final String label;
-  final bool selected;
-  final VoidCallback? onTap;
+  final bool isSelected;
+  final VoidCallback onTap;
 
-  const _SegmentButton({
+  const _Segment({
     required this.label,
-    required this.selected,
-    this.onTap,
+    required this.isSelected,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          decoration: selected
-              ? BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                )
-              : null,
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: Colors.black,
-              fontSize: 14,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Container(
+            height: double.infinity,
+            decoration: isSelected
+                ? BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  )
+                : null,
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              ),
             ),
           ),
         ),

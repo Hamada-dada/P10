@@ -6,6 +6,8 @@ class Activity {
   final DateTime endTime;
   final bool isCompleted;
   final bool isImportant;
+  final String description;
+  final List<String> participants;
 
   const Activity({
     required this.id,
@@ -15,5 +17,7 @@ class Activity {
     required this.endTime,
     this.isCompleted = false,
     this.isImportant = false,
+    this.description = '',
+    this.participants = const [],
   });
 }
