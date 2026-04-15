@@ -7,15 +7,26 @@ import '../widgets/view_switcher.dart';
 import 'activity_detail_screen.dart';
 
 class DailyCalendarScreen extends StatefulWidget {
-  const DailyCalendarScreen({super.key});
+  final DateTime? initialDate;
+
+  const DailyCalendarScreen({
+    super.key,
+    this.initialDate,
+  });
 
   @override
   State<DailyCalendarScreen> createState() => _DailyCalendarScreenState();
 }
 
 class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
-  final ActivityService _activityService = const ActivityService();
-  DateTime _focusedDate = DateTime.now();
+  final ActivityService _activityService = ActivityService();
+  late DateTime _focusedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusedDate = widget.initialDate ?? DateTime.now();
+  }
 
   List<Activity> get _activitiesForFocusedDate {
     return _activityService.getActivitiesForDate(_focusedDate);
@@ -62,7 +73,10 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
             children: [
               const _TopHeader(),
               const SizedBox(height: 12),
-              Container(height: 6, color: Colors.white),
+              Container(
+                height: 6,
+                color: Colors.white,
+              ),
               const SizedBox(height: 16),
               const _ScreenTitle(),
               const SizedBox(height: 16),
@@ -146,7 +160,7 @@ class _ScreenTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Center(
       child: Text(
-        'Daglige Kalender',
+        'Daglig Kalender',
         style: TextStyle(
           fontFamily: 'Italiana',
           fontSize: 42,

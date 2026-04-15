@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../models/activity.dart';
+import '../screens/daily_calendar_screen.dart';
+import '../services/activity_service.dart';
 import '../widgets/calendar_navigation_bar.dart';
 import '../widgets/view_switcher.dart';
 
@@ -11,24 +14,17 @@ class MonthlyCalendarScreen extends StatefulWidget {
 
 class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   DateTime _focusedDate = DateTime.now();
+  final ActivityService _activityService = ActivityService();
 
   void _goToPreviousMonth() {
     setState(() {
-      _focusedDate = DateTime(
-        _focusedDate.year,
-        _focusedDate.month - 1,
-        _focusedDate.day,
-      );
+      _focusedDate = DateTime(_focusedDate.year, _focusedDate.month - 1, 1);
     });
   }
 
   void _goToNextMonth() {
     setState(() {
-      _focusedDate = DateTime(
-        _focusedDate.year,
-        _focusedDate.month + 1,
-        _focusedDate.day,
-      );
+      _focusedDate = DateTime(_focusedDate.year, _focusedDate.month + 1, 1);
     });
   }
 
@@ -38,8 +34,42 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     });
   }
 
+  void _openDay(DateTime selectedDate) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DailyCalendarScreen(initialDate: selectedDate),
+      ),
+    );
+  }
+
+  List<DateTime> _buildMonthGrid(DateTime monthDate) {
+    final firstDayOfMonth = DateTime(monthDate.year, monthDate.month, 1);
+    final lastDayOfMonth = DateTime(monthDate.year, monthDate.month + 1, 0);
+
+    final startOffset = firstDayOfMonth.weekday - 1;
+    final gridStartDate = firstDayOfMonth.subtract(Duration(days: startOffset));
+
+    final endOffset = 7 - lastDayOfMonth.weekday;
+    final gridEndDate = lastDayOfMonth.add(Duration(days: endOffset));
+
+    final totalDays = gridEndDate.difference(gridStartDate).inDays + 1;
+
+    return List.generate(
+      totalDays,
+      (index) => gridStartDate.add(Duration(days: index)),
+    );
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final monthGridDates = _buildMonthGrid(_focusedDate);
+    final today = DateTime.now();
+
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
       body: SafeArea(
@@ -50,10 +80,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
             children: [
               const _TopHeader(),
               const SizedBox(height: 12),
-              Container(
-                height: 6,
-                color: Colors.white,
-              ),
+              Container(height: 6, color: Colors.white),
               const SizedBox(height: 16),
               const _ScreenTitle(),
               const SizedBox(height: 16),
@@ -71,15 +98,41 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
               Expanded(
                 child: Container(
                   color: Colors.white,
-                  alignment: Alignment.center,
-                  child: const Text(
-                    'Monthly calendar coming next',
-                    style: TextStyle(
-                      fontFamily: 'Italiana',
-                      fontSize: 28,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.black,
-                    ),
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      const _WeekdayHeaderRow(),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: GridView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: monthGridDates.length,
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 7,
+                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 8,
+                            childAspectRatio: 0.82,
+                          ),
+                          itemBuilder: (context, index) {
+                            final date = monthGridDates[index];
+                            final activities =
+                                _activityService.getActivitiesForDate(date);
+                            final isCurrentMonth =
+                                date.month == _focusedDate.month;
+                            final isToday = _isSameDate(date, today);
+
+                            return _MonthDayCell(
+                              date: date,
+                              activities: activities,
+                              isCurrentMonth: isCurrentMonth,
+                              isToday: isToday,
+                              onTap: () => _openDay(date),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -99,7 +152,7 @@ class _TopHeader extends StatelessWidget {
     return Row(
       children: [
         IconButton(
-          onPressed: () => Navigator.pushReplacementNamed(context, '/'),
+          onPressed: () => Navigator.maybePop(context),
           icon: const Icon(
             Icons.arrow_back,
             size: 32,
@@ -127,12 +180,133 @@ class _ScreenTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Center(
       child: Text(
-        'Månedlige Kalender',
+        'Månedlig Kalender',
         style: TextStyle(
           fontFamily: 'Italiana',
           fontSize: 42,
           fontWeight: FontWeight.w400,
           color: Colors.black,
+        ),
+      ),
+    );
+  }
+}
+
+class _WeekdayHeaderRow extends StatelessWidget {
+  const _WeekdayHeaderRow();
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+
+    return Row(
+      children: labels
+          .map(
+            (label) => Expanded(
+              child: Center(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _MonthDayCell extends StatelessWidget {
+  final DateTime date;
+  final List<Activity> activities;
+  final bool isCurrentMonth;
+  final bool isToday;
+  final VoidCallback onTap;
+
+  const _MonthDayCell({
+    required this.date,
+    required this.activities,
+    required this.isCurrentMonth,
+    required this.isToday,
+    required this.onTap,
+  });
+
+  Color _ownerColor(ActivityOwner owner) {
+    switch (owner) {
+      case ActivityOwner.me:
+        return Colors.blue;
+      case ActivityOwner.mother:
+        return Colors.pink;
+      case ActivityOwner.father:
+        return Colors.orange;
+      case ActivityOwner.family:
+        return Colors.purple;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isCurrentMonth ? Colors.black : Colors.black38;
+    final borderColor = isToday ? Colors.black : const Color(0xFFA2E5AD);
+
+    final visibleActivities = activities.take(3).toList();
+    final extraCount = activities.length - visibleActivities.length;
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(
+            color: borderColor,
+            width: isToday ? 2.5 : 1.2,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${date.day}',
+              style: TextStyle(
+                fontFamily: 'Italiana',
+                fontSize: 20,
+                fontWeight: FontWeight.w400,
+                color: textColor,
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (visibleActivities.isNotEmpty)
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  ...visibleActivities.map(
+                    (activity) => Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _ownerColor(activity.owner),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  if (extraCount > 0)
+                    Text(
+                      '+$extraCount',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: isCurrentMonth ? Colors.black87 : Colors.black38,
+                      ),
+                    ),
+                ],
+              ),
+          ],
         ),
       ),
     );
