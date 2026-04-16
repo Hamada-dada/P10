@@ -235,7 +235,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<ActivityOwner>(
-                        value: _selectedOwner,
+                        initialValue: _selectedOwner,
                         decoration: const InputDecoration(
                           labelText: 'Ejer',
                           border: OutlineInputBorder(),

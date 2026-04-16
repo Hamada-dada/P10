@@ -21,7 +21,6 @@ class DailyCalendarScreen extends StatefulWidget {
 
 class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
   final ActivityService _activityService = ActivityService();
-  final List<Activity> _createdActivities = [];
   late DateTime _focusedDate;
 
   @override
@@ -31,21 +30,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
   }
 
   List<Activity> get _activitiesForFocusedDate {
-    final serviceActivities = _activityService.getActivitiesForDate(_focusedDate);
-
-    final createdActivitiesForDate = _createdActivities.where((activity) {
-      return activity.startTime.year == _focusedDate.year &&
-          activity.startTime.month == _focusedDate.month &&
-          activity.startTime.day == _focusedDate.day;
-    }).toList();
-
-    final allActivities = [
-      ...serviceActivities,
-      ...createdActivitiesForDate,
-    ];
-
-    allActivities.sort((a, b) => a.startTime.compareTo(b.startTime));
-    return allActivities;
+    return _activityService.getActivitiesForDate(_focusedDate);
   }
 
   void _goToPreviousDay() {
@@ -66,13 +51,17 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
     });
   }
 
-  void _openActivityDetail(Activity activity) {
-    Navigator.push(
+  Future<void> _openActivityDetail(Activity activity) async {
+    final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(
         builder: (_) => ActivityDetailScreen(activity: activity),
       ),
     );
+
+    if (result == true) {
+      setState(() {});
+    }
   }
 
   Future<void> _openCreateActivityScreen() async {
@@ -84,9 +73,8 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
     );
 
     if (createdActivity != null) {
-      setState(() {
-        _createdActivities.add(createdActivity);
-      });
+      _activityService.addActivity(createdActivity);
+      setState(() {});
     }
   }
 
@@ -153,7 +141,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
                             ? const _EmptyActivitiesView()
                             : ListView.separated(
                                 itemCount: activities.length,
-                                separatorBuilder: (_, __) =>
+                                separatorBuilder: (_, _) =>
                                     const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
                                   final activity = activities[index];

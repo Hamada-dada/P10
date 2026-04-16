@@ -16,7 +16,6 @@ class MonthlyCalendarScreen extends StatefulWidget {
 class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   DateTime _focusedDate = DateTime.now();
   final ActivityService _activityService = ActivityService();
-  final List<Activity> _createdActivities = [];
 
   void _goToPreviousMonth() {
     setState(() {
@@ -36,13 +35,15 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     });
   }
 
-  void _openDay(DateTime selectedDate) {
-    Navigator.push(
+  Future<void> _openDay(DateTime selectedDate) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => DailyCalendarScreen(initialDate: selectedDate),
       ),
     );
+
+    setState(() {});
   }
 
   Future<void> _openCreateActivityScreen() async {
@@ -54,28 +55,9 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     );
 
     if (createdActivity != null) {
-      setState(() {
-        _createdActivities.add(createdActivity);
-      });
+      _activityService.addActivity(createdActivity);
+      setState(() {});
     }
-  }
-
-  List<Activity> _activitiesForDate(DateTime date) {
-    final serviceActivities = _activityService.getActivitiesForDate(date);
-
-    final createdActivitiesForDate = _createdActivities.where((activity) {
-      return activity.startTime.year == date.year &&
-          activity.startTime.month == date.month &&
-          activity.startTime.day == date.day;
-    }).toList();
-
-    final allActivities = [
-      ...serviceActivities,
-      ...createdActivitiesForDate,
-    ];
-
-    allActivities.sort((a, b) => a.startTime.compareTo(b.startTime));
-    return allActivities;
   }
 
   List<DateTime> _buildMonthGrid(DateTime monthDate) {
@@ -204,7 +186,8 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
                             weekNumber: _getWeekNumber(week[0]),
                             weekNumberWidth: weekNumberWidth,
                             cellHeight: cellHeight,
-                            getActivitiesForDate: _activitiesForDate,
+                            getActivitiesForDate:
+                                _activityService.getActivitiesForDate,
                             ownerColorBuilder: _ownerColor,
                             isSameDate: _isSameDate,
                             onTapDay: _openDay,
