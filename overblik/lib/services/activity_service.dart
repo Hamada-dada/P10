@@ -144,15 +144,13 @@ class ActivityService {
   }
 
   List<Activity> _buildSeedActivitiesForDate(DateTime date) {
-    final day = date.day;
-
-    final hasPeter = date.weekday == DateTime.wednesday || day % 5 == 0;
-    final hasTakeout = date.weekday == DateTime.friday || day % 3 == 0;
+    final hasPeter = date.weekday == DateTime.wednesday || date.day % 5 == 0;
+    final hasTakeout = date.weekday == DateTime.friday || date.day % 3 == 0;
     final hasHomework = date.weekday != DateTime.saturday;
     final hasSport = date.weekday == DateTime.thursday;
     final hasDogWalk = date.weekday == DateTime.saturday;
 
-    final List<Activity> seedActivities = [
+    final activities = <Activity>[
       Activity(
         id: 'seed-${_dateKey(date)}-morgenmad',
         title: 'Morgenmad',
@@ -176,24 +174,30 @@ class ActivityService {
     ];
 
     if (hasPeter) {
-      seedActivities.add(
+      activities.add(
         Activity(
           id: 'seed-${_dateKey(date)}-peter',
           title: 'Aftale med Peter',
           emoji: '🎮',
           startTime: DateTime(date.year, date.month, date.day, 16, 0),
           endTime: DateTime(date.year, date.month, date.day, 17, 30),
-          owner: ActivityOwner.me,
-          isImportant: true,
+          owner: ActivityOwner.family,
+          isFavorite: true,
           description:
-              'Peter kommer forbi, og I skal spille sammen. Før Peter kommer skal du gøre dig klar derhjemme.',
+              'Peter kommer forbi, og I har aftalt at spille sammen.',
           participants: const ['Mig', 'Peter'],
+          checklistItems: const [
+            'Spise en snack',
+            'Stille service i opvaskeren',
+            'Rydde op på værelset',
+          ],
+          reward: '30 min ekstra skærmtid bagefter',
         ),
       );
     }
 
     if (hasTakeout) {
-      seedActivities.add(
+      activities.add(
         Activity(
           id: 'seed-${_dateKey(date)}-takeout',
           title: 'Takeout',
@@ -208,7 +212,7 @@ class ActivityService {
     }
 
     if (hasSport) {
-      seedActivities.add(
+      activities.add(
         Activity(
           id: 'seed-${_dateKey(date)}-sport',
           title: 'Idræt',
@@ -219,12 +223,17 @@ class ActivityService {
           isFavorite: true,
           description: 'Idrætstræning i hallen.',
           participants: const ['Mig'],
+          checklistItems: const [
+            'Pak sportstøj',
+            'Tag drikkedunk med',
+          ],
+          reward: 'Vælg aftensnack efter træning',
         ),
       );
     }
 
     if (hasHomework) {
-      seedActivities.add(
+      activities.add(
         Activity(
           id: 'seed-${_dateKey(date)}-lektier',
           title: 'Lektier',
@@ -234,12 +243,18 @@ class ActivityService {
           owner: ActivityOwner.me,
           description: 'Dansk lektier og matematik lektier.',
           participants: const ['Mig'],
+          checklistItems: const [
+            'Find bøger frem',
+            'Lav dansk',
+            'Lav matematik',
+          ],
+          reward: 'Vælg en lille belønning bagefter',
         ),
       );
     }
 
     if (hasDogWalk) {
-      seedActivities.add(
+      activities.add(
         Activity(
           id: 'seed-${_dateKey(date)}-hund',
           title: 'Gå med hunden',
@@ -253,7 +268,7 @@ class ActivityService {
       );
     }
 
-    seedActivities.sort((a, b) => a.startTime.compareTo(b.startTime));
-    return seedActivities;
+    activities.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return activities;
   }
 }

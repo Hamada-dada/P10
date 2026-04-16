@@ -52,6 +52,14 @@ class ActivityDetailScreen extends StatelessWidget {
     return activity.description;
   }
 
+  String _buildRewardText() {
+    if (activity.reward.trim().isEmpty) {
+      return 'Ingen belønning valgt';
+    }
+
+    return activity.reward;
+  }
+
   Future<void> _editActivity(BuildContext context) async {
     final activityService = ActivityService();
 
@@ -69,7 +77,6 @@ class ActivityDetailScreen extends StatelessWidget {
       activityService.updateActivity(updatedActivity);
 
       if (!context.mounted) return;
-
       Navigator.pop(context, true);
     }
   }
@@ -103,7 +110,6 @@ class ActivityDetailScreen extends StatelessWidget {
     activityService.deleteActivity(activity.id);
 
     if (!context.mounted) return;
-
     Navigator.pop(context, true);
   }
 
@@ -182,6 +188,62 @@ class ActivityDetailScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (activity.checklistItems.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _InfoSection(
+                      icon: Icons.check_box_outlined,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: activity.checklistItems.map((item) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 2),
+                                  child: Icon(
+                                    Icons.check_box_outline_blank,
+                                    size: 18,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    item,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w400,
+                                      color: Color(0xFF1D1B20),
+                                      height: 1.5,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                  if (activity.isFavorite || activity.reward.trim().isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _InfoSection(
+                      icon: Icons.card_giftcard_outlined,
+                      child: Text(
+                        _buildRewardText(),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.black,
+                          height: 1.5,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   _InfoSection(
                     icon: Icons.group_outlined,
