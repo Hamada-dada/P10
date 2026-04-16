@@ -59,8 +59,7 @@ class CalendarNavigationBar extends StatelessWidget {
         return '$weekday d. ${focusedDate.day}. $month';
 
       case CalendarViewType.week:
-        final weekNumber = _getWeekNumber(focusedDate);
-        return 'Uge $weekNumber';
+        return 'Uge ${_getWeekNumber(focusedDate)}';
 
       case CalendarViewType.month:
         final month = months[focusedDate.month - 1];
@@ -69,61 +68,128 @@ class CalendarNavigationBar extends StatelessWidget {
   }
 
   int _getWeekNumber(DateTime date) {
-    final firstDayOfYear = DateTime(date.year, 1, 1);
-    final daysOffset = firstDayOfYear.weekday - 1;
-    final firstMonday = firstDayOfYear.subtract(Duration(days: daysOffset));
-    final difference = date.difference(firstMonday).inDays;
-    return (difference / 7).floor() + 1;
+    final thursday =
+        date.add(Duration(days: 4 - (date.weekday == 7 ? 7 : date.weekday)));
+    final firstJanuary = DateTime(thursday.year, 1, 1);
+    final days = thursday.difference(firstJanuary).inDays;
+    return ((days + firstJanuary.weekday - 1) / 7).floor() + 1;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
+    final titleFontSize = isLandscape ? 18.0 : 22.0;
+    final metaFontSize = isLandscape ? 11.0 : 12.0;
+    final iconSize = isLandscape ? 24.0 : 26.0;
+    final smallGap = isLandscape ? 4.0 : 6.0;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          children: [
-            IconButton(
-              onPressed: onPrevious,
-              icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black),
-            ),
-            Expanded(
-              child: Center(
-                child: Text(
-                  _buildTitle(),
-                  style: const TextStyle(
-                    fontFamily: 'Italiana',
-                    fontSize: 32,
-                    fontWeight: FontWeight.w400,
-                    color: Colors.black,
-                  ),
+        IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: onPrevious,
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            size: iconSize,
+            color: Colors.black,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            children: [
+              Text(
+                _buildTitle(),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Italiana',
+                  fontSize: titleFontSize,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.black,
                 ),
               ),
-            ),
-            if (showFilter)
-              IconButton(
-                onPressed: onFilterTap,
-                icon: const Icon(Icons.filter_alt_outlined, size: 24, color: Colors.black),
-              )
-            else
-              const SizedBox(width: 48),
-            IconButton(
-              onPressed: onNext,
-              icon: const Icon(Icons.arrow_forward_ios, size: 20, color: Colors.black),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.center,
-          child: TextButton(
-            onPressed: onToday,
-            child: const Text(
-              'I dag',
-              style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.w600,
+              SizedBox(height: smallGap),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (viewType == CalendarViewType.day) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0x1A000000),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Uge ${_getWeekNumber(focusedDate)}',
+                        style: TextStyle(
+                          fontSize: metaFontSize,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  GestureDetector(
+                    onTap: onToday,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFFD8D8D8),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        'I dag',
+                        style: TextStyle(
+                          fontSize: metaFontSize,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        if (showFilter)
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: onFilterTap,
+            icon: Icon(
+              Icons.filter_alt_outlined,
+              size: iconSize,
+              color: Colors.black,
             ),
+          )
+        else
+          SizedBox(width: iconSize),
+        const SizedBox(width: 12),
+        IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: onNext,
+          icon: Icon(
+            Icons.arrow_forward_ios,
+            size: iconSize,
+            color: Colors.black,
           ),
         ),
       ],

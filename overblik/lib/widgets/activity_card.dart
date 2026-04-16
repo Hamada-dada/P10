@@ -19,18 +19,22 @@ class ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(
-            color: activity.isImportant ? Colors.red : const Color(0xFFA2E5AD),
-            width: 2,
-          ),
+   return Material(
+  color: Colors.transparent,
+  child: InkWell(
+    borderRadius: BorderRadius.circular(14),
+    onTap: onTap,
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: activity.isImportant ? Colors.red : const Color(0xFFE0E0E0),
+          width: activity.isImportant ? 2 : 1,
         ),
+      ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -61,8 +65,9 @@ class ActivityCard extends StatelessWidget {
             const Icon(
               Icons.chevron_right,
               color: Colors.black,
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -4,6 +4,7 @@ import '../screens/daily_calendar_screen.dart';
 import '../services/activity_service.dart';
 import '../widgets/calendar_navigation_bar.dart';
 import '../widgets/view_switcher.dart';
+import 'create_activity_screen.dart';
 
 class MonthlyCalendarScreen extends StatefulWidget {
   const MonthlyCalendarScreen({super.key});
@@ -15,6 +16,7 @@ class MonthlyCalendarScreen extends StatefulWidget {
 class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   DateTime _focusedDate = DateTime.now();
   final ActivityService _activityService = ActivityService();
+  final List<Activity> _createdActivities = [];
 
   void _goToPreviousMonth() {
     setState(() {
@@ -43,6 +45,39 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     );
   }
 
+  Future<void> _openCreateActivityScreen() async {
+    final createdActivity = await Navigator.push<Activity>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
+      ),
+    );
+
+    if (createdActivity != null) {
+      setState(() {
+        _createdActivities.add(createdActivity);
+      });
+    }
+  }
+
+  List<Activity> _activitiesForDate(DateTime date) {
+    final serviceActivities = _activityService.getActivitiesForDate(date);
+
+    final createdActivitiesForDate = _createdActivities.where((activity) {
+      return activity.startTime.year == date.year &&
+          activity.startTime.month == date.month &&
+          activity.startTime.day == date.day;
+    }).toList();
+
+    final allActivities = [
+      ...serviceActivities,
+      ...createdActivitiesForDate,
+    ];
+
+    allActivities.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return allActivities;
+  }
+
   List<DateTime> _buildMonthGrid(DateTime monthDate) {
     final firstDayOfMonth = DateTime(monthDate.year, monthDate.month, 1);
     final lastDayOfMonth = DateTime(monthDate.year, monthDate.month + 1, 0);
@@ -61,179 +96,28 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     );
   }
 
+  List<List<DateTime>> _buildWeekRows(DateTime monthDate) {
+    final dates = _buildMonthGrid(monthDate);
+    final rows = <List<DateTime>>[];
+
+    for (int i = 0; i < dates.length; i += 7) {
+      rows.add(dates.sublist(i, i + 7));
+    }
+
+    return rows;
+  }
+
+  int _getWeekNumber(DateTime date) {
+    final thursday =
+        date.add(Duration(days: 4 - (date.weekday == 7 ? 7 : date.weekday)));
+    final firstJanuary = DateTime(thursday.year, 1, 1);
+    final days = thursday.difference(firstJanuary).inDays;
+    return ((days + firstJanuary.weekday - 1) / 7).floor() + 1;
+  }
+
   bool _isSameDate(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final monthGridDates = _buildMonthGrid(_focusedDate);
-    final today = DateTime.now();
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFA2E5AD),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const _TopHeader(),
-              const SizedBox(height: 12),
-              Container(height: 6, color: Colors.white),
-              const SizedBox(height: 16),
-              const _ScreenTitle(),
-              const SizedBox(height: 16),
-              const ViewSwitcher(selectedView: CalendarScreenType.month),
-              const SizedBox(height: 24),
-              CalendarNavigationBar(
-                focusedDate: _focusedDate,
-                viewType: CalendarViewType.month,
-                onPrevious: _goToPreviousMonth,
-                onNext: _goToNextMonth,
-                onToday: _goToToday,
-                onFilterTap: () {},
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: [
-                      const _WeekdayHeaderRow(),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: monthGridDates.length,
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 7,
-                            mainAxisSpacing: 8,
-                            crossAxisSpacing: 8,
-                            childAspectRatio: 0.82,
-                          ),
-                          itemBuilder: (context, index) {
-                            final date = monthGridDates[index];
-                            final activities =
-                                _activityService.getActivitiesForDate(date);
-                            final isCurrentMonth =
-                                date.month == _focusedDate.month;
-                            final isToday = _isSameDate(date, today);
-
-                            return _MonthDayCell(
-                              date: date,
-                              activities: activities,
-                              isCurrentMonth: isCurrentMonth,
-                              isToday: isToday,
-                              onTap: () => _openDay(date),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TopHeader extends StatelessWidget {
-  const _TopHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconButton(
-          onPressed: () => Navigator.maybePop(context),
-          icon: const Icon(
-            Icons.arrow_back,
-            size: 32,
-            color: Colors.black,
-          ),
-        ),
-        const Spacer(),
-        CircleAvatar(
-          radius: 24,
-          backgroundColor: Colors.white,
-          child: Icon(
-            Icons.person,
-            color: Colors.grey.shade700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ScreenTitle extends StatelessWidget {
-  const _ScreenTitle();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Månedlig Kalender',
-        style: TextStyle(
-          fontFamily: 'Italiana',
-          fontSize: 42,
-          fontWeight: FontWeight.w400,
-          color: Colors.black,
-        ),
-      ),
-    );
-  }
-}
-
-class _WeekdayHeaderRow extends StatelessWidget {
-  const _WeekdayHeaderRow();
-
-  @override
-  Widget build(BuildContext context) {
-    const labels = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
-
-    return Row(
-      children: labels
-          .map(
-            (label) => Expanded(
-              child: Center(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class _MonthDayCell extends StatelessWidget {
-  final DateTime date;
-  final List<Activity> activities;
-  final bool isCurrentMonth;
-  final bool isToday;
-  final VoidCallback onTap;
-
-  const _MonthDayCell({
-    required this.date,
-    required this.activities,
-    required this.isCurrentMonth,
-    required this.isToday,
-    required this.onTap,
-  });
 
   Color _ownerColor(ActivityOwner owner) {
     switch (owner) {
@@ -250,21 +134,291 @@ class _MonthDayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor = isCurrentMonth ? Colors.black : Colors.black38;
-    final borderColor = isToday ? Colors.black : const Color(0xFFA2E5AD);
+    final weekRows = _buildWeekRows(_focusedDate);
+    final today = DateTime.now();
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
-    final visibleActivities = activities.take(3).toList();
-    final extraCount = activities.length - visibleActivities.length;
+    final horizontalPadding = isLandscape ? 12.0 : 16.0;
+    final verticalPadding = isLandscape ? 6.0 : 10.0;
+    final titleFontSize = isLandscape ? 22.0 : 28.0;
+    final mediumGap = isLandscape ? 8.0 : 10.0;
+    final largeGap = isLandscape ? 10.0 : 12.0;
+    final weekNumberWidth = isLandscape ? 34.0 : 38.0;
+    final cellHeight = isLandscape ? 58.0 : 72.0;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFA2E5AD),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _TopHeader(),
+                SizedBox(height: mediumGap),
+                _ScreenTitle(fontSize: titleFontSize),
+                SizedBox(height: mediumGap),
+                const ViewSwitcher(selectedView: CalendarScreenType.month),
+                SizedBox(height: largeGap),
+                CalendarNavigationBar(
+                  focusedDate: _focusedDate,
+                  viewType: CalendarViewType.month,
+                  onPrevious: _goToPreviousMonth,
+                  onNext: _goToNextMonth,
+                  onToday: _goToToday,
+                  onFilterTap: () {},
+                ),
+                SizedBox(height: mediumGap),
+                Container(
+                  clipBehavior: Clip.antiAlias,
+                  padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _openCreateActivityScreen,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Ny aktivitet'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _WeekdayHeaderRow(weekNumberWidth: weekNumberWidth),
+                      const SizedBox(height: 8),
+                      ...weekRows.map(
+                        (week) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _MonthWeekRow(
+                            week: week,
+                            focusedMonth: _focusedDate.month,
+                            today: today,
+                            weekNumber: _getWeekNumber(week[0]),
+                            weekNumberWidth: weekNumberWidth,
+                            cellHeight: cellHeight,
+                            getActivitiesForDate: _activitiesForDate,
+                            ownerColorBuilder: _ownerColor,
+                            isSameDate: _isSameDate,
+                            onTapDay: _openDay,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TopHeader extends StatelessWidget {
+  const _TopHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () => Navigator.maybePop(context),
+          icon: const Icon(
+            Icons.arrow_back,
+            size: 30,
+            color: Colors.black,
+          ),
+        ),
+        const Spacer(),
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: Colors.white,
+          child: Icon(
+            Icons.person,
+            color: Colors.grey.shade700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScreenTitle extends StatelessWidget {
+  final double fontSize;
+
+  const _ScreenTitle({
+    required this.fontSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        'Månedskalender',
+        style: TextStyle(
+          fontFamily: 'Italiana',
+          fontSize: fontSize,
+          fontWeight: FontWeight.w400,
+          color: Colors.black,
+        ),
+      ),
+    );
+  }
+}
+
+class _WeekdayHeaderRow extends StatelessWidget {
+  final double weekNumberWidth;
+
+  const _WeekdayHeaderRow({
+    required this.weekNumberWidth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+
+    return Row(
+      children: [
+        SizedBox(width: weekNumberWidth),
+        ...labels.map(
+          (label) => Expanded(
+            child: Center(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MonthWeekRow extends StatelessWidget {
+  final List<DateTime> week;
+  final int focusedMonth;
+  final DateTime today;
+  final int weekNumber;
+  final double weekNumberWidth;
+  final double cellHeight;
+  final List<Activity> Function(DateTime) getActivitiesForDate;
+  final Color Function(ActivityOwner) ownerColorBuilder;
+  final bool Function(DateTime, DateTime) isSameDate;
+  final ValueChanged<DateTime> onTapDay;
+
+  const _MonthWeekRow({
+    required this.week,
+    required this.focusedMonth,
+    required this.today,
+    required this.weekNumber,
+    required this.weekNumberWidth,
+    required this.cellHeight,
+    required this.getActivitiesForDate,
+    required this.ownerColorBuilder,
+    required this.isSameDate,
+    required this.onTapDay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: weekNumberWidth,
+          child: Center(
+            child: Text(
+              '$weekNumber',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.black54,
+              ),
+            ),
+          ),
+        ),
+        ...week.map(
+          (date) {
+            final activities = getActivitiesForDate(date);
+
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: _MonthDayCell(
+                  date: date,
+                  activities: activities,
+                  isCurrentMonth: date.month == focusedMonth,
+                  isToday: isSameDate(date, today),
+                  cellHeight: cellHeight,
+                  ownerColorBuilder: ownerColorBuilder,
+                  onTap: () => onTapDay(date),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _MonthDayCell extends StatelessWidget {
+  final DateTime date;
+  final List<Activity> activities;
+  final bool isCurrentMonth;
+  final bool isToday;
+  final double cellHeight;
+  final Color Function(ActivityOwner) ownerColorBuilder;
+  final VoidCallback onTap;
+
+  const _MonthDayCell({
+    required this.date,
+    required this.activities,
+    required this.isCurrentMonth,
+    required this.isToday,
+    required this.cellHeight,
+    required this.ownerColorBuilder,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isCurrentMonth ? Colors.black : Colors.black38;
+    final backgroundColor =
+        isCurrentMonth ? const Color(0xFFF8F8F8) : const Color(0xFFF1F1F1);
+    final borderColor = isToday ? Colors.black : const Color(0xFFE0E0E0);
+
+    final hasActivities = activities.isNotEmpty;
+    final firstActivity = hasActivities ? activities.first : null;
+    final extraCount = hasActivities ? activities.length - 1 : 0;
 
     return InkWell(
+      borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(6),
+        height: cellHeight,
+        padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: borderColor,
-            width: isToday ? 2.5 : 1.2,
+            width: isToday ? 2 : 1,
           ),
         ),
         child: Column(
@@ -274,36 +428,39 @@ class _MonthDayCell extends StatelessWidget {
               '${date.day}',
               style: TextStyle(
                 fontFamily: 'Italiana',
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.w400,
                 color: textColor,
               ),
             ),
-            const SizedBox(height: 6),
-            if (visibleActivities.isNotEmpty)
-              Wrap(
-                spacing: 4,
-                runSpacing: 4,
+            const Spacer(),
+            if (firstActivity != null)
+              Row(
                 children: [
-                  ...visibleActivities.map(
-                    (activity) => Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: _ownerColor(activity.owner),
-                        shape: BoxShape.circle,
-                      ),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: ownerColorBuilder(firstActivity.owner),
+                      shape: BoxShape.circle,
                     ),
                   ),
-                  if (extraCount > 0)
-                    Text(
-                      '+$extraCount',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: isCurrentMonth ? Colors.black87 : Colors.black38,
+                  if (extraCount > 0) ...[
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        '+$extraCount',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: isCurrentMonth
+                              ? Colors.black87
+                              : Colors.black38,
+                        ),
                       ),
                     ),
+                  ],
                 ],
               ),
           ],
