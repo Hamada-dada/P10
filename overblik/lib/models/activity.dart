@@ -16,6 +16,7 @@ class Activity {
   final bool isFavorite;
   final String description;
   final List<String> participants;
+  final List<String> checklistItems;
   final ActivityOwner owner;
 
   const Activity({
@@ -30,6 +31,7 @@ class Activity {
     this.isFavorite = false,
     this.description = '',
     this.participants = const [],
+    this.checklistItems = const [],
   });
 
   Duration get duration => endTime.difference(startTime);
