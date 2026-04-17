@@ -90,7 +90,7 @@ class ActivityService {
 
   void addActivity(Activity activity) {
     _ensureSeededForDate(activity.startTime);
-    _activities.add(activity);
+    _activities.add(_normalizeActivity(activity));
   }
 
   void updateActivity(Activity updatedActivity) {
@@ -101,7 +101,7 @@ class ActivityService {
       return;
     }
 
-    _activities[index] = updatedActivity;
+    _activities[index] = _normalizeActivity(updatedActivity);
   }
 
   void deleteActivity(String activityId) {
@@ -112,6 +112,23 @@ class ActivityService {
     final copy = List<Activity>.from(_activities);
     copy.sort((a, b) => a.startTime.compareTo(b.startTime));
     return copy;
+  }
+
+  Activity _normalizeActivity(Activity activity) {
+    final normalizedChecked = List<bool>.generate(
+      activity.checklistItems.length,
+      (index) => index < activity.checklistChecked.length
+          ? activity.checklistChecked[index]
+          : false,
+    );
+
+    return activity.copyWith(
+      checklistChecked: normalizedChecked,
+    );
+  }
+
+  List<bool> _emptyChecklistState(List<String> items) {
+    return List<bool>.filled(items.length, false);
   }
 
   DateTime _dateOnly(DateTime date) {
@@ -174,6 +191,12 @@ class ActivityService {
     ];
 
     if (hasPeter) {
+      const peterChecklist = [
+        'Spise en snack',
+        'Stille service i opvaskeren',
+        'Rydde op på værelset',
+      ];
+
       activities.add(
         Activity(
           id: 'seed-${_dateKey(date)}-peter',
@@ -186,11 +209,8 @@ class ActivityService {
           description:
               'Peter kommer forbi, og I har aftalt at spille sammen.',
           participants: const ['Mig', 'Peter'],
-          checklistItems: const [
-            'Spise en snack',
-            'Stille service i opvaskeren',
-            'Rydde op på værelset',
-          ],
+          checklistItems: peterChecklist,
+          checklistChecked: _emptyChecklistState(peterChecklist),
           reward: '30 min ekstra skærmtid bagefter',
         ),
       );
@@ -212,6 +232,11 @@ class ActivityService {
     }
 
     if (hasSport) {
+      const sportChecklist = [
+        'Pak sportstøj',
+        'Tag drikkedunk med',
+      ];
+
       activities.add(
         Activity(
           id: 'seed-${_dateKey(date)}-sport',
@@ -223,16 +248,20 @@ class ActivityService {
           isFavorite: true,
           description: 'Idrætstræning i hallen.',
           participants: const ['Mig'],
-          checklistItems: const [
-            'Pak sportstøj',
-            'Tag drikkedunk med',
-          ],
+          checklistItems: sportChecklist,
+          checklistChecked: _emptyChecklistState(sportChecklist),
           reward: 'Vælg aftensnack efter træning',
         ),
       );
     }
 
     if (hasHomework) {
+      const homeworkChecklist = [
+        'Find bøger frem',
+        'Lav dansk',
+        'Lav matematik',
+      ];
+
       activities.add(
         Activity(
           id: 'seed-${_dateKey(date)}-lektier',
@@ -243,11 +272,8 @@ class ActivityService {
           owner: ActivityOwner.me,
           description: 'Dansk lektier og matematik lektier.',
           participants: const ['Mig'],
-          checklistItems: const [
-            'Find bøger frem',
-            'Lav dansk',
-            'Lav matematik',
-          ],
+          checklistItems: homeworkChecklist,
+          checklistChecked: _emptyChecklistState(homeworkChecklist),
           reward: 'Vælg en lille belønning bagefter',
         ),
       );

@@ -19,14 +19,17 @@ class ActivityDetailScreen extends StatefulWidget {
 }
 
 class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
+  late Activity _activity;
   late List<bool> _checkedItems;
-
-  Activity get activity => widget.activity;
 
   @override
   void initState() {
     super.initState();
-    _checkedItems = List<bool>.from(activity.normalizedChecklistChecked);
+
+    _activity =
+        ActivityService().getActivityById(widget.activity.id) ?? widget.activity;
+
+    _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
   }
 
   String _formatDate(DateTime dateTime) {
@@ -55,52 +58,52 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   }
 
   String _buildParticipantsText() {
-    if (activity.participants.isEmpty) {
+    if (_activity.participants.isEmpty) {
       return 'Ingen deltagere';
     }
 
-    return activity.participants.join(', ');
+    return _activity.participants.join(', ');
   }
 
   String _buildDescriptionText() {
-    if (activity.description.trim().isEmpty) {
+    if (_activity.description.trim().isEmpty) {
       return 'Ingen beskrivelse';
     }
 
-    return activity.description;
+    return _activity.description;
   }
 
   String _buildRewardText() {
-    if (activity.reward.trim().isEmpty) {
+    if (_activity.reward.trim().isEmpty) {
       return 'Ingen belønning valgt';
     }
 
-    if (activity.isRewardRecurring) {
-      return '${activity.reward}\nGentagende belønning';
+    if (_activity.isRewardRecurring) {
+      return '${_activity.reward}\nGentagende belønning';
     }
 
-    return activity.reward;
+    return _activity.reward;
   }
 
   String _buildRecurrenceText() {
-    switch (activity.recurrence) {
+    switch (_activity.recurrence) {
       case ActivityRecurrence.none:
         return 'Ingen gentagelse';
       case ActivityRecurrence.daily:
-        if (activity.recurrenceInterval == 1) {
+        if (_activity.recurrenceInterval == 1) {
           return 'Gentages hver dag';
         }
-        return 'Gentages hver ${activity.recurrenceInterval}. dag';
+        return 'Gentages hver ${_activity.recurrenceInterval}. dag';
       case ActivityRecurrence.weekly:
-        if (activity.recurrenceInterval == 1) {
+        if (_activity.recurrenceInterval == 1) {
           return 'Gentages hver uge';
         }
-        return 'Gentages hver ${activity.recurrenceInterval}. uge';
+        return 'Gentages hver ${_activity.recurrenceInterval}. uge';
       case ActivityRecurrence.monthly:
-        if (activity.recurrenceInterval == 1) {
+        if (_activity.recurrenceInterval == 1) {
           return 'Gentages hver måned';
         }
-        return 'Gentages hver ${activity.recurrenceInterval}. måned';
+        return 'Gentages hver ${_activity.recurrenceInterval}. måned';
       case ActivityRecurrence.custom:
         return 'Brugerdefineret gentagelse';
     }
@@ -110,32 +113,36 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     final updatedCheckedItems = List<bool>.from(_checkedItems);
     updatedCheckedItems[index] = !updatedCheckedItems[index];
 
-    setState(() {
-      _checkedItems = updatedCheckedItems;
-    });
-
-    final updatedActivity = activity.copyWith(
+    final updatedActivity = _activity.copyWith(
       checklistChecked: updatedCheckedItems,
     );
 
     ActivityService().updateActivity(updatedActivity);
+
+    setState(() {
+      _checkedItems = updatedCheckedItems;
+      _activity = updatedActivity;
+    });
   }
 
   Future<void> _editActivity(BuildContext context) async {
-    final activityService = ActivityService();
-
     final updatedActivity = await Navigator.push<Activity>(
       context,
       MaterialPageRoute(
         builder: (_) => CreateActivityScreen(
-          existingActivity: activity,
-          initialDate: activity.startTime,
+          existingActivity: _activity,
+          initialDate: _activity.startTime,
         ),
       ),
     );
 
     if (updatedActivity != null) {
-      activityService.updateActivity(updatedActivity);
+      ActivityService().updateActivity(updatedActivity);
+
+      setState(() {
+        _activity = updatedActivity;
+        _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
+      });
 
       if (!context.mounted) return;
       Navigator.pop(context, true);
@@ -148,7 +155,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Slet aktivitet'),
-          content: Text('Vil du slette "${activity.title}"?'),
+          content: Text('Vil du slette "${_activity.title}"?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -167,15 +174,14 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       return;
     }
 
-    final activityService = ActivityService();
-    activityService.deleteActivity(activity.id);
+    ActivityService().deleteActivity(_activity.id);
 
     if (!context.mounted) return;
     Navigator.pop(context, true);
   }
 
   void _openImagePreview(BuildContext context) {
-    if (activity.imagePath.trim().isEmpty) return;
+    if (_activity.imagePath.trim().isEmpty) return;
 
     Navigator.push(
       context,
@@ -188,7 +194,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                 Center(
                   child: InteractiveViewer(
                     child: Image.file(
-                      File(activity.imagePath),
+                      File(_activity.imagePath),
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -215,10 +221,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = activity.imagePath.trim().isNotEmpty;
-    final hasReward = activity.reward.trim().isNotEmpty;
-    final hasChecklist = activity.checklistItems.isNotEmpty;
-    final hasRecurrence = activity.recurrence != ActivityRecurrence.none;
+    final hasImage = _activity.imagePath.trim().isNotEmpty;
+    final hasReward = _activity.reward.trim().isNotEmpty;
+    final hasChecklist = _activity.checklistItems.isNotEmpty;
+    final hasRecurrence = _activity.recurrence != ActivityRecurrence.none;
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -252,7 +258,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (activity.isFavorite)
+                                if (_activity.isFavorite)
                                   const Padding(
                                     padding: EdgeInsets.only(right: 8),
                                     child: Icon(
@@ -263,7 +269,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                   ),
                                 Flexible(
                                   child: Text(
-                                    '${activity.title} ${activity.emoji}',
+                                    '${_activity.title} ${_activity.emoji}',
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
                                       fontFamily: 'Italiana',
@@ -282,8 +288,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               _TimeInfoCard(
-                                dateText: _formatDate(activity.startTime),
-                                timeText: _formatTime(activity.startTime),
+                                dateText: _formatDate(_activity.startTime),
+                                timeText: _formatTime(_activity.startTime),
                               ),
                               const Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 12),
@@ -294,8 +300,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                 ),
                               ),
                               _TimeInfoCard(
-                                dateText: _formatDate(activity.endTime),
-                                timeText: _formatTime(activity.endTime),
+                                dateText: _formatDate(_activity.endTime),
+                                timeText: _formatTime(_activity.endTime),
                               ),
                             ],
                           ),
@@ -323,7 +329,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
                                   child: Image.file(
-                                    File(activity.imagePath),
+                                    File(_activity.imagePath),
                                     height: 160,
                                     width: double.infinity,
                                     fit: BoxFit.cover,
@@ -349,7 +355,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: List.generate(
-                                  activity.checklistItems.length,
+                                  _activity.checklistItems.length,
                                   (index) => Padding(
                                     padding: const EdgeInsets.only(bottom: 8),
                                     child: InkWell(
@@ -374,7 +380,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
-                                              activity.checklistItems[index],
+                                              _activity.checklistItems[index],
                                               style: TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w400,
