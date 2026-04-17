@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+
 import '../models/activity.dart';
 import '../screens/daily_calendar_screen.dart';
 import '../services/activity_service.dart';
+import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
+import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
-import '../widgets/profile_avatar.dart';
 
 class MonthlyCalendarScreen extends StatefulWidget {
   const MonthlyCalendarScreen({super.key});
@@ -128,7 +130,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     final mediumGap = isLandscape ? 8.0 : 10.0;
     final largeGap = isLandscape ? 10.0 : 12.0;
     final weekNumberWidth = isLandscape ? 34.0 : 38.0;
-    final cellHeight = isLandscape ? 58.0 : 72.0;
+    final cellHeight = isLandscape ? 66.0 : 80.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -380,10 +382,6 @@ class _MonthDayCell extends StatelessWidget {
         isCurrentMonth ? const Color(0xFFF8F8F8) : const Color(0xFFF1F1F1);
     final borderColor = isToday ? Colors.black : const Color(0xFFE0E0E0);
 
-    final hasActivities = activities.isNotEmpty;
-    final firstActivity = hasActivities ? activities.first : null;
-    final extraCount = hasActivities ? activities.length - 1 : 0;
-
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
@@ -411,34 +409,17 @@ class _MonthDayCell extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            if (firstActivity != null)
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: ownerColorBuilder(firstActivity.owner),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  if (extraCount > 0) ...[
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        '+$extraCount',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color: isCurrentMonth
-                              ? Colors.black87
-                              : Colors.black38,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+            if (activities.isNotEmpty)
+              ActivityIndicators(
+                activities: activities,
+                ownerColorBuilder: ownerColorBuilder,
+                maxDots: 3,
+                maxStars: 2,
+                dotSize: 8,
+                starSize: 11,
+                countFontSize: 8.5,
+                itemSpacing: 3,
+                sectionSpacing: 6,
               ),
           ],
         ),

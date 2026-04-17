@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../models/profile.dart';
 import 'rewards_screen.dart';
 import 'settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
-  final String name;
-  final String roleLabel;
-  final String emoji;
+  final Profile profile;
   final List<String> familyMembers;
   final VoidCallback? onOpenCalendar;
   final VoidCallback? onOpenRewards;
@@ -15,15 +14,22 @@ class ProfileScreen extends StatelessWidget {
 
   const ProfileScreen({
     super.key,
-    this.name = 'Mig',
-    this.roleLabel = 'Barn',
-    this.emoji = '🙂',
+    required this.profile,
     this.familyMembers = const ['Mig', 'Mor', 'Far'],
     this.onOpenCalendar,
     this.onOpenRewards,
     this.onOpenSettings,
     this.onBack,
   });
+
+  String get _roleLabel {
+    switch (profile.role) {
+      case ProfileRole.child:
+        return 'Barn';
+      case ProfileRole.parent:
+        return 'Forælder';
+    }
+  }
 
   void _openSettings(BuildContext context) {
     if (onOpenSettings != null) {
@@ -92,9 +98,9 @@ class ProfileScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _ProfileHeader(
-                          name: name,
-                          roleLabel: roleLabel,
-                          emoji: emoji,
+                          name: profile.name,
+                          roleLabel: _roleLabel,
+                          emoji: profile.emoji,
                         ),
                         const SizedBox(height: 20),
                         const _SectionTitle(title: 'Hurtige handlinger'),
@@ -179,7 +185,7 @@ class ProfileScreen extends StatelessWidget {
                           icon: Icons.info_outline,
                           title: 'Om profilen',
                           body:
-                              '$name vises her med rolle, familieoversigt og hurtig adgang til kalender, belønninger og indstillinger.',
+                              '${profile.name} vises her med rolle, familieoversigt og hurtig adgang til kalender, belønninger og indstillinger.',
                         ),
                         const SizedBox(height: 24),
                         SizedBox(

@@ -1,65 +1,46 @@
 import 'package:flutter/material.dart';
 
 import '../screens/profile_screen.dart';
+import '../services/profile_service.dart';
 
 class ProfileAvatarButton extends StatelessWidget {
-  final double radius;
-  final String name;
-  final String roleLabel;
-  final String emoji;
-  final List<String> familyMembers;
-  final Color backgroundColor;
-  final Color iconColor;
-  final bool useEmoji;
-  final VoidCallback? onBeforeNavigate;
-
-  const ProfileAvatarButton({
-    super.key,
-    this.radius = 22,
-    this.name = 'Mig',
-    this.roleLabel = 'Barn',
-    this.emoji = '🙂',
-    this.familyMembers = const ['Mig', 'Mor', 'Far'],
-    this.backgroundColor = Colors.white,
-    this.iconColor = Colors.black54,
-    this.useEmoji = false,
-    this.onBeforeNavigate,
-  });
+  const ProfileAvatarButton({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(radius + 8),
-        onTap: () {
-          onBeforeNavigate?.call();
+    final profileService = ProfileService();
+    final currentProfile = profileService.getProfileById('profile-me');
 
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProfileScreen(
-                name: name,
-                roleLabel: roleLabel,
-                emoji: emoji,
-                familyMembers: familyMembers,
-              ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () {
+        if (currentProfile == null) return;
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProfileScreen(
+              profile: currentProfile,
+              familyMembers: profileService
+                  .getAllProfiles()
+                  .map((profile) => profile.name)
+                  .toList(),
             ),
-          );
-        },
-        child: CircleAvatar(
-          radius: radius,
-          backgroundColor: backgroundColor,
-          child: useEmoji
-              ? Text(
-                  emoji,
-                  style: TextStyle(fontSize: radius * 0.9),
-                )
-              : Icon(
-                  Icons.person,
-                  color: iconColor,
-                ),
-        ),
+          ),
+        );
+      },
+      child: CircleAvatar(
+        radius: 22,
+        backgroundColor: Colors.white,
+        child: currentProfile != null
+            ? Text(
+                currentProfile.emoji,
+                style: const TextStyle(fontSize: 20),
+              )
+            : Icon(
+                Icons.person,
+                color: Colors.grey.shade700,
+              ),
       ),
     );
   }

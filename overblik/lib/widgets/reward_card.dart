@@ -15,6 +15,22 @@ class RewardCard extends StatelessWidget {
     this.onTap,
   });
 
+  String _profileLabel() {
+    final profile = reward.assignedProfile.trim();
+    if (profile.isEmpty) {
+      return 'Ingen profil valgt';
+    }
+    return profile;
+  }
+
+  String _emojiLabel() {
+    final emoji = reward.emoji.trim();
+    if (emoji.isEmpty) {
+      return '🎁';
+    }
+    return emoji;
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasDescription = reward.description.trim().isNotEmpty;
@@ -32,12 +48,13 @@ class RewardCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
                   radius: 24,
                   backgroundColor: Colors.white,
                   child: Text(
-                    reward.emoji,
+                    _emojiLabel(),
                     style: const TextStyle(fontSize: 24),
                   ),
                 ),
@@ -48,15 +65,20 @@ class RewardCard extends StatelessWidget {
                     children: [
                       Text(
                         reward.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: Colors.black,
+                          height: 1.2,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Tilhører: ${reward.assignedProfile}',
+                        'Tilhører: ${_profileLabel()}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 13,
                           color: Colors.black54,

@@ -75,38 +75,6 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     return _activity.description;
   }
 
-  String _buildRewardText() {
-    final parts = <String>[];
-
-    if (_activity.directRewardId != null) {
-      final reward = _rewardService.getRewardById(_activity.directRewardId!);
-      parts.add(
-        reward != null
-            ? 'Direkte belønning: ${reward.emoji} ${reward.title}'
-            : 'Direkte belønning: Ukendt belønning',
-      );
-    }
-
-    if (_activity.streakRewardId != null) {
-      final reward = _rewardService.getRewardById(_activity.streakRewardId!);
-      final targetText = _activity.streakTarget != null
-          ? ' efter ${_activity.streakTarget} gange'
-          : '';
-
-      parts.add(
-        reward != null
-            ? 'Langsigtet belønning: ${reward.emoji} ${reward.title}$targetText'
-            : 'Langsigtet belønning: Ukendt belønning$targetText',
-      );
-    }
-
-    if (parts.isEmpty) {
-      return 'Ingen belønning valgt';
-    }
-
-    return parts.join('\n\n');
-  }
-
   String _buildRecurrenceText() {
     switch (_activity.recurrence) {
       case ActivityRecurrence.none:
@@ -248,6 +216,14 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         _activity.directRewardId != null || _activity.streakRewardId != null;
     final hasChecklist = _activity.checklistItems.isNotEmpty;
     final hasRecurrence = _activity.recurrence != ActivityRecurrence.none;
+
+    final directReward = _activity.directRewardId != null
+        ? _rewardService.getRewardById(_activity.directRewardId!)
+        : null;
+
+    final streakReward = _activity.streakRewardId != null
+        ? _rewardService.getRewardById(_activity.streakRewardId!)
+        : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -427,15 +403,40 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             const SizedBox(height: 20),
                             _InfoSection(
                               icon: Icons.card_giftcard_outlined,
-                              child: Text(
-                                _buildRewardText(),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w400,
-                                  color: Colors.black,
-                                  height: 1.5,
-                                  letterSpacing: 0.5,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (directReward != null ||
+                                      _activity.directRewardId != null)
+                                    _RewardCard(
+                                      title: 'Direkte belønning',
+                                      emoji: directReward?.emoji ?? '🎁',
+                                      rewardTitle:
+                                          directReward?.title ??
+                                              'Ukendt belønning',
+                                      subtitle:
+                                          'Kan opnås efter denne aktivitet',
+                                      icon: Icons.flash_on_outlined,
+                                    ),
+                                  if ((directReward != null ||
+                                          _activity.directRewardId != null) &&
+                                      (streakReward != null ||
+                                          _activity.streakRewardId != null))
+                                    const SizedBox(height: 10),
+                                  if (streakReward != null ||
+                                      _activity.streakRewardId != null)
+                                    _RewardCard(
+                                      title: 'Langsigtet belønning',
+                                      emoji: streakReward?.emoji ?? '🏆',
+                                      rewardTitle:
+                                          streakReward?.title ??
+                                              'Ukendt belønning',
+                                      subtitle: _activity.streakTarget != null
+                                          ? 'Opnås efter ${_activity.streakTarget} gange'
+                                          : 'Langsigtet belønning',
+                                      icon: Icons.trending_up_outlined,
+                                    ),
+                                ],
                               ),
                             ),
                           ],
@@ -605,6 +606,94 @@ class _InfoSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _RewardCard extends StatelessWidget {
+  final String title;
+  final String emoji;
+  final String rewardTitle;
+  final String subtitle;
+  final IconData icon;
+
+  const _RewardCard({
+    required this.title,
+    required this.emoji,
+    required this.rewardTitle,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: const Color(0xFFF8F8F8),
+            child: Text(
+              emoji,
+              style: const TextStyle(fontSize: 22),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      icon,
+                      size: 16,
+                      color: Colors.black87,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  rewardTitle,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black54,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

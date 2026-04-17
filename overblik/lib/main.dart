@@ -1,46 +1,26 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'core/supabase_config.dart';
-import 'core/theme/app_theme.dart';
-import 'screens/create_activity_screen.dart';
 import 'screens/daily_calendar_screen.dart';
-import 'screens/family_screen.dart';
-import 'screens/monthly_calendar_screen.dart';
-import 'screens/profile_screen.dart';
-import 'screens/rewards_screen.dart';
-import 'screens/weekly_calendar_screen.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
-  );
-
-  runApp(const OverblikApp());
+void main() {
+  runApp(const MyApp());
 }
 
-class OverblikApp extends StatelessWidget {
-  const OverblikApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Overblik',
-      theme: AppTheme.lightTheme,
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const DailyCalendarScreen(),
-        '/family': (context) => const FamilyScreen(),
-        '/profile': (context) => const ProfileScreen(),
-        '/weekly': (context) => const WeeklyCalendarScreen(),
-        '/monthly': (context) => const MonthlyCalendarScreen(),
-        '/rewards': (context) => const RewardsScreen(),
-        '/create-activity': (context) => const CreateActivityScreen(),
-      },
+      title: 'Familiekalender',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFA2E5AD),
+        ),
+        useMaterial3: true,
+      ),
+      home: const DailyCalendarScreen(),
     );
   }
 }

@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/activity.dart';
+import '../models/profile.dart';
 import '../models/reward.dart';
 import '../screens/rewards_screen.dart';
+import '../services/profile_service.dart';
 import '../services/reward_service.dart';
 
 class CreateActivityScreen extends StatefulWidget {
@@ -26,6 +28,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _imagePicker = ImagePicker();
   final RewardService _rewardService = RewardService();
+  final ProfileService _profileService = ProfileService();
+
+  late final List<Profile> _availableProfiles;
+  late final List<String> _participantOptions;
 
   late final TextEditingController _titleController;
   late final TextEditingController _emojiController;
@@ -56,14 +62,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
   bool get _isEditing => widget.existingActivity != null;
 
-  static const List<String> _participantOptions = [
-    'Mig',
-    'Mor',
-    'Far',
-    'Peter',
-    'Familie',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -71,6 +69,12 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     final activity = widget.existingActivity;
     final baseDate = widget.initialDate ?? DateTime.now();
     final roundedNow = _roundToNextQuarter(baseDate);
+
+    _availableProfiles = _profileService.getAllProfiles();
+    _participantOptions = [
+      ..._availableProfiles.map((profile) => profile.name),
+      'Familie',
+    ];
 
     _titleController = TextEditingController(text: activity?.title ?? '');
     _emojiController = TextEditingController(text: activity?.emoji ?? '');
@@ -92,7 +96,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     );
 
     _isFavorite = activity?.isFavorite ?? false;
-    _showChecklist = (activity?.checklistItems.isNotEmpty ?? false);
+    _showChecklist = activity?.checklistItems.isNotEmpty ?? false;
 
     _enableDirectReward = activity?.directRewardId != null;
     _enableStreakReward = activity?.streakRewardId != null;
@@ -240,7 +244,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
   List<Reward> _availableRewards() {
     final rewards = _rewardService.getAllRewards();
-    rewards.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    rewards.sort(
+      (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+    );
     return rewards;
   }
 
@@ -274,6 +280,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   String _rewardTitleById(String? rewardId) {
     if (rewardId == null) return 'Ingen valgt';
     return _rewardService.getRewardById(rewardId)?.title ?? 'Ukendt belønning';
+  }
+
+  String _rewardDropdownLabel(Reward reward) {
+    final emoji = reward.emoji.trim().isEmpty ? '🎁' : reward.emoji;
+    return '$emoji ${reward.title}';
   }
 
   Future<void> _pickDate() async {
@@ -449,7 +460,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     });
   }
 
-  void _openRewardsScreen() async {
+  Future<void> _openRewardsScreen() async {
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -728,8 +739,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                             border: OutlineInputBorder(),
                           ),
                           items: _participantOptions
-                              .where((option) =>
-                                  !_selectedParticipants.contains(option))
+                              .where(
+                                (option) =>
+                                    !_selectedParticipants.contains(option),
+                              )
                               .map((participant) {
                             return DropdownMenuItem<String>(
                               value: participant,
@@ -930,8 +943,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                         ),
                         if (_showChecklist) ...[
                           const SizedBox(height: 12),
-                          ...List.generate(_checklistControllers.length,
-                              (index) {
+                          ...List.generate(_checklistControllers.length, (
+                            index,
+                          ) {
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Row(
@@ -997,8 +1011,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                           if (_enableDirectReward) ...[
                             const SizedBox(height: 10),
                             DropdownButtonFormField<String>(
-                              initialValue: directRewards
-                                      .any((r) => r.id == _selectedDirectRewardId)
+                              initialValue: directRewards.any(
+                                (r) => r.id == _selectedDirectRewardId,
+                              )
                                   ? _selectedDirectRewardId
                                   : null,
                               decoration: const InputDecoration(
@@ -1010,7 +1025,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                     (reward) => DropdownMenuItem<String>(
                                       value: reward.id,
                                       child: Text(
-                                        '${reward.emoji} ${reward.title} (${reward.assignedProfile})',
+                                        _rewardDropdownLabel(reward),
                                       ),
                                     ),
                                   )
@@ -1060,8 +1075,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                           if (_enableStreakReward) ...[
                             const SizedBox(height: 10),
                             DropdownButtonFormField<String>(
-                              initialValue: streakRewards
-                                      .any((r) => r.id == _selectedStreakRewardId)
+                              initialValue: streakRewards.any(
+                                (r) => r.id == _selectedStreakRewardId,
+                              )
                                   ? _selectedStreakRewardId
                                   : null,
                               decoration: const InputDecoration(
@@ -1073,7 +1089,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                     (reward) => DropdownMenuItem<String>(
                                       value: reward.id,
                                       child: Text(
-                                        '${reward.emoji} ${reward.title} (${reward.assignedProfile})',
+                                        _rewardDropdownLabel(reward),
                                       ),
                                     ),
                                   )

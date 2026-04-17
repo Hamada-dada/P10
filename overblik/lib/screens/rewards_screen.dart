@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../models/profile.dart';
 import '../models/reward.dart';
+import '../services/profile_service.dart';
 import '../services/reward_service.dart';
 import '../widgets/reward_card.dart';
 
@@ -13,15 +15,24 @@ class RewardsScreen extends StatefulWidget {
 
 class _RewardsScreenState extends State<RewardsScreen> {
   final RewardService _rewardService = RewardService();
+  final ProfileService _profileService = ProfileService();
 
-  final List<String> _profiles = const [
-    'Alle',
-    'Jørn',
-    'Emma',
-    'Noah',
-  ];
+  late final List<Profile> _profiles;
 
   String _selectedProfileFilter = 'Alle';
+
+  @override
+  void initState() {
+    super.initState();
+    _profiles = _profileService.getAllProfiles();
+  }
+
+  List<String> get _profileFilterOptions {
+    return [
+      'Alle',
+      ..._profiles.map((profile) => profile.name),
+    ];
+  }
 
   List<Reward> get _filteredRewards {
     final allRewards = _rewardService.getAllRewards();
@@ -40,7 +51,12 @@ class _RewardsScreenState extends State<RewardsScreen> {
     final emojiController = TextEditingController();
     final descriptionController = TextEditingController();
 
-    String selectedProfile = _profiles.length > 1 ? _profiles[1] : 'Jørn';
+    final childProfiles =
+        _profiles.where((profile) => profile.role == ProfileRole.child).toList();
+
+    String selectedProfile =
+        childProfiles.isNotEmpty ? childProfiles.first.name : _profiles.first.name;
+
     bool isDirectReward = true;
     bool isStreakReward = false;
 
@@ -87,15 +103,12 @@ class _RewardsScreenState extends State<RewardsScreen> {
                         labelText: 'Tilhører profil',
                         border: OutlineInputBorder(),
                       ),
-                      items: _profiles
-                          .where((profile) => profile != 'Alle')
-                          .map(
-                            (profile) => DropdownMenuItem(
-                              value: profile,
-                              child: Text(profile),
-                            ),
-                          )
-                          .toList(),
+                      items: childProfiles.map((profile) {
+                        return DropdownMenuItem<String>(
+                          value: profile.name,
+                          child: Text('${profile.emoji} ${profile.name}'),
+                        );
+                      }).toList(),
                       onChanged: (value) {
                         if (value == null) return;
                         setDialogState(() {
@@ -213,6 +226,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
   @override
   Widget build(BuildContext context) {
     final rewards = _filteredRewards;
+    final profileFilters = _profileFilterOptions;
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -243,18 +257,18 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
-                          children: _profiles.map((profile) {
+                          children: profileFilters.map((profileName) {
                             final isSelected =
-                                profile == _selectedProfileFilter;
+                                profileName == _selectedProfileFilter;
 
                             return Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: ChoiceChip(
-                                label: Text(profile),
+                                label: Text(profileName),
                                 selected: isSelected,
                                 onSelected: (_) {
                                   setState(() {
-                                    _selectedProfileFilter = profile;
+                                    _selectedProfileFilter = profileName;
                                   });
                                 },
                               ),

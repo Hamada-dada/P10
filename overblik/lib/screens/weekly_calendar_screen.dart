@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+
 import '../models/activity.dart';
 import '../screens/daily_calendar_screen.dart';
 import '../services/activity_service.dart';
+import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
+import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
-import '../widgets/profile_avatar.dart';
 
 class WeeklyCalendarScreen extends StatefulWidget {
   const WeeklyCalendarScreen({super.key});
@@ -17,7 +19,6 @@ class WeeklyCalendarScreen extends StatefulWidget {
 class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   DateTime _focusedDate = DateTime.now();
   final ActivityService _activityService = ActivityService();
-  final List<Activity> _createdActivities = [];
 
   void _goToPreviousWeek() {
     setState(() {
@@ -37,13 +38,15 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     });
   }
 
-  void _openDay(DateTime selectedDate) {
-    Navigator.push(
+  Future<void> _openDay(DateTime selectedDate) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => DailyCalendarScreen(initialDate: selectedDate),
       ),
     );
+
+    setState(() {});
   }
 
   Future<void> _openCreateActivityScreen() async {
@@ -55,28 +58,15 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     );
 
     if (createdActivity != null) {
-      setState(() {
-        _createdActivities.add(createdActivity);
-      });
+      _activityService.addActivity(createdActivity);
+      setState(() {});
     }
   }
 
   List<Activity> _activitiesForDate(DateTime date) {
-    final serviceActivities = _activityService.getActivitiesForDate(date);
-
-    final createdActivitiesForDate = _createdActivities.where((activity) {
-      return activity.startTime.year == date.year &&
-          activity.startTime.month == date.month &&
-          activity.startTime.day == date.day;
-    }).toList();
-
-    final allActivities = [
-      ...serviceActivities,
-      ...createdActivitiesForDate,
-    ];
-
-    allActivities.sort((a, b) => a.startTime.compareTo(b.startTime));
-    return allActivities;
+    final activities = _activityService.getActivitiesForDate(date);
+    activities.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return activities;
   }
 
   Activity? _getWeeklyHighlight(List<Activity> activities) {
@@ -143,10 +133,10 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
                 Container(
                   padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
                   decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                 clipBehavior: Clip.antiAlias,
+                  clipBehavior: Clip.antiAlias,
                   child: Column(
                     children: [
                       SizedBox(
@@ -284,8 +274,6 @@ class _WeekDayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasActivities = activities.isNotEmpty;
-    final visibleActivities = activities.take(3).toList();
-    final extraCount = activities.length - visibleActivities.length;
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -304,60 +292,51 @@ class _WeekDayCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: 92,
+              width: 84,
               child: Text(
                 '${_weekdayName(date.weekday)}\n${date.day}/${date.month}',
                 style: const TextStyle(
                   fontFamily: 'Italiana',
-                  fontSize: 20,
+                  fontSize: 19,
                   fontWeight: FontWeight.w400,
                   color: Colors.black,
+                  height: 1.15,
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: !hasActivities
-                  ? const Text(
-                      'Ingen aktiviteter',
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: Colors.black54,
+                  ? const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Ingen aktiviteter',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.black54,
+                        ),
                       ),
                     )
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            ...visibleActivities.map(
-                              (activity) => Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: _ownerColor(activity.owner),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                            if (extraCount > 0)
-                              Text(
-                                '+$extraCount',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                          ],
+                        ActivityIndicators(
+                          activities: activities,
+                          ownerColorBuilder: _ownerColor,
+                          maxDots: 3,
+                          maxStars: 3,
+                          dotSize: 8,
+                          starSize: 13,
+                          countFontSize: 11,
+                          itemSpacing: 4,
+                          sectionSpacing: 10,
                         ),
-                        const SizedBox(height: 8),
                         if (highlightActivity != null) ...[
+                          const SizedBox(height: 8),
                           Text(
                             '${_formatTime(highlightActivity!.startTime)} - ${_formatTime(highlightActivity!.endTime)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 13,
                               color: Colors.black54,
@@ -377,16 +356,20 @@ class _WeekDayCard extends StatelessWidget {
                               color: highlightActivity!.isImportant
                                   ? Colors.red
                                   : Colors.black,
+                              height: 1.2,
                             ),
                           ),
                         ],
                       ],
                     ),
             ),
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.chevron_right,
-              color: Colors.black,
+            const SizedBox(width: 6),
+            const Padding(
+              padding: EdgeInsets.only(top: 2),
+              child: Icon(
+                Icons.chevron_right,
+                color: Colors.black,
+              ),
             ),
           ],
         ),

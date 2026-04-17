@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+
 import '../models/activity.dart';
 import '../services/activity_service.dart';
 import '../widgets/activity_card.dart';
+import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
+import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
 import 'activity_detail_screen.dart';
 import 'create_activity_screen.dart';
-import '../widgets/profile_avatar.dart';
 
 class DailyCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -31,7 +33,9 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
   }
 
   List<Activity> get _activitiesForFocusedDate {
-    return _activityService.getActivitiesForDate(_focusedDate);
+    final activities = _activityService.getActivitiesForDate(_focusedDate);
+    activities.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return activities;
   }
 
   void _goToPreviousDay() {
@@ -137,6 +141,8 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      _DailySummaryCard(activities: activities),
+                      const SizedBox(height: 12),
                       Expanded(
                         child: activities.isEmpty
                             ? const _EmptyActivitiesView()
@@ -201,7 +207,7 @@ class _ScreenTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        'Daglig Kalender',
+        'Daglig kalender',
         style: TextStyle(
           fontFamily: 'Italiana',
           fontSize: fontSize,
@@ -213,20 +219,100 @@ class _ScreenTitle extends StatelessWidget {
   }
 }
 
+class _DailySummaryCard extends StatelessWidget {
+  final List<Activity> activities;
+
+  const _DailySummaryCard({
+    required this.activities,
+  });
+
+  Color _ownerColor(ActivityOwner owner) {
+    switch (owner) {
+      case ActivityOwner.me:
+        return Colors.blue;
+      case ActivityOwner.mother:
+        return Colors.pink;
+      case ActivityOwner.father:
+        return Colors.orange;
+      case ActivityOwner.family:
+        return Colors.purple;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFE0E0E0),
+        ),
+      ),
+      child: activities.isEmpty
+          ? const Text(
+              'Ingen aktiviteter planlagt for denne dag',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black54,
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Dagens overblik',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ActivityIndicators(
+                  activities: activities,
+                  ownerColorBuilder: _ownerColor,
+                  maxDots: 5,
+                  maxStars: 3,
+                  dotSize: 8,
+                  starSize: 13,
+                  countFontSize: 11,
+                  itemSpacing: 4,
+                  sectionSpacing: 10,
+                ),
+              ],
+            ),
+    );
+  }
+}
+
 class _EmptyActivitiesView extends StatelessWidget {
   const _EmptyActivitiesView();
 
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: Text(
-        'Ingen aktiviteter',
-        style: TextStyle(
-          fontFamily: 'Italiana',
-          fontSize: 24,
-          fontWeight: FontWeight.w400,
-          color: Colors.black,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.event_note_outlined,
+            size: 38,
+            color: Colors.black45,
+          ),
+          SizedBox(height: 10),
+          Text(
+            'Ingen aktiviteter',
+            style: TextStyle(
+              fontFamily: 'Italiana',
+              fontSize: 24,
+              fontWeight: FontWeight.w400,
+              color: Colors.black,
+            ),
+          ),
+        ],
       ),
     );
   }
