@@ -25,6 +25,7 @@ class Activity {
   final String description;
   final List<String> participants;
   final List<String> checklistItems;
+  final List<bool> checklistChecked;
   final String reward;
   final bool isRewardRecurring;
   final String imagePath;
@@ -45,6 +46,7 @@ class Activity {
     this.description = '',
     this.participants = const [],
     this.checklistItems = const [],
+    this.checklistChecked = const [],
     this.reward = '',
     this.isRewardRecurring = false,
     this.imagePath = '',
@@ -53,6 +55,13 @@ class Activity {
   });
 
   Duration get duration => endTime.difference(startTime);
+
+  List<bool> get normalizedChecklistChecked {
+    return List<bool>.generate(
+      checklistItems.length,
+      (index) => index < checklistChecked.length ? checklistChecked[index] : false,
+    );
+  }
 
   Activity copyWith({
     String? id,
@@ -66,6 +75,7 @@ class Activity {
     String? description,
     List<String>? participants,
     List<String>? checklistItems,
+    List<bool>? checklistChecked,
     String? reward,
     bool? isRewardRecurring,
     String? imagePath,
@@ -86,6 +96,7 @@ class Activity {
       description: description ?? this.description,
       participants: participants ?? this.participants,
       checklistItems: checklistItems ?? this.checklistItems,
+      checklistChecked: checklistChecked ?? this.checklistChecked,
       reward: reward ?? this.reward,
       isRewardRecurring: isRewardRecurring ?? this.isRewardRecurring,
       imagePath: imagePath ?? this.imagePath,

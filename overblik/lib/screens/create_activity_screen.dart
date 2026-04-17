@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
 import '../models/activity.dart';
 
 class CreateActivityScreen extends StatefulWidget {
@@ -17,12 +21,12 @@ class CreateActivityScreen extends StatefulWidget {
 
 class _CreateActivityScreenState extends State<CreateActivityScreen> {
   final _formKey = GlobalKey<FormState>();
+  final ImagePicker _imagePicker = ImagePicker();
 
   late final TextEditingController _titleController;
   late final TextEditingController _emojiController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _rewardController;
-  late final TextEditingController _imagePathController;
   late final TextEditingController _recurrenceIntervalController;
 
   late DateTime _selectedDate;
@@ -38,6 +42,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   late List<TextEditingController> _checklistControllers;
   late ActivityRecurrence _selectedRecurrence;
   late ActivityRecurrence _selectedCustomRecurrence;
+
+  String _imagePath = '';
 
   bool get _isEditing => widget.existingActivity != null;
 
@@ -62,11 +68,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _descriptionController =
         TextEditingController(text: activity?.description ?? '');
     _rewardController = TextEditingController(text: activity?.reward ?? '');
-    _imagePathController =
-        TextEditingController(text: activity?.imagePath ?? '');
     _recurrenceIntervalController = TextEditingController(
       text: (activity?.recurrenceInterval ?? 1).toString(),
     );
+
+    _imagePath = activity?.imagePath ?? '';
 
     _selectedDate = activity?.startTime ?? baseDate;
     _startTime = TimeOfDay.fromDateTime(activity?.startTime ?? roundedNow);
@@ -103,7 +109,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _emojiController.dispose();
     _descriptionController.dispose();
     _rewardController.dispose();
-    _imagePathController.dispose();
     _recurrenceIntervalController.dispose();
 
     for (final controller in _checklistControllers) {
@@ -199,6 +204,22 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     }
   }
 
+  List<bool> _buildChecklistChecked({
+    required List<String> newItems,
+    required Activity? existingActivity,
+  }) {
+    if (newItems.isEmpty) {
+      return <bool>[];
+    }
+
+    final oldChecked = existingActivity?.normalizedChecklistChecked ?? <bool>[];
+
+    return List<bool>.generate(
+      newItems.length,
+      (index) => index < oldChecked.length ? oldChecked[index] : false,
+    );
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -252,6 +273,77 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     }
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+
+      if (pickedFile == null) {
+        return;
+      }
+
+      setState(() {
+        _imagePath = pickedFile.path;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kunne ikke vælge billede: $e')),
+      );
+    }
+  }
+
+  void _removeImage() {
+    setState(() {
+      _imagePath = '';
+    });
+  }
+
+  Future<void> _showImageSourceDialog() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('Vælg fra billeder'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _pickImage(ImageSource.gallery);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined),
+                  title: const Text('Tag billede med kamera'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _pickImage(ImageSource.camera);
+                  },
+                ),
+                if (_imagePath.trim().isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline),
+                    title: const Text('Slet billede'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _removeImage();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _addChecklistItem() {
     setState(() {
       if (!_showChecklist) {
@@ -295,52 +387,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         _isRewardRecurring = false;
       }
     });
-  }
-
-  Future<void> _showImageSourceDialog() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: const Text('Vælg fra billeder'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Galleri-integration mangler endnu. UI er klar til image_picker.',
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.camera_alt_outlined),
-                  title: const Text('Tag billede med kamera'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Kamera-integration mangler endnu. UI er klar til image_picker.',
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   void _saveActivity() {
@@ -388,6 +434,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
             .toList()
         : <String>[];
 
+    final checklistChecked = _buildChecklistChecked(
+      newItems: checklistItems,
+      existingActivity: widget.existingActivity,
+    );
+
     final rewardText = _showRewardFields ? _rewardController.text.trim() : '';
 
     final activity = Activity(
@@ -403,9 +454,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       description: _descriptionController.text.trim(),
       participants: _selectedParticipants,
       checklistItems: checklistItems,
+      checklistChecked: checklistChecked,
       reward: rewardText,
       isRewardRecurring: _showRewardFields ? _isRewardRecurring : false,
-      imagePath: _imagePathController.text.trim(),
+      imagePath: _imagePath.trim(),
       recurrence: _selectedRecurrence == ActivityRecurrence.custom
           ? _selectedCustomRecurrence
           : _selectedRecurrence,
@@ -419,7 +471,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = _isEditing ? 'Ny aktivitet' : 'Ny aktivitet';
+    final title = _isEditing ? 'Rediger aktivitet' : 'Ny aktivitet';
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -506,7 +558,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<ActivityRecurrence>(
-                          value: _selectedRecurrence,
+                          initialValue: _selectedRecurrence,
                           decoration: const InputDecoration(
                             labelText: 'Gentagelse',
                             border: OutlineInputBorder(),
@@ -528,7 +580,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                           const SizedBox(height: 12),
                           if (_selectedRecurrence == ActivityRecurrence.custom) ...[
                             DropdownButtonFormField<ActivityRecurrence>(
-                              value: _selectedCustomRecurrence,
+                              initialValue: _selectedCustomRecurrence,
                               decoration: const InputDecoration(
                                 labelText: 'Gentag hver',
                                 border: OutlineInputBorder(),
@@ -568,7 +620,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                               hintText: 'f.eks. 2',
                             ),
                             validator: (value) {
-                              if (_selectedRecurrence == ActivityRecurrence.none) {
+                              if (_selectedRecurrence ==
+                                  ActivityRecurrence.none) {
                                 return null;
                               }
                               final number = int.tryParse((value ?? '').trim());
@@ -624,18 +677,101 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                           ),
                           child: Column(
                             children: [
-                              TextFormField(
-                                controller: _descriptionController,
-                                maxLines: 5,
-                                decoration: const InputDecoration(
-                                  labelText: 'Beskrivelse',
-                                  alignLabelWithHint: true,
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.fromLTRB(
-                                    12,
-                                    12,
-                                    12,
-                                    12,
+                              SizedBox(
+                                height: 220,
+                                child: Scrollbar(
+                                  thumbVisibility: true,
+                                  child: SingleChildScrollView(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      12,
+                                      12,
+                                      12,
+                                      12,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        TextField(
+                                          controller: _descriptionController,
+                                          keyboardType:
+                                              TextInputType.multiline,
+                                          textInputAction:
+                                              TextInputAction.newline,
+                                          minLines: 4,
+                                          maxLines: null,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Beskrivelse',
+                                            alignLabelWithHint: true,
+                                            border: InputBorder.none,
+                                            isCollapsed: true,
+                                          ),
+                                        ),
+                                        if (_imagePath.trim().isNotEmpty) ...[
+                                          const SizedBox(height: 12),
+                                          Stack(
+                                            children: [
+                                              Container(
+                                                width: double.infinity,
+                                                constraints:
+                                                    const BoxConstraints(
+                                                  maxHeight: 140,
+                                                  minHeight: 90,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      const Color(0xFFF8F8F8),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  border: Border.all(
+                                                    color:
+                                                        const Color(0xFFE0E0E0),
+                                                  ),
+                                                ),
+                                                child: ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  child: Image.file(
+                                                    File(_imagePath),
+                                                    width: double.infinity,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (context,
+                                                        error, stackTrace) {
+                                                      return const SizedBox(
+                                                        height: 90,
+                                                        child: Center(
+                                                          child: Text(
+                                                            'Kunne ikke vise billedet',
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: 6,
+                                                right: 6,
+                                                child: Material(
+                                                  color: Colors.white,
+                                                  shape: const CircleBorder(),
+                                                  elevation: 2,
+                                                  child: IconButton(
+                                                    tooltip: 'Slet billede',
+                                                    onPressed: _removeImage,
+                                                    icon: const Icon(
+                                                      Icons.close,
+                                                      size: 18,
+                                                      color: Colors.black,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -700,19 +836,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                             ],
                           ),
                         ),
-                        if (_imagePathController.text.trim().isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _imagePathController,
-                            decoration: const InputDecoration(
-                              labelText: 'Billedereference',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ],
                         if (_showChecklist) ...[
                           const SizedBox(height: 12),
-                          ...List.generate(_checklistControllers.length, (index) {
+                          ...List.generate(_checklistControllers.length,
+                              (index) {
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Row(
@@ -734,7 +861,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   IconButton(
-                                    onPressed: () => _removeChecklistItem(index),
+                                    onPressed: () =>
+                                        _removeChecklistItem(index),
                                     icon: const Icon(Icons.close),
                                   ),
                                 ],

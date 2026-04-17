@@ -1,15 +1,33 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+
 import '../models/activity.dart';
 import '../services/activity_service.dart';
 import 'create_activity_screen.dart';
 
-class ActivityDetailScreen extends StatelessWidget {
+class ActivityDetailScreen extends StatefulWidget {
   final Activity activity;
 
   const ActivityDetailScreen({
     super.key,
     required this.activity,
   });
+
+  @override
+  State<ActivityDetailScreen> createState() => _ActivityDetailScreenState();
+}
+
+class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
+  late List<bool> _checkedItems;
+
+  Activity get activity => widget.activity;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkedItems = List<bool>.from(activity.normalizedChecklistChecked);
+  }
 
   String _formatDate(DateTime dateTime) {
     const weekdays = [
@@ -27,7 +45,7 @@ class ActivityDetailScreen extends StatelessWidget {
     final month = dateTime.month.toString().padLeft(2, '0');
     final year = (dateTime.year % 100).toString().padLeft(2, '0');
 
-    return '$weekday $day/$month/$year';
+    return '$weekday\n$day/$month/$year';
   }
 
   String _formatTime(DateTime dateTime) {
@@ -57,7 +75,50 @@ class ActivityDetailScreen extends StatelessWidget {
       return 'Ingen belønning valgt';
     }
 
+    if (activity.isRewardRecurring) {
+      return '${activity.reward}\nGentagende belønning';
+    }
+
     return activity.reward;
+  }
+
+  String _buildRecurrenceText() {
+    switch (activity.recurrence) {
+      case ActivityRecurrence.none:
+        return 'Ingen gentagelse';
+      case ActivityRecurrence.daily:
+        if (activity.recurrenceInterval == 1) {
+          return 'Gentages hver dag';
+        }
+        return 'Gentages hver ${activity.recurrenceInterval}. dag';
+      case ActivityRecurrence.weekly:
+        if (activity.recurrenceInterval == 1) {
+          return 'Gentages hver uge';
+        }
+        return 'Gentages hver ${activity.recurrenceInterval}. uge';
+      case ActivityRecurrence.monthly:
+        if (activity.recurrenceInterval == 1) {
+          return 'Gentages hver måned';
+        }
+        return 'Gentages hver ${activity.recurrenceInterval}. måned';
+      case ActivityRecurrence.custom:
+        return 'Brugerdefineret gentagelse';
+    }
+  }
+
+  Future<void> _toggleChecklistItem(int index) async {
+    final updatedCheckedItems = List<bool>.from(_checkedItems);
+    updatedCheckedItems[index] = !updatedCheckedItems[index];
+
+    setState(() {
+      _checkedItems = updatedCheckedItems;
+    });
+
+    final updatedActivity = activity.copyWith(
+      checklistChecked: updatedCheckedItems,
+    );
+
+    ActivityService().updateActivity(updatedActivity);
   }
 
   Future<void> _editActivity(BuildContext context) async {
@@ -113,8 +174,52 @@ class ActivityDetailScreen extends StatelessWidget {
     Navigator.pop(context, true);
   }
 
+  void _openImagePreview(BuildContext context) {
+    if (activity.imagePath.trim().isEmpty) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          body: SafeArea(
+            child: Stack(
+              children: [
+                Center(
+                  child: InteractiveViewer(
+                    child: Image.file(
+                      File(activity.imagePath),
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final hasImage = activity.imagePath.trim().isNotEmpty;
+    final hasReward = activity.reward.trim().isNotEmpty;
+    final hasChecklist = activity.checklistItems.isNotEmpty;
+    final hasRecurrence = activity.recurrence != ActivityRecurrence.none;
+
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
       body: SafeArea(
@@ -124,160 +229,243 @@ class ActivityDetailScreen extends StatelessWidget {
             child: Container(
               width: 420,
               constraints: const BoxConstraints(maxWidth: 420),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _TopBar(
-                    onBack: () => Navigator.pop(context),
-                    onEdit: () => _editActivity(context),
-                    onDelete: () => _deleteActivity(context),
-                  ),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: Text(
-                      '${activity.title} ${activity.emoji}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontFamily: 'Italiana',
-                        fontSize: 32,
-                        fontWeight: FontWeight.w400,
-                        color: Colors.black,
-                        letterSpacing: 1.2,
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: _TopBar(
+                      onBack: () => Navigator.pop(context),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _TimeInfoCard(
-                        dateText: _formatDate(activity.startTime),
-                        timeText: _formatTime(activity.startTime),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Icon(
-                          Icons.arrow_forward_ios,
-                          size: 24,
-                          color: Colors.black,
-                        ),
-                      ),
-                      _TimeInfoCard(
-                        dateText: _formatDate(activity.endTime),
-                        timeText: _formatTime(activity.endTime),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  _InfoSection(
-                    icon: Icons.edit_note,
-                    child: Text(
-                      _buildDescriptionText(),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xFF1D1B20),
-                        height: 1.5,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  if (activity.checklistItems.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    _InfoSection(
-                      icon: Icons.check_box_outlined,
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: activity.checklistItems.map((item) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Center(
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 2),
-                                  child: Icon(
-                                    Icons.check_box_outline_blank,
-                                    size: 18,
-                                    color: Colors.black87,
+                                if (activity.isFavorite)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 8),
+                                    child: Icon(
+                                      Icons.star,
+                                      color: Colors.amber,
+                                      size: 28,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
+                                Flexible(
                                   child: Text(
-                                    item,
+                                    '${activity.title} ${activity.emoji}',
+                                    textAlign: TextAlign.center,
                                     style: const TextStyle(
-                                      fontSize: 16,
+                                      fontFamily: 'Italiana',
+                                      fontSize: 32,
                                       fontWeight: FontWeight.w400,
-                                      color: Color(0xFF1D1B20),
-                                      height: 1.5,
-                                      letterSpacing: 0.5,
+                                      color: Colors.black,
+                                      letterSpacing: 1.2,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ],
-                  if (activity.isFavorite || activity.reward.trim().isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    _InfoSection(
-                      icon: Icons.card_giftcard_outlined,
-                      child: Text(
-                        _buildRewardText(),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.black,
-                          height: 1.5,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  _InfoSection(
-                    icon: Icons.group_outlined,
-                    child: Text(
-                      _buildParticipantsText(),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
-                        color: Colors.black,
-                        height: 1.5,
-                        letterSpacing: 0.5,
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _TimeInfoCard(
+                                dateText: _formatDate(activity.startTime),
+                                timeText: _formatTime(activity.startTime),
+                              ),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 12),
+                                child: Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 24,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              _TimeInfoCard(
+                                dateText: _formatDate(activity.endTime),
+                                timeText: _formatTime(activity.endTime),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          _InfoSection(
+                            icon: Icons.edit_note,
+                            child: Text(
+                              _buildDescriptionText(),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w400,
+                                color: Color(0xFF1D1B20),
+                                height: 1.5,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          if (hasImage) ...[
+                            const SizedBox(height: 20),
+                            _InfoSection(
+                              icon: Icons.image_outlined,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () => _openImagePreview(context),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.file(
+                                    File(activity.imagePath),
+                                    height: 160,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        height: 90,
+                                        alignment: Alignment.center,
+                                        color: const Color(0xFFF1F1F1),
+                                        child: const Text(
+                                          'Kunne ikke vise billedet',
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (hasChecklist) ...[
+                            const SizedBox(height: 20),
+                            _InfoSection(
+                              icon: Icons.check_box_outlined,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: List.generate(
+                                  activity.checklistItems.length,
+                                  (index) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(8),
+                                      onTap: () => _toggleChecklistItem(index),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(top: 2),
+                                            child: Icon(
+                                              _checkedItems[index]
+                                                  ? Icons.check_box
+                                                  : Icons
+                                                      .check_box_outline_blank,
+                                              size: 20,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              activity.checklistItems[index],
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w400,
+                                                color: const Color(0xFF1D1B20),
+                                                height: 1.5,
+                                                letterSpacing: 0.5,
+                                                decoration: _checkedItems[index]
+                                                    ? TextDecoration.lineThrough
+                                                    : TextDecoration.none,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (hasReward) ...[
+                            const SizedBox(height: 20),
+                            _InfoSection(
+                              icon: Icons.card_giftcard_outlined,
+                              child: Text(
+                                _buildRewardText(),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w400,
+                                  color: Colors.black,
+                                  height: 1.5,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (hasRecurrence) ...[
+                            const SizedBox(height: 20),
+                            _InfoSection(
+                              icon: Icons.repeat,
+                              child: Text(
+                                _buildRecurrenceText(),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w400,
+                                  color: Colors.black,
+                                  height: 1.5,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          _InfoSection(
+                            icon: Icons.group_outlined,
+                            child: Text(
+                              _buildParticipantsText(),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.black,
+                                height: 1.5,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
                       ),
                     ),
                   ),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _BottomActionButton(
-                        icon: Icons.delete_outline,
-                        label: 'Slet',
-                        onTap: () => _deleteActivity(context),
-                      ),
-                      _BottomActionButton(
-                        icon: Icons.edit_outlined,
-                        label: 'Rediger',
-                        onTap: () => _editActivity(context),
-                      ),
-                      _BottomActionButton(
-                        icon: Icons.camera_alt_outlined,
-                        label: 'Foto',
-                        onTap: () {},
-                      ),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _BottomActionButton(
+                          icon: Icons.delete_outline,
+                          label: 'Slet',
+                          onTap: () => _deleteActivity(context),
+                        ),
+                        _BottomActionButton(
+                          icon: Icons.edit_outlined,
+                          label: 'Rediger',
+                          onTap: () => _editActivity(context),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -291,13 +479,9 @@ class ActivityDetailScreen extends StatelessWidget {
 
 class _TopBar extends StatelessWidget {
   final VoidCallback onBack;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
 
   const _TopBar({
     required this.onBack,
-    required this.onEdit,
-    required this.onDelete,
   });
 
   @override
@@ -310,23 +494,6 @@ class _TopBar extends StatelessWidget {
             Icons.arrow_back_ios_new,
             color: Colors.black,
             size: 24,
-          ),
-        ),
-        const Spacer(),
-        IconButton(
-          onPressed: onDelete,
-          icon: const Icon(
-            Icons.delete_outline,
-            color: Colors.black,
-            size: 26,
-          ),
-        ),
-        IconButton(
-          onPressed: onEdit,
-          icon: const Icon(
-            Icons.edit,
-            color: Colors.black,
-            size: 26,
           ),
         ),
       ],
