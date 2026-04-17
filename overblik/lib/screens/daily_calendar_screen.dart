@@ -6,6 +6,7 @@ import '../widgets/calendar_navigation_bar.dart';
 import '../widgets/view_switcher.dart';
 import 'activity_detail_screen.dart';
 import 'create_activity_screen.dart';
+import '../widgets/profile_avatar.dart';
 
 class DailyCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -183,14 +184,7 @@ class _TopHeader extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: Colors.white,
-          child: Icon(
-            Icons.person,
-            color: Colors.grey.shade700,
-          ),
-        ),
+        const ProfileAvatarButton(),
       ],
     );
   }

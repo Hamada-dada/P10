@@ -5,6 +5,7 @@ import '../services/activity_service.dart';
 import '../widgets/calendar_navigation_bar.dart';
 import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
+import '../widgets/profile_avatar.dart';
 
 class MonthlyCalendarScreen extends StatefulWidget {
   const MonthlyCalendarScreen({super.key});
@@ -224,14 +225,7 @@ class _TopHeader extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: Colors.white,
-          child: Icon(
-            Icons.person,
-            color: Colors.grey.shade700,
-          ),
-        ),
+        const ProfileAvatarButton(),
       ],
     );
   }
