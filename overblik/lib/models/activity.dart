@@ -26,8 +26,9 @@ class Activity {
   final List<String> participants;
   final List<String> checklistItems;
   final List<bool> checklistChecked;
-  final String reward;
-  final bool isRewardRecurring;
+  final String? directRewardId;
+  final String? streakRewardId;
+  final int? streakTarget;
   final String imagePath;
   final ActivityOwner owner;
   final ActivityRecurrence recurrence;
@@ -47,8 +48,9 @@ class Activity {
     this.participants = const [],
     this.checklistItems = const [],
     this.checklistChecked = const [],
-    this.reward = '',
-    this.isRewardRecurring = false,
+    this.directRewardId,
+    this.streakRewardId,
+    this.streakTarget,
     this.imagePath = '',
     this.recurrence = ActivityRecurrence.none,
     this.recurrenceInterval = 1,
@@ -76,8 +78,9 @@ class Activity {
     List<String>? participants,
     List<String>? checklistItems,
     List<bool>? checklistChecked,
-    String? reward,
-    bool? isRewardRecurring,
+    String? directRewardId,
+    String? streakRewardId,
+    int? streakTarget,
     String? imagePath,
     ActivityOwner? owner,
     ActivityRecurrence? recurrence,
@@ -97,8 +100,9 @@ class Activity {
       participants: participants ?? this.participants,
       checklistItems: checklistItems ?? this.checklistItems,
       checklistChecked: checklistChecked ?? this.checklistChecked,
-      reward: reward ?? this.reward,
-      isRewardRecurring: isRewardRecurring ?? this.isRewardRecurring,
+      directRewardId: directRewardId ?? this.directRewardId,
+      streakRewardId: streakRewardId ?? this.streakRewardId,
+      streakTarget: streakTarget ?? this.streakTarget,
       imagePath: imagePath ?? this.imagePath,
       recurrence: recurrence ?? this.recurrence,
       recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval,

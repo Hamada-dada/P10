@@ -211,7 +211,7 @@ class ActivityService {
           participants: const ['Mig', 'Peter'],
           checklistItems: peterChecklist,
           checklistChecked: _emptyChecklistState(peterChecklist),
-          reward: '30 min ekstra skærmtid bagefter',
+          directRewardId: 'reward-1',
         ),
       );
     }
@@ -250,7 +250,7 @@ class ActivityService {
           participants: const ['Mig'],
           checklistItems: sportChecklist,
           checklistChecked: _emptyChecklistState(sportChecklist),
-          reward: 'Vælg aftensnack efter træning',
+          directRewardId: 'reward-3',
         ),
       );
     }
@@ -274,7 +274,8 @@ class ActivityService {
           participants: const ['Mig'],
           checklistItems: homeworkChecklist,
           checklistChecked: _emptyChecklistState(homeworkChecklist),
-          reward: 'Vælg en lille belønning bagefter',
+          streakRewardId: 'reward-2',
+          streakTarget: 5,
         ),
       );
     }

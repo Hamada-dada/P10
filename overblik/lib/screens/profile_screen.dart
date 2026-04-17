@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'rewards_screen.dart';
 import 'settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -38,6 +39,20 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  void _openRewards(BuildContext context) {
+    if (onOpenRewards != null) {
+      onOpenRewards!.call();
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const RewardsScreen(),
+      ),
+    );
+  }
+
   void _showComingSoon(BuildContext context, String label) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -48,6 +63,9 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final calendarAction =
+        onOpenCalendar ?? () => _showComingSoon(context, 'Kalender');
+
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
       body: SafeArea(
@@ -87,8 +105,7 @@ class ProfileScreen extends StatelessWidget {
                               child: _ActionCard(
                                 icon: Icons.calendar_today_outlined,
                                 label: 'Kalender',
-                                onTap: onOpenCalendar ??
-                                    () => _showComingSoon(context, 'Kalender'),
+                                onTap: calendarAction,
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -96,8 +113,7 @@ class ProfileScreen extends StatelessWidget {
                               child: _ActionCard(
                                 icon: Icons.card_giftcard_outlined,
                                 label: 'Belønninger',
-                                onTap: onOpenRewards ??
-                                    () => _showComingSoon(context, 'Belønninger'),
+                                onTap: () => _openRewards(context),
                               ),
                             ),
                           ],
@@ -117,7 +133,7 @@ class ProfileScreen extends StatelessWidget {
                               child: _InfoCard(
                                 icon: Icons.star_border,
                                 title: 'Favoritter',
-                                subtitle: 'Dine vigtige aktiviteter',
+                                subtitle: 'Udvalgte aktiviteter og rutiner',
                               ),
                             ),
                           ],
@@ -129,7 +145,7 @@ class ProfileScreen extends StatelessWidget {
                           icon: Icons.wb_sunny_outlined,
                           title: 'I dag',
                           body:
-                              'Her kan du hurtigt få overblik over dagens aktiviteter, belønninger og det vigtigste, du skal huske.',
+                              'Her kan du hurtigt få overblik over dagens aktiviteter, tjeklister og belønninger.',
                         ),
                         const SizedBox(height: 20),
                         const _SectionTitle(title: 'Familie og deltagere'),
@@ -159,18 +175,17 @@ class ProfileScreen extends StatelessWidget {
                         const SizedBox(height: 20),
                         const _SectionTitle(title: 'Profiloplysninger'),
                         const SizedBox(height: 10),
-                        const _LargeInfoCard(
+                        _LargeInfoCard(
                           icon: Icons.info_outline,
                           title: 'Om profilen',
                           body:
-                              'Profilen bruges til at vise aktiviteter, deltagere og kalenderoversigter på en tydelig måde.',
+                              '$name vises her med rolle, familieoversigt og hurtig adgang til kalender, belønninger og indstillinger.',
                         ),
                         const SizedBox(height: 24),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: onOpenCalendar ??
-                                () => _showComingSoon(context, 'Kalender'),
+                            onPressed: calendarAction,
                             icon: const Icon(Icons.calendar_month_outlined),
                             label: const Padding(
                               padding: EdgeInsets.symmetric(vertical: 14),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/activity.dart';
 import '../services/activity_service.dart';
+import '../services/reward_service.dart';
 import 'create_activity_screen.dart';
 
 class ActivityDetailScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class ActivityDetailScreen extends StatefulWidget {
 class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   late Activity _activity;
   late List<bool> _checkedItems;
+  final RewardService _rewardService = RewardService();
 
   @override
   void initState() {
@@ -74,15 +76,35 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   }
 
   String _buildRewardText() {
-    if (_activity.reward.trim().isEmpty) {
+    final parts = <String>[];
+
+    if (_activity.directRewardId != null) {
+      final reward = _rewardService.getRewardById(_activity.directRewardId!);
+      parts.add(
+        reward != null
+            ? 'Direkte belønning: ${reward.emoji} ${reward.title}'
+            : 'Direkte belønning: Ukendt belønning',
+      );
+    }
+
+    if (_activity.streakRewardId != null) {
+      final reward = _rewardService.getRewardById(_activity.streakRewardId!);
+      final targetText = _activity.streakTarget != null
+          ? ' efter ${_activity.streakTarget} gange'
+          : '';
+
+      parts.add(
+        reward != null
+            ? 'Langsigtet belønning: ${reward.emoji} ${reward.title}$targetText'
+            : 'Langsigtet belønning: Ukendt belønning$targetText',
+      );
+    }
+
+    if (parts.isEmpty) {
       return 'Ingen belønning valgt';
     }
 
-    if (_activity.isRewardRecurring) {
-      return '${_activity.reward}\nGentagende belønning';
-    }
-
-    return _activity.reward;
+    return parts.join('\n\n');
   }
 
   String _buildRecurrenceText() {
@@ -222,7 +244,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final hasImage = _activity.imagePath.trim().isNotEmpty;
-    final hasReward = _activity.reward.trim().isNotEmpty;
+    final hasReward =
+        _activity.directRewardId != null || _activity.streakRewardId != null;
     final hasChecklist = _activity.checklistItems.isNotEmpty;
     final hasRecurrence = _activity.recurrence != ActivityRecurrence.none;
 
@@ -371,8 +394,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                             child: Icon(
                                               _checkedItems[index]
                                                   ? Icons.check_box
-                                                  : Icons
-                                                      .check_box_outline_blank,
+                                                  : Icons.check_box_outline_blank,
                                               size: 20,
                                               color: Colors.black87,
                                             ),

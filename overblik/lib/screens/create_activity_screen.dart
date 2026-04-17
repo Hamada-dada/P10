@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/activity.dart';
+import '../models/reward.dart';
+import '../screens/rewards_screen.dart';
+import '../services/reward_service.dart';
 
 class CreateActivityScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -22,12 +25,13 @@ class CreateActivityScreen extends StatefulWidget {
 class _CreateActivityScreenState extends State<CreateActivityScreen> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _imagePicker = ImagePicker();
+  final RewardService _rewardService = RewardService();
 
   late final TextEditingController _titleController;
   late final TextEditingController _emojiController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _rewardController;
   late final TextEditingController _recurrenceIntervalController;
+  late final TextEditingController _streakTargetController;
 
   late DateTime _selectedDate;
   late TimeOfDay _startTime;
@@ -35,8 +39,13 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
   bool _isFavorite = false;
   bool _showRewardFields = false;
-  bool _isRewardRecurring = false;
   bool _showChecklist = false;
+
+  bool _enableDirectReward = false;
+  bool _enableStreakReward = false;
+
+  String? _selectedDirectRewardId;
+  String? _selectedStreakRewardId;
 
   late List<String> _selectedParticipants;
   late List<TextEditingController> _checklistControllers;
@@ -67,9 +76,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _emojiController = TextEditingController(text: activity?.emoji ?? '');
     _descriptionController =
         TextEditingController(text: activity?.description ?? '');
-    _rewardController = TextEditingController(text: activity?.reward ?? '');
     _recurrenceIntervalController = TextEditingController(
       text: (activity?.recurrenceInterval ?? 1).toString(),
+    );
+    _streakTargetController = TextEditingController(
+      text: (activity?.streakTarget ?? 5).toString(),
     );
 
     _imagePath = activity?.imagePath ?? '';
@@ -81,9 +92,14 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     );
 
     _isFavorite = activity?.isFavorite ?? false;
-    _showRewardFields = (activity?.reward.trim().isNotEmpty ?? false);
-    _isRewardRecurring = activity?.isRewardRecurring ?? false;
     _showChecklist = (activity?.checklistItems.isNotEmpty ?? false);
+
+    _enableDirectReward = activity?.directRewardId != null;
+    _enableStreakReward = activity?.streakRewardId != null;
+    _showRewardFields = _enableDirectReward || _enableStreakReward;
+
+    _selectedDirectRewardId = activity?.directRewardId;
+    _selectedStreakRewardId = activity?.streakRewardId;
 
     _selectedParticipants = List<String>.from(activity?.participants ?? ['Mig']);
     _selectedRecurrence = activity?.recurrence ?? ActivityRecurrence.none;
@@ -101,6 +117,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
             .map((item) => TextEditingController(text: item))
             .toList()
         : [];
+
+    _revalidateSelectedRewards();
   }
 
   @override
@@ -108,8 +126,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _titleController.dispose();
     _emojiController.dispose();
     _descriptionController.dispose();
-    _rewardController.dispose();
     _recurrenceIntervalController.dispose();
+    _streakTargetController.dispose();
 
     for (final controller in _checklistControllers) {
       controller.dispose();
@@ -218,6 +236,44 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       newItems.length,
       (index) => index < oldChecked.length ? oldChecked[index] : false,
     );
+  }
+
+  List<Reward> _availableRewards() {
+    final rewards = _rewardService.getAllRewards();
+    rewards.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    return rewards;
+  }
+
+  List<Reward> _directRewards() {
+    return _availableRewards()
+        .where((reward) => reward.types.contains(RewardType.direct))
+        .toList();
+  }
+
+  List<Reward> _streakRewards() {
+    return _availableRewards()
+        .where((reward) => reward.types.contains(RewardType.streak))
+        .toList();
+  }
+
+  void _revalidateSelectedRewards() {
+    final updatedDirectRewards = _directRewards();
+    final updatedStreakRewards = _streakRewards();
+
+    if (_selectedDirectRewardId != null &&
+        !updatedDirectRewards.any((r) => r.id == _selectedDirectRewardId)) {
+      _selectedDirectRewardId = null;
+    }
+
+    if (_selectedStreakRewardId != null &&
+        !updatedStreakRewards.any((r) => r.id == _selectedStreakRewardId)) {
+      _selectedStreakRewardId = null;
+    }
+  }
+
+  String _rewardTitleById(String? rewardId) {
+    if (rewardId == null) return 'Ingen valgt';
+    return _rewardService.getRewardById(rewardId)?.title ?? 'Ukendt belønning';
   }
 
   Future<void> _pickDate() async {
@@ -382,10 +438,28 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   void _toggleRewardFields() {
     setState(() {
       _showRewardFields = !_showRewardFields;
+
       if (!_showRewardFields) {
-        _rewardController.clear();
-        _isRewardRecurring = false;
+        _enableDirectReward = false;
+        _enableStreakReward = false;
+        _selectedDirectRewardId = null;
+        _selectedStreakRewardId = null;
+        _streakTargetController.text = '5';
       }
+    });
+  }
+
+  void _openRewardsScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const RewardsScreen(),
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _revalidateSelectedRewards();
     });
   }
 
@@ -427,6 +501,18 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       return;
     }
 
+    if (_enableStreakReward) {
+      final streakTarget = int.tryParse(_streakTargetController.text.trim());
+      if (streakTarget == null || streakTarget < 1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Angiv et gyldigt mål for langsigtet belønning.'),
+          ),
+        );
+        return;
+      }
+    }
+
     final checklistItems = _showChecklist
         ? _checklistControllers
             .map((controller) => controller.text.trim())
@@ -438,8 +524,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       newItems: checklistItems,
       existingActivity: widget.existingActivity,
     );
-
-    final rewardText = _showRewardFields ? _rewardController.text.trim() : '';
 
     final activity = Activity(
       id: widget.existingActivity?.id ??
@@ -455,8 +539,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       participants: _selectedParticipants,
       checklistItems: checklistItems,
       checklistChecked: checklistChecked,
-      reward: rewardText,
-      isRewardRecurring: _showRewardFields ? _isRewardRecurring : false,
+      directRewardId: _enableDirectReward ? _selectedDirectRewardId : null,
+      streakRewardId: _enableStreakReward ? _selectedStreakRewardId : null,
+      streakTarget: _enableStreakReward
+          ? int.tryParse(_streakTargetController.text.trim()) ?? 5
+          : null,
       imagePath: _imagePath.trim(),
       recurrence: _selectedRecurrence == ActivityRecurrence.custom
           ? _selectedCustomRecurrence
@@ -472,6 +559,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   @override
   Widget build(BuildContext context) {
     final title = _isEditing ? 'Rediger aktivitet' : 'Ny aktivitet';
+    final directRewards = _directRewards();
+    final streakRewards = _streakRewards();
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -649,8 +738,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                           }).toList(),
                           onChanged: (value) {
                             if (value == null) return;
+
                             setState(() {
                               _selectedParticipants.add(value);
+                              _revalidateSelectedRewards();
                             });
                           },
                         ),
@@ -664,6 +755,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                               onDeleted: () {
                                 setState(() {
                                   _selectedParticipants.remove(participant);
+                                  _revalidateSelectedRewards();
                                 });
                               },
                             );
@@ -880,16 +972,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                         ],
                         if (_showRewardFields) ...[
                           const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _rewardController,
-                            decoration: const InputDecoration(
-                              labelText: 'Belønning',
-                              border: OutlineInputBorder(),
-                              hintText:
-                                  'f.eks. 30 min. Switch eller is efter aftensmad',
-                            ),
-                          ),
-                          const SizedBox(height: 10),
                           SwitchListTile(
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -898,16 +980,155 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12,
                             ),
-                            title: const Text('Gentagende belønning'),
+                            title: const Text('Direkte belønning'),
                             subtitle: const Text(
-                              'Belønningen kan bruges igen næste gang aktiviteten gennemføres.',
+                              'Belønning efter én aktivitet.',
                             ),
-                            value: _isRewardRecurring,
+                            value: _enableDirectReward,
                             onChanged: (value) {
                               setState(() {
-                                _isRewardRecurring = value;
+                                _enableDirectReward = value;
+                                if (!value) {
+                                  _selectedDirectRewardId = null;
+                                }
                               });
                             },
+                          ),
+                          if (_enableDirectReward) ...[
+                            const SizedBox(height: 10),
+                            DropdownButtonFormField<String>(
+                              initialValue: directRewards
+                                      .any((r) => r.id == _selectedDirectRewardId)
+                                  ? _selectedDirectRewardId
+                                  : null,
+                              decoration: const InputDecoration(
+                                labelText: 'Vælg direkte belønning',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: directRewards
+                                  .map(
+                                    (reward) => DropdownMenuItem<String>(
+                                      value: reward.id,
+                                      child: Text(
+                                        '${reward.emoji} ${reward.title} (${reward.assignedProfile})',
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedDirectRewardId = value;
+                                });
+                              },
+                            ),
+                            if (directRewards.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: TextButton.icon(
+                                  onPressed: _openRewardsScreen,
+                                  icon: const Icon(Icons.add),
+                                  label: const Text(
+                                    'Ingen direkte belønninger fundet – opret en',
+                                  ),
+                                ),
+                              ),
+                          ],
+                          const SizedBox(height: 12),
+                          SwitchListTile(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            tileColor: const Color(0xFFF8F8F8),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                            ),
+                            title: const Text('Langsigtet belønning'),
+                            subtitle: const Text(
+                              'Belønning efter flere gennemførelser.',
+                            ),
+                            value: _enableStreakReward,
+                            onChanged: (value) {
+                              setState(() {
+                                _enableStreakReward = value;
+                                if (!value) {
+                                  _selectedStreakRewardId = null;
+                                  _streakTargetController.text = '5';
+                                }
+                              });
+                            },
+                          ),
+                          if (_enableStreakReward) ...[
+                            const SizedBox(height: 10),
+                            DropdownButtonFormField<String>(
+                              initialValue: streakRewards
+                                      .any((r) => r.id == _selectedStreakRewardId)
+                                  ? _selectedStreakRewardId
+                                  : null,
+                              decoration: const InputDecoration(
+                                labelText: 'Vælg langsigtet belønning',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: streakRewards
+                                  .map(
+                                    (reward) => DropdownMenuItem<String>(
+                                      value: reward.id,
+                                      child: Text(
+                                        '${reward.emoji} ${reward.title} (${reward.assignedProfile})',
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedStreakRewardId = value;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 10),
+                            TextFormField(
+                              controller: _streakTargetController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Opnås efter X gange',
+                                border: OutlineInputBorder(),
+                                hintText: 'f.eks. 5',
+                              ),
+                              validator: (value) {
+                                if (!_enableStreakReward) return null;
+                                final number = int.tryParse((value ?? '').trim());
+                                if (number == null || number < 1) {
+                                  return 'Skriv et tal på mindst 1';
+                                }
+                                return null;
+                              },
+                            ),
+                            if (streakRewards.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: TextButton.icon(
+                                  onPressed: _openRewardsScreen,
+                                  icon: const Icon(Icons.add),
+                                  label: const Text(
+                                    'Ingen langsigtede belønninger fundet – opret en',
+                                  ),
+                                ),
+                              ),
+                          ],
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8F8F8),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'Valgt nu: direkte = ${_rewardTitleById(_selectedDirectRewardId)}, langsigtet = ${_rewardTitleById(_selectedStreakRewardId)}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.black87,
+                                height: 1.4,
+                              ),
+                            ),
                           ),
                         ],
                         const SizedBox(height: 24),
