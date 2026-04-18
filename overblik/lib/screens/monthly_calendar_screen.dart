@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
-import '../screens/daily_calendar_screen.dart';
+import '../repositories/supabase_activity_repository.dart';
+import 'daily_calendar_screen.dart';
 import '../services/activity_service.dart';
 import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
@@ -18,24 +20,78 @@ class MonthlyCalendarScreen extends StatefulWidget {
 
 class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   DateTime _focusedDate = DateTime.now();
-  final ActivityService _activityService = ActivityService();
 
-  void _goToPreviousMonth() {
+  late final ActivityService _activityService = ActivityService(
+    SupabaseActivityRepository(Supabase.instance.client),
+  );
+
+  Map<String, List<Activity>> _activitiesByDate = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMonthActivities();
+  }
+
+  Future<void> _loadMonthActivities() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final gridDates = _buildMonthGrid(_focusedDate);
+    final start = gridDates.first;
+    final end = gridDates.last;
+
+    final activities = await _activityService.getActivitiesForWeek(start);
+    final extraWeeks = <Activity>[];
+
+    DateTime cursor = start.add(const Duration(days: 7));
+    while (!cursor.isAfter(end)) {
+      extraWeeks.addAll(await _activityService.getActivitiesForWeek(cursor));
+      cursor = cursor.add(const Duration(days: 7));
+    }
+
+    final allActivities = [...activities, ...extraWeeks];
+    final map = <String, List<Activity>>{};
+
+    for (final activity in allActivities) {
+      final key = _dateKey(activity.startTime);
+      map.putIfAbsent(key, () => []);
+      map[key]!.add(activity);
+    }
+
+    for (final entry in map.entries) {
+      entry.value.sort((a, b) => a.startTime.compareTo(b.startTime));
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _activitiesByDate = map;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _goToPreviousMonth() async {
     setState(() {
       _focusedDate = DateTime(_focusedDate.year, _focusedDate.month - 1, 1);
     });
+    await _loadMonthActivities();
   }
 
-  void _goToNextMonth() {
+  Future<void> _goToNextMonth() async {
     setState(() {
       _focusedDate = DateTime(_focusedDate.year, _focusedDate.month + 1, 1);
     });
+    await _loadMonthActivities();
   }
 
-  void _goToToday() {
+  Future<void> _goToToday() async {
     setState(() {
       _focusedDate = DateTime.now();
     });
+    await _loadMonthActivities();
   }
 
   Future<void> _openDay(DateTime selectedDate) async {
@@ -46,7 +102,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
       ),
     );
 
-    setState(() {});
+    await _loadMonthActivities();
   }
 
   Future<void> _openCreateActivityScreen() async {
@@ -58,8 +114,8 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     );
 
     if (createdActivity != null) {
-      _activityService.addActivity(createdActivity);
-      setState(() {});
+      await _activityService.addActivity(createdActivity);
+      await _loadMonthActivities();
     }
   }
 
@@ -115,6 +171,15 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
       case ActivityOwner.family:
         return Colors.purple;
     }
+  }
+
+  String _dateKey(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return '${normalized.year}-${normalized.month}-${normalized.day}';
+  }
+
+  List<Activity> _getActivitiesForDate(DateTime date) {
+    return _activitiesByDate[_dateKey(date)] ?? const [];
   }
 
   @override
@@ -179,24 +244,31 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
                       const SizedBox(height: 12),
                       _WeekdayHeaderRow(weekNumberWidth: weekNumberWidth),
                       const SizedBox(height: 8),
-                      ...weekRows.map(
-                        (week) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _MonthWeekRow(
-                            week: week,
-                            focusedMonth: _focusedDate.month,
-                            today: today,
-                            weekNumber: _getWeekNumber(week[0]),
-                            weekNumberWidth: weekNumberWidth,
-                            cellHeight: cellHeight,
-                            getActivitiesForDate:
-                                _activityService.getActivitiesForDate,
-                            ownerColorBuilder: _ownerColor,
-                            isSameDate: _isSameDate,
-                            onTapDay: _openDay,
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32),
+                          child: Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else
+                        ...weekRows.map(
+                          (week) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _MonthWeekRow(
+                              week: week,
+                              focusedMonth: _focusedDate.month,
+                              today: today,
+                              weekNumber: _getWeekNumber(week[0]),
+                              weekNumberWidth: weekNumberWidth,
+                              cellHeight: cellHeight,
+                              getActivitiesForDate: _getActivitiesForDate,
+                              ownerColorBuilder: _ownerColor,
+                              isSameDate: _isSameDate,
+                              onTapDay: _openDay,
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),

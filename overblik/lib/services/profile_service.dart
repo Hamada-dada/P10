@@ -7,26 +7,26 @@ class ProfileService {
 
   factory ProfileService() => _instance;
 
-  final List<Profile> _profiles = const [
-    Profile(
+  final List<Profile> _profiles = [
+    const Profile(
       id: 'profile-me',
       name: 'Mig',
       emoji: '🙂',
       role: ProfileRole.child,
     ),
-    Profile(
+    const Profile(
       id: 'profile-mor',
       name: 'Mor',
       emoji: '👩',
       role: ProfileRole.parent,
     ),
-    Profile(
+    const Profile(
       id: 'profile-far',
       name: 'Far',
       emoji: '👨',
       role: ProfileRole.parent,
     ),
-    Profile(
+    const Profile(
       id: 'profile-peter',
       name: 'Peter',
       emoji: '🧒',
@@ -39,11 +39,15 @@ class ProfileService {
   }
 
   List<Profile> getChildProfiles() {
-    return _profiles.where((profile) => profile.role == ProfileRole.child).toList();
+    return _profiles
+        .where((profile) => profile.role == ProfileRole.child)
+        .toList();
   }
 
   List<Profile> getParentProfiles() {
-    return _profiles.where((profile) => profile.role == ProfileRole.parent).toList();
+    return _profiles
+        .where((profile) => profile.role == ProfileRole.parent)
+        .toList();
   }
 
   Profile? getProfileById(String id) {
@@ -60,5 +64,23 @@ class ProfileService {
     } catch (_) {
       return null;
     }
+  }
+
+  void addProfile(Profile profile) {
+    _profiles.add(profile);
+  }
+
+  void updateProfile(Profile updatedProfile) {
+    final index = _profiles.indexWhere((profile) => profile.id == updatedProfile.id);
+
+    if (index == -1) {
+      return;
+    }
+
+    _profiles[index] = updatedProfile;
+  }
+
+  void deleteProfile(String profileId) {
+    _profiles.removeWhere((profile) => profile.id == profileId);
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
+import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/activity_indicators.dart';
@@ -23,37 +25,87 @@ class DailyCalendarScreen extends StatefulWidget {
 }
 
 class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
-  final ActivityService _activityService = ActivityService();
+  late final ActivityService _activityService = ActivityService(
+    SupabaseActivityRepository(Supabase.instance.client),
+  );
+
   late DateTime _focusedDate;
+  List<Activity> _activities = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _focusedDate = widget.initialDate ?? DateTime.now();
+    _loadActivities();
   }
 
-  List<Activity> get _activitiesForFocusedDate {
-    final activities = _activityService.getActivitiesForDate(_focusedDate);
-    activities.sort((a, b) => a.startTime.compareTo(b.startTime));
-    return activities;
+  Future<void> _loadActivities() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      final activities =
+          await _activityService.getActivitiesForDate(_focusedDate);
+
+      if (!mounted) return;
+
+      setState(() {
+        _activities = activities;
+        _isLoading = false;
+      });
+    } catch (e, st) {
+      debugPrint('DailyCalendarScreen _loadActivities failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      setState(() {
+        _activities = [];
+        _isLoading = false;
+      });
+    }
   }
 
-  void _goToPreviousDay() {
+  Future<void> _goToPreviousDay() async {
     setState(() {
       _focusedDate = _focusedDate.subtract(const Duration(days: 1));
     });
+    await _loadActivities();
   }
 
-  void _goToNextDay() {
+  Future<void> _goToNextDay() async {
     setState(() {
       _focusedDate = _focusedDate.add(const Duration(days: 1));
     });
+    await _loadActivities();
   }
 
-  void _goToToday() {
+  Future<void> _goToToday() async {
     setState(() {
       _focusedDate = DateTime.now();
     });
+    await _loadActivities();
+  }
+
+  Future<void> _openCreateActivityScreen() async {
+    try {
+      final createdActivity = await Navigator.push<Activity>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
+        ),
+      );
+
+      if (createdActivity != null) {
+        await _activityService.addActivity(createdActivity);
+        await _loadActivities();
+      }
+    } catch (e, st) {
+      debugPrint('DailyCalendarScreen _openCreateActivityScreen failed: $e');
+      debugPrintStack(stackTrace: st);
+    }
   }
 
   Future<void> _openActivityDetail(Activity activity) async {
@@ -65,54 +117,28 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
     );
 
     if (result == true) {
-      setState(() {});
-    }
-  }
-
-  Future<void> _openCreateActivityScreen() async {
-    final createdActivity = await Navigator.push<Activity>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
-      ),
-    );
-
-    if (createdActivity != null) {
-      _activityService.addActivity(createdActivity);
-      setState(() {});
+      await _loadActivities();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final activities = _activitiesForFocusedDate;
-    final isLandscape =
-        MediaQuery.of(context).orientation == Orientation.landscape;
-
-    final horizontalPadding = isLandscape ? 12.0 : 16.0;
-    final verticalPadding = isLandscape ? 6.0 : 10.0;
-    final titleFontSize = isLandscape ? 22.0 : 28.0;
-    final smallGap = isLandscape ? 4.0 : 6.0;
-    final mediumGap = isLandscape ? 8.0 : 10.0;
-    final largeGap = isLandscape ? 10.0 : 12.0;
+    final activities = _activities;
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: horizontalPadding,
-            vertical: verticalPadding,
-          ),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const _TopHeader(),
-              SizedBox(height: smallGap),
-              _ScreenTitle(fontSize: titleFontSize),
-              SizedBox(height: mediumGap),
+              const SizedBox(height: 8),
+              const _ScreenTitle(),
+              const SizedBox(height: 12),
               const ViewSwitcher(selectedView: CalendarScreenType.day),
-              SizedBox(height: largeGap),
+              const SizedBox(height: 12),
               CalendarNavigationBar(
                 focusedDate: _focusedDate,
                 viewType: CalendarViewType.day,
@@ -121,7 +147,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
                 onToday: _goToToday,
                 onFilterTap: () {},
               ),
-              SizedBox(height: mediumGap),
+              const SizedBox(height: 12),
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
@@ -144,21 +170,26 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
                       _DailySummaryCard(activities: activities),
                       const SizedBox(height: 12),
                       Expanded(
-                        child: activities.isEmpty
-                            ? const _EmptyActivitiesView()
-                            : ListView.separated(
-                                itemCount: activities.length,
-                                separatorBuilder: (_, _) =>
-                                    const SizedBox(height: 10),
-                                itemBuilder: (context, index) {
-                                  final activity = activities[index];
+                        child: _isLoading
+                            ? const Center(
+                                child: CircularProgressIndicator(),
+                              )
+                            : activities.isEmpty
+                                ? const _EmptyActivitiesView()
+                                : ListView.separated(
+                                    itemCount: activities.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (context, index) {
+                                      final activity = activities[index];
 
-                                  return ActivityCard(
-                                    activity: activity,
-                                    onTap: () => _openActivityDetail(activity),
-                                  );
-                                },
-                              ),
+                                      return ActivityCard(
+                                        activity: activity,
+                                        onTap: () =>
+                                            _openActivityDetail(activity),
+                                      );
+                                    },
+                                  ),
                       ),
                     ],
                   ),
@@ -197,20 +228,16 @@ class _TopHeader extends StatelessWidget {
 }
 
 class _ScreenTitle extends StatelessWidget {
-  final double fontSize;
-
-  const _ScreenTitle({
-    required this.fontSize,
-  });
+  const _ScreenTitle();
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return const Center(
       child: Text(
         'Daglig kalender',
         style: TextStyle(
           fontFamily: 'Italiana',
-          fontSize: fontSize,
+          fontSize: 28,
           fontWeight: FontWeight.w400,
           color: Colors.black,
         ),

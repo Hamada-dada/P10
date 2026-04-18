@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
-import '../screens/daily_calendar_screen.dart';
+import 'daily_calendar_screen.dart';
 import '../services/activity_service.dart';
+import '../repositories/supabase_activity_repository.dart';
 import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
 import '../widgets/profile_avatar.dart';
@@ -18,24 +20,65 @@ class WeeklyCalendarScreen extends StatefulWidget {
 
 class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   DateTime _focusedDate = DateTime.now();
-  final ActivityService _activityService = ActivityService();
 
-  void _goToPreviousWeek() {
+  late final ActivityService _activityService = ActivityService(
+    SupabaseActivityRepository(Supabase.instance.client),
+  );
+
+  Map<String, List<Activity>> _activitiesByDate = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWeekActivities();
+  }
+
+  Future<void> _loadWeekActivities() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final activities = await _activityService.getActivitiesForWeek(_focusedDate);
+    final map = <String, List<Activity>>{};
+
+    for (final activity in activities) {
+      final key = _dateKey(activity.startTime);
+      map.putIfAbsent(key, () => []);
+      map[key]!.add(activity);
+    }
+
+    for (final entry in map.entries) {
+      entry.value.sort((a, b) => a.startTime.compareTo(b.startTime));
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _activitiesByDate = map;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _goToPreviousWeek() async {
     setState(() {
       _focusedDate = _focusedDate.subtract(const Duration(days: 7));
     });
+    await _loadWeekActivities();
   }
 
-  void _goToNextWeek() {
+  Future<void> _goToNextWeek() async {
     setState(() {
       _focusedDate = _focusedDate.add(const Duration(days: 7));
     });
+    await _loadWeekActivities();
   }
 
-  void _goToToday() {
+  Future<void> _goToToday() async {
     setState(() {
       _focusedDate = DateTime.now();
     });
+    await _loadWeekActivities();
   }
 
   Future<void> _openDay(DateTime selectedDate) async {
@@ -46,7 +89,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       ),
     );
 
-    setState(() {});
+    await _loadWeekActivities();
   }
 
   Future<void> _openCreateActivityScreen() async {
@@ -58,15 +101,13 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     );
 
     if (createdActivity != null) {
-      _activityService.addActivity(createdActivity);
-      setState(() {});
+      await _activityService.addActivity(createdActivity);
+      await _loadWeekActivities();
     }
   }
 
   List<Activity> _activitiesForDate(DateTime date) {
-    final activities = _activityService.getActivitiesForDate(date);
-    activities.sort((a, b) => a.startTime.compareTo(b.startTime));
-    return activities;
+    return _activitiesByDate[_dateKey(date)] ?? const [];
   }
 
   Activity? _getWeeklyHighlight(List<Activity> activities) {
@@ -88,6 +129,11 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
 
     activities.sort((a, b) => b.duration.compareTo(a.duration));
     return activities.first;
+  }
+
+  String _dateKey(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return '${normalized.year}-${normalized.month}-${normalized.day}';
   }
 
   @override
@@ -148,25 +194,33 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: weekDays.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final day = weekDays[index];
-                          final activities = _activitiesForDate(day);
-                          final highlight =
-                              _getWeeklyHighlight(List<Activity>.from(activities));
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32),
+                          child: Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: weekDays.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final day = weekDays[index];
+                            final activities = _activitiesForDate(day);
+                            final highlight =
+                                _getWeeklyHighlight(List<Activity>.from(activities));
 
-                          return _WeekDayCard(
-                            date: day,
-                            activities: activities,
-                            highlightActivity: highlight,
-                            onTap: () => _openDay(day),
-                          );
-                        },
-                      ),
+                            return _WeekDayCard(
+                              date: day,
+                              activities: activities,
+                              highlightActivity: highlight,
+                              onTap: () => _openDay(day),
+                            );
+                          },
+                        ),
                     ],
                   ),
                 ),

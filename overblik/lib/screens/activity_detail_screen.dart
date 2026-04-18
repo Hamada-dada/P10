@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
+import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
 import '../services/reward_service.dart';
 import 'create_activity_screen.dart';
@@ -24,14 +26,30 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   late List<bool> _checkedItems;
   final RewardService _rewardService = RewardService();
 
+  late final ActivityService _activityService = ActivityService(
+    SupabaseActivityRepository(Supabase.instance.client),
+  );
+
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
-
-    _activity =
-        ActivityService().getActivityById(widget.activity.id) ?? widget.activity;
-
+    _activity = widget.activity;
     _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
+    _loadActivity();
+  }
+
+  Future<void> _loadActivity() async {
+    final freshActivity = await _activityService.getActivityById(widget.activity.id);
+
+    if (!mounted) return;
+
+    setState(() {
+      _activity = freshActivity ?? widget.activity;
+      _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
+      _isLoading = false;
+    });
   }
 
   String _formatDate(DateTime dateTime) {
@@ -107,7 +125,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       checklistChecked: updatedCheckedItems,
     );
 
-    ActivityService().updateActivity(updatedActivity);
+    await _activityService.updateActivity(updatedActivity);
+
+    if (!mounted) return;
 
     setState(() {
       _checkedItems = updatedCheckedItems;
@@ -127,14 +147,15 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     );
 
     if (updatedActivity != null) {
-      ActivityService().updateActivity(updatedActivity);
+      await _activityService.updateActivity(updatedActivity);
+
+      if (!mounted) return;
 
       setState(() {
         _activity = updatedActivity;
         _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
       });
 
-      if (!context.mounted) return;
       Navigator.pop(context, true);
     }
   }
@@ -164,7 +185,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       return;
     }
 
-    ActivityService().deleteActivity(_activity.id);
+    await _activityService.deleteActivity(_activity.id);
 
     if (!context.mounted) return;
     Navigator.pop(context, true);
@@ -211,6 +232,17 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFA2E5AD),
+        body: SafeArea(
+          child: Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
     final hasImage = _activity.imagePath.trim().isNotEmpty;
     final hasReward =
         _activity.directRewardId != null || _activity.streakRewardId != null;
@@ -413,7 +445,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                       emoji: directReward?.emoji ?? '🎁',
                                       rewardTitle:
                                           directReward?.title ??
-                                              'Ukendt belønning',
+                                          'Ukendt belønning',
                                       subtitle:
                                           'Kan opnås efter denne aktivitet',
                                       icon: Icons.flash_on_outlined,
@@ -430,7 +462,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                       emoji: streakReward?.emoji ?? '🏆',
                                       rewardTitle:
                                           streakReward?.title ??
-                                              'Ukendt belønning',
+                                          'Ukendt belønning',
                                       subtitle: _activity.streakTarget != null
                                           ? 'Opnås efter ${_activity.streakTarget} gange'
                                           : 'Langsigtet belønning',

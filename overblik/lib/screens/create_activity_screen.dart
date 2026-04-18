@@ -784,99 +784,96 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                             children: [
                               SizedBox(
                                 height: 220,
-                                child: Scrollbar(
-                                  thumbVisibility: true,
-                                  child: SingleChildScrollView(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      12,
-                                      12,
-                                      12,
-                                      12,
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        TextField(
-                                          controller: _descriptionController,
-                                          keyboardType:
-                                              TextInputType.multiline,
-                                          textInputAction:
-                                              TextInputAction.newline,
-                                          minLines: 4,
-                                          maxLines: null,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Beskrivelse',
-                                            alignLabelWithHint: true,
-                                            border: InputBorder.none,
-                                            isCollapsed: true,
-                                          ),
+                                child: SingleChildScrollView(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    12,
+                                    12,
+                                    12,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      TextField(
+                                        controller: _descriptionController,
+                                        keyboardType:
+                                            TextInputType.multiline,
+                                        textInputAction:
+                                            TextInputAction.newline,
+                                        minLines: 4,
+                                        maxLines: null,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Beskrivelse',
+                                          alignLabelWithHint: true,
+                                          border: InputBorder.none,
+                                          isCollapsed: true,
                                         ),
-                                        if (_imagePath.trim().isNotEmpty) ...[
-                                          const SizedBox(height: 12),
-                                          Stack(
-                                            children: [
-                                              Container(
-                                                width: double.infinity,
-                                                constraints:
-                                                    const BoxConstraints(
-                                                  maxHeight: 140,
-                                                  minHeight: 90,
-                                                ),
-                                                decoration: BoxDecoration(
+                                      ),
+                                      if (_imagePath.trim().isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        Stack(
+                                          children: [
+                                            Container(
+                                              width: double.infinity,
+                                              constraints:
+                                                  const BoxConstraints(
+                                                maxHeight: 140,
+                                                minHeight: 90,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    const Color(0xFFF8F8F8),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                border: Border.all(
                                                   color:
-                                                      const Color(0xFFF8F8F8),
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  border: Border.all(
-                                                    color:
-                                                        const Color(0xFFE0E0E0),
-                                                  ),
+                                                      const Color(0xFFE0E0E0),
                                                 ),
-                                                child: ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  child: Image.file(
-                                                    File(_imagePath),
-                                                    width: double.infinity,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder: (context,
-                                                        error, stackTrace) {
-                                                      return const SizedBox(
-                                                        height: 90,
-                                                        child: Center(
-                                                          child: Text(
-                                                            'Kunne ikke vise billedet',
-                                                          ),
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                child: Image.file(
+                                                  File(_imagePath),
+                                                  width: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (context,
+                                                      error, stackTrace) {
+                                                    return const SizedBox(
+                                                      height: 90,
+                                                      child: Center(
+                                                        child: Text(
+                                                          'Kunne ikke vise billedet',
                                                         ),
-                                                      );
-                                                    },
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                            Positioned(
+                                              top: 6,
+                                              right: 6,
+                                              child: Material(
+                                                color: Colors.white,
+                                                shape: const CircleBorder(),
+                                                elevation: 2,
+                                                child: IconButton(
+                                                  tooltip: 'Slet billede',
+                                                  onPressed: _removeImage,
+                                                  icon: const Icon(
+                                                    Icons.close,
+                                                    size: 18,
+                                                    color: Colors.black,
                                                   ),
                                                 ),
                                               ),
-                                              Positioned(
-                                                top: 6,
-                                                right: 6,
-                                                child: Material(
-                                                  color: Colors.white,
-                                                  shape: const CircleBorder(),
-                                                  elevation: 2,
-                                                  child: IconButton(
-                                                    tooltip: 'Slet billede',
-                                                    onPressed: _removeImage,
-                                                    icon: const Icon(
-                                                      Icons.close,
-                                                      size: 18,
-                                                      color: Colors.black,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                            ),
+                                          ],
+                                        ),
                                       ],
-                                    ),
+                                    ],
                                   ),
                                 ),
                               ),
