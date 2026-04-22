@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
-import 'daily_calendar_screen.dart';
-import '../services/activity_service.dart';
 import '../repositories/supabase_activity_repository.dart';
+import '../services/activity_service.dart';
 import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
+import 'daily_calendar_screen.dart';
 
 class WeeklyCalendarScreen extends StatefulWidget {
   const WeeklyCalendarScreen({super.key});
@@ -19,12 +19,11 @@ class WeeklyCalendarScreen extends StatefulWidget {
 }
 
 class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
-  DateTime _focusedDate = DateTime.now();
-
   late final ActivityService _activityService = ActivityService(
     SupabaseActivityRepository(Supabase.instance.client),
   );
 
+  DateTime _focusedDate = DateTime.now();
   Map<String, List<Activity>> _activitiesByDate = {};
   bool _isLoading = true;
 
@@ -35,29 +34,41 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   }
 
   Future<void> _loadWeekActivities() async {
-    setState(() {
-      _isLoading = true;
-    });
+    try {
+      setState(() {
+        _isLoading = true;
+      });
 
-    final activities = await _activityService.getActivitiesForWeek(_focusedDate);
-    final map = <String, List<Activity>>{};
+      final activities = await _activityService.getActivitiesForWeek(_focusedDate);
+      final grouped = <String, List<Activity>>{};
 
-    for (final activity in activities) {
-      final key = _dateKey(activity.startTime);
-      map.putIfAbsent(key, () => []);
-      map[key]!.add(activity);
+      for (final activity in activities) {
+        final key = _dateKey(activity.startTime);
+        grouped.putIfAbsent(key, () => []);
+        grouped[key]!.add(activity);
+      }
+
+      for (final entry in grouped.entries) {
+        entry.value.sort((a, b) => a.startTime.compareTo(b.startTime));
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _activitiesByDate = grouped;
+        _isLoading = false;
+      });
+    } catch (e, st) {
+      debugPrint('WeeklyCalendarScreen _loadWeekActivities failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      setState(() {
+        _activitiesByDate = {};
+        _isLoading = false;
+      });
     }
-
-    for (final entry in map.entries) {
-      entry.value.sort((a, b) => a.startTime.compareTo(b.startTime));
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _activitiesByDate = map;
-      _isLoading = false;
-    });
   }
 
   Future<void> _goToPreviousWeek() async {
@@ -93,16 +104,21 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   }
 
   Future<void> _openCreateActivityScreen() async {
-    final createdActivity = await Navigator.push<Activity>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
-      ),
-    );
+    try {
+      final createdActivity = await Navigator.push<Activity>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
+        ),
+      );
 
-    if (createdActivity != null) {
-      await _activityService.addActivity(createdActivity);
-      await _loadWeekActivities();
+      if (createdActivity != null) {
+        await _activityService.addActivity(createdActivity);
+        await _loadWeekActivities();
+      }
+    } catch (e, st) {
+      debugPrint('WeeklyCalendarScreen _openCreateActivityScreen failed: $e');
+      debugPrintStack(stackTrace: st);
     }
   }
 
@@ -127,13 +143,18 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       return favoriteActivities.first;
     }
 
-    activities.sort((a, b) => b.duration.compareTo(a.duration));
-    return activities.first;
+    final sorted = List<Activity>.from(activities)
+      ..sort((a, b) => b.duration.compareTo(a.duration));
+    return sorted.first;
   }
 
   String _dateKey(DateTime date) {
     final normalized = DateTime(date.year, date.month, date.day);
     return '${normalized.year}-${normalized.month}-${normalized.day}';
+  }
+
+  bool get _hasAnyActivities {
+    return _activitiesByDate.values.any((activities) => activities.isNotEmpty);
   }
 
   @override
@@ -152,31 +173,31 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: horizontalPadding,
-              vertical: verticalPadding,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _TopHeader(),
-                SizedBox(height: smallGap),
-                _ScreenTitle(fontSize: titleFontSize),
-                SizedBox(height: mediumGap),
-                const ViewSwitcher(selectedView: CalendarScreenType.week),
-                SizedBox(height: largeGap),
-                CalendarNavigationBar(
-                  focusedDate: _focusedDate,
-                  viewType: CalendarViewType.week,
-                  onPrevious: _goToPreviousWeek,
-                  onNext: _goToNextWeek,
-                  onToday: _goToToday,
-                  onFilterTap: () {},
-                ),
-                SizedBox(height: mediumGap),
-                Container(
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _TopHeader(),
+              SizedBox(height: smallGap),
+              _ScreenTitle(fontSize: titleFontSize),
+              SizedBox(height: mediumGap),
+              const ViewSwitcher(selectedView: CalendarScreenType.week),
+              SizedBox(height: largeGap),
+              CalendarNavigationBar(
+                focusedDate: _focusedDate,
+                viewType: CalendarViewType.week,
+                onPrevious: _goToPreviousWeek,
+                onNext: _goToNextWeek,
+                onToday: _goToToday,
+                onFilterTap: () {},
+              ),
+              SizedBox(height: mediumGap),
+              Expanded(
+                child: Container(
                   padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -194,38 +215,37 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      if (_isLoading)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else
-                        ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: weekDays.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 10),
-                          itemBuilder: (context, index) {
-                            final day = weekDays[index];
-                            final activities = _activitiesForDate(day);
-                            final highlight =
-                                _getWeeklyHighlight(List<Activity>.from(activities));
+                      Expanded(
+                        child: _isLoading
+                            ? const Center(
+                                child: CircularProgressIndicator(),
+                              )
+                            : !_hasAnyActivities
+                                ? const _EmptyWeekView()
+                                : ListView.separated(
+                                    itemCount: weekDays.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (context, index) {
+                                      final day = weekDays[index];
+                                      final activities = _activitiesForDate(day);
+                                      final highlight =
+                                          _getWeeklyHighlight(activities);
 
-                            return _WeekDayCard(
-                              date: day,
-                              activities: activities,
-                              highlightActivity: highlight,
-                              onTap: () => _openDay(day),
-                            );
-                          },
-                        ),
+                                      return _WeekDayCard(
+                                        date: day,
+                                        activities: activities,
+                                        highlightActivity: highlight,
+                                        onTap: () => _openDay(day),
+                                      );
+                                    },
+                                  ),
+                      ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -427,6 +447,36 @@ class _WeekDayCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _EmptyWeekView extends StatelessWidget {
+  const _EmptyWeekView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.view_week_outlined,
+            size: 40,
+            color: Colors.black45,
+          ),
+          SizedBox(height: 10),
+          Text(
+            'Ingen aktiviteter i denne uge',
+            style: TextStyle(
+              fontFamily: 'Italiana',
+              fontSize: 24,
+              fontWeight: FontWeight.w400,
+              color: Colors.black,
+            ),
+          ),
+        ],
       ),
     );
   }

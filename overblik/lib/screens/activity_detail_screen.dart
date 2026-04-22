@@ -41,15 +41,29 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   }
 
   Future<void> _loadActivity() async {
-    final freshActivity = await _activityService.getActivityById(widget.activity.id);
+    try {
+      final freshActivity =
+          await _activityService.getActivityById(widget.activity.id);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _activity = freshActivity ?? widget.activity;
-      _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
-      _isLoading = false;
-    });
+      setState(() {
+        _activity = freshActivity ?? widget.activity;
+        _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
+        _isLoading = false;
+      });
+    } catch (e, st) {
+      debugPrint('ActivityDetailScreen _loadActivity failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      setState(() {
+        _activity = widget.activity;
+        _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
+        _isLoading = false;
+      });
+    }
   }
 
   String _formatDate(DateTime dateTime) {
@@ -118,45 +132,71 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   }
 
   Future<void> _toggleChecklistItem(int index) async {
-    final updatedCheckedItems = List<bool>.from(_checkedItems);
-    updatedCheckedItems[index] = !updatedCheckedItems[index];
+    try {
+      final updatedCheckedItems = List<bool>.from(_checkedItems);
+      updatedCheckedItems[index] = !updatedCheckedItems[index];
 
-    final updatedActivity = _activity.copyWith(
-      checklistChecked: updatedCheckedItems,
-    );
+      final updatedActivity = _activity.copyWith(
+        checklistChecked: updatedCheckedItems,
+      );
 
-    await _activityService.updateActivity(updatedActivity);
-
-    if (!mounted) return;
-
-    setState(() {
-      _checkedItems = updatedCheckedItems;
-      _activity = updatedActivity;
-    });
-  }
-
-  Future<void> _editActivity(BuildContext context) async {
-    final updatedActivity = await Navigator.push<Activity>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CreateActivityScreen(
-          existingActivity: _activity,
-          initialDate: _activity.startTime,
-        ),
-      ),
-    );
-
-    if (updatedActivity != null) {
       await _activityService.updateActivity(updatedActivity);
 
       if (!mounted) return;
 
       setState(() {
+        _checkedItems = updatedCheckedItems;
         _activity = updatedActivity;
-        _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
       });
+    } catch (e, st) {
+      debugPrint('ActivityDetailScreen _toggleChecklistItem failed: $e');
+      debugPrintStack(stackTrace: st);
 
-      Navigator.pop(context, true);
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kunne ikke opdatere tjeklisten.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _editActivity(BuildContext context) async {
+    try {
+      final updatedActivity = await Navigator.push<Activity>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreateActivityScreen(
+            existingActivity: _activity,
+            initialDate: _activity.startTime,
+          ),
+        ),
+      );
+
+      if (updatedActivity != null) {
+        await _activityService.updateActivity(updatedActivity);
+
+        if (!mounted) return;
+
+        setState(() {
+          _activity = updatedActivity;
+          _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
+        });
+
+        Navigator.pop(context, true);
+      }
+    } catch (e, st) {
+      debugPrint('ActivityDetailScreen _editActivity failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kunne ikke gemme ændringerne.'),
+        ),
+      );
     }
   }
 
@@ -185,10 +225,23 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       return;
     }
 
-    await _activityService.deleteActivity(_activity.id);
+    try {
+      await _activityService.deleteActivity(_activity.id);
 
-    if (!context.mounted) return;
-    Navigator.pop(context, true);
+      if (!context.mounted) return;
+      Navigator.pop(context, true);
+    } catch (e, st) {
+      debugPrint('ActivityDetailScreen _deleteActivity failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kunne ikke slette aktiviteten.'),
+        ),
+      );
+    }
   }
 
   void _openImagePreview(BuildContext context) {

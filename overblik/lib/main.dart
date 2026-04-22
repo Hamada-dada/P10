@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_config.dart';
-import 'screens/daily_calendar_screen.dart';
+import 'screens/auth_gate.dart';
 import 'screens/monthly_calendar_screen.dart';
 import 'screens/weekly_calendar_screen.dart';
+import 'screens/daily_calendar_screen.dart';
 
 Future<void> main() async {
+  
   await runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
@@ -29,17 +31,11 @@ Future<void> main() async {
       url: SupabaseConfig.url,
       anonKey: SupabaseConfig.anonKey,
     );
+    
+  final client = Supabase.instance.client;
+  await client.auth.signOut();
+  debugPrint('Current session user id: ${client.auth.currentUser?.id}');
 
-    final client = Supabase.instance.client;
-
-    if (client.auth.currentSession == null) {
-      final response = await client.auth.signInAnonymously();
-      debugPrint('Anonymous user id: ${response.user?.id}');
-    } else {
-      debugPrint(
-        'Existing session user id: ${client.auth.currentUser?.id}',
-      );
-    }
 
     runApp(const MyApp());
   }, (error, stack) {
@@ -56,9 +52,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Familiekalender',
-      initialRoute: '/',
+      home: const AuthGate(),
       routes: {
-        '/': (_) => const DailyCalendarScreen(),
+        '/daily': (_) => const DailyCalendarScreen(),
         '/weekly': (_) => const WeeklyCalendarScreen(),
         '/monthly': (_) => const MonthlyCalendarScreen(),
       },

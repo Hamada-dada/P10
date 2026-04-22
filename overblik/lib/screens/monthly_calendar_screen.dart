@@ -3,13 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
 import '../repositories/supabase_activity_repository.dart';
-import 'daily_calendar_screen.dart';
 import '../services/activity_service.dart';
 import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
+import 'daily_calendar_screen.dart';
 
 class MonthlyCalendarScreen extends StatefulWidget {
   const MonthlyCalendarScreen({super.key});
@@ -19,12 +19,11 @@ class MonthlyCalendarScreen extends StatefulWidget {
 }
 
 class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
-  DateTime _focusedDate = DateTime.now();
-
   late final ActivityService _activityService = ActivityService(
     SupabaseActivityRepository(Supabase.instance.client),
   );
 
+  DateTime _focusedDate = DateTime.now();
   Map<String, List<Activity>> _activitiesByDate = {};
   bool _isLoading = true;
 
@@ -35,42 +34,67 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   }
 
   Future<void> _loadMonthActivities() async {
-    setState(() {
-      _isLoading = true;
-    });
+    try {
+      setState(() {
+        _isLoading = true;
+      });
 
-    final gridDates = _buildMonthGrid(_focusedDate);
-    final start = gridDates.first;
-    final end = gridDates.last;
+      final gridDates = _buildMonthGrid(_focusedDate);
+      if (gridDates.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _activitiesByDate = {};
+          _isLoading = false;
+        });
+        return;
+      }
 
-    final activities = await _activityService.getActivitiesForWeek(start);
-    final extraWeeks = <Activity>[];
+      final allActivities = <Activity>[];
+      final loadedIds = <String>{};
 
-    DateTime cursor = start.add(const Duration(days: 7));
-    while (!cursor.isAfter(end)) {
-      extraWeeks.addAll(await _activityService.getActivitiesForWeek(cursor));
-      cursor = cursor.add(const Duration(days: 7));
+      DateTime cursor = gridDates.first;
+      final end = gridDates.last;
+
+      while (!cursor.isAfter(end)) {
+        final weekActivities = await _activityService.getActivitiesForWeek(cursor);
+
+        for (final activity in weekActivities) {
+          if (loadedIds.add(activity.id)) {
+            allActivities.add(activity);
+          }
+        }
+
+        cursor = cursor.add(const Duration(days: 7));
+      }
+
+      final grouped = <String, List<Activity>>{};
+      for (final activity in allActivities) {
+        final key = _dateKey(activity.startTime);
+        grouped.putIfAbsent(key, () => []);
+        grouped[key]!.add(activity);
+      }
+
+      for (final entry in grouped.entries) {
+        entry.value.sort((a, b) => a.startTime.compareTo(b.startTime));
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _activitiesByDate = grouped;
+        _isLoading = false;
+      });
+    } catch (e, st) {
+      debugPrint('MonthlyCalendarScreen _loadMonthActivities failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      setState(() {
+        _activitiesByDate = {};
+        _isLoading = false;
+      });
     }
-
-    final allActivities = [...activities, ...extraWeeks];
-    final map = <String, List<Activity>>{};
-
-    for (final activity in allActivities) {
-      final key = _dateKey(activity.startTime);
-      map.putIfAbsent(key, () => []);
-      map[key]!.add(activity);
-    }
-
-    for (final entry in map.entries) {
-      entry.value.sort((a, b) => a.startTime.compareTo(b.startTime));
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _activitiesByDate = map;
-      _isLoading = false;
-    });
   }
 
   Future<void> _goToPreviousMonth() async {
@@ -106,16 +130,21 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   }
 
   Future<void> _openCreateActivityScreen() async {
-    final createdActivity = await Navigator.push<Activity>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
-      ),
-    );
+    try {
+      final createdActivity = await Navigator.push<Activity>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
+        ),
+      );
 
-    if (createdActivity != null) {
-      await _activityService.addActivity(createdActivity);
-      await _loadMonthActivities();
+      if (createdActivity != null) {
+        await _activityService.addActivity(createdActivity);
+        await _loadMonthActivities();
+      }
+    } catch (e, st) {
+      debugPrint('MonthlyCalendarScreen _openCreateActivityScreen failed: $e');
+      debugPrintStack(stackTrace: st);
     }
   }
 
@@ -182,6 +211,10 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     return _activitiesByDate[_dateKey(date)] ?? const [];
   }
 
+  bool get _hasAnyActivities {
+    return _activitiesByDate.values.any((activities) => activities.isNotEmpty);
+  }
+
   @override
   Widget build(BuildContext context) {
     final weekRows = _buildWeekRows(_focusedDate);
@@ -200,31 +233,31 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: horizontalPadding,
-              vertical: verticalPadding,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _TopHeader(),
-                SizedBox(height: mediumGap),
-                _ScreenTitle(fontSize: titleFontSize),
-                SizedBox(height: mediumGap),
-                const ViewSwitcher(selectedView: CalendarScreenType.month),
-                SizedBox(height: largeGap),
-                CalendarNavigationBar(
-                  focusedDate: _focusedDate,
-                  viewType: CalendarViewType.month,
-                  onPrevious: _goToPreviousMonth,
-                  onNext: _goToNextMonth,
-                  onToday: _goToToday,
-                  onFilterTap: () {},
-                ),
-                SizedBox(height: mediumGap),
-                Container(
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _TopHeader(),
+              SizedBox(height: mediumGap),
+              _ScreenTitle(fontSize: titleFontSize),
+              SizedBox(height: mediumGap),
+              const ViewSwitcher(selectedView: CalendarScreenType.month),
+              SizedBox(height: largeGap),
+              CalendarNavigationBar(
+                focusedDate: _focusedDate,
+                viewType: CalendarViewType.month,
+                onPrevious: _goToPreviousMonth,
+                onNext: _goToNextMonth,
+                onToday: _goToToday,
+                onFilterTap: () {},
+              ),
+              SizedBox(height: mediumGap),
+              Expanded(
+                child: Container(
                   clipBehavior: Clip.antiAlias,
                   padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
                   decoration: BoxDecoration(
@@ -244,36 +277,48 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
                       const SizedBox(height: 12),
                       _WeekdayHeaderRow(weekNumberWidth: weekNumberWidth),
                       const SizedBox(height: 8),
-                      if (_isLoading)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else
-                        ...weekRows.map(
-                          (week) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: _MonthWeekRow(
-                              week: week,
-                              focusedMonth: _focusedDate.month,
-                              today: today,
-                              weekNumber: _getWeekNumber(week[0]),
-                              weekNumberWidth: weekNumberWidth,
-                              cellHeight: cellHeight,
-                              getActivitiesForDate: _getActivitiesForDate,
-                              ownerColorBuilder: _ownerColor,
-                              isSameDate: _isSameDate,
-                              onTapDay: _openDay,
-                            ),
-                          ),
-                        ),
+                      Expanded(
+                        child: _isLoading
+                            ? const Center(
+                                child: CircularProgressIndicator(),
+                              )
+                            : !_hasAnyActivities
+                                ? const _EmptyMonthView()
+                                : SingleChildScrollView(
+                                    child: Column(
+                                      children: weekRows
+                                          .map(
+                                            (week) => Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 8,
+                                              ),
+                                              child: _MonthWeekRow(
+                                                week: week,
+                                                focusedMonth:
+                                                    _focusedDate.month,
+                                                today: today,
+                                                weekNumber:
+                                                    _getWeekNumber(week[0]),
+                                                weekNumberWidth:
+                                                    weekNumberWidth,
+                                                cellHeight: cellHeight,
+                                                getActivitiesForDate:
+                                                    _getActivitiesForDate,
+                                                ownerColorBuilder: _ownerColor,
+                                                isSameDate: _isSameDate,
+                                                onTapDay: _openDay,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ),
+                      ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -495,6 +540,36 @@ class _MonthDayCell extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _EmptyMonthView extends StatelessWidget {
+  const _EmptyMonthView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.calendar_month_outlined,
+            size: 40,
+            color: Colors.black45,
+          ),
+          SizedBox(height: 10),
+          Text(
+            'Ingen aktiviteter i denne måned',
+            style: TextStyle(
+              fontFamily: 'Italiana',
+              fontSize: 24,
+              fontWeight: FontWeight.w400,
+              color: Colors.black,
+            ),
+          ),
+        ],
       ),
     );
   }
