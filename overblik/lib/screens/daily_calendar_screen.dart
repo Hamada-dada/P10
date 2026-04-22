@@ -253,17 +253,20 @@ class _DailySummaryCard extends StatelessWidget {
     required this.activities,
   });
 
-  Color _ownerColor(ActivityOwner owner) {
-    switch (owner) {
-      case ActivityOwner.me:
-        return Colors.blue;
-      case ActivityOwner.mother:
-        return Colors.pink;
-      case ActivityOwner.father:
-        return Colors.orange;
-      case ActivityOwner.family:
-        return Colors.purple;
+  Color _activityColor(Activity activity) {
+    if (activity.isCompleted) {
+      return Colors.green;
     }
+    if (activity.isImportant) {
+      return Colors.red;
+    }
+    if (activity.isFavorite) {
+      return Colors.amber;
+    }
+    if (activity.ownerProfileId != null) {
+      return Colors.blue;
+    }
+    return Colors.purple;
   }
 
   @override
@@ -300,7 +303,7 @@ class _DailySummaryCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 ActivityIndicators(
                   activities: activities,
-                  ownerColorBuilder: _ownerColor,
+                  activityColorBuilder: _activityColor,
                   maxDots: 5,
                   maxStars: 3,
                   dotSize: 8,

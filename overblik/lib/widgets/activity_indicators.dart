@@ -4,7 +4,7 @@ import '../models/activity.dart';
 
 class ActivityIndicators extends StatelessWidget {
   final List<Activity> activities;
-  final Color Function(ActivityOwner) ownerColorBuilder;
+  final Color Function(Activity activity) activityColorBuilder;
   final int maxDots;
   final int maxStars;
   final double dotSize;
@@ -17,7 +17,7 @@ class ActivityIndicators extends StatelessWidget {
   const ActivityIndicators({
     super.key,
     required this.activities,
-    required this.ownerColorBuilder,
+    required this.activityColorBuilder,
     this.maxDots = 3,
     this.maxStars = 2,
     this.dotSize = 8,
@@ -58,7 +58,7 @@ class ActivityIndicators extends StatelessWidget {
                   width: dotSize,
                   height: dotSize,
                   decoration: BoxDecoration(
-                    color: ownerColorBuilder(activity.owner),
+                    color: activityColorBuilder(activity),
                     shape: BoxShape.circle,
                   ),
                 ),

@@ -66,27 +66,53 @@ class ActivityService {
   }
 
   Future<void> addActivity(Activity activity) async {
-    await repository.addActivity(_normalizeActivity(activity));
+    await repository.addActivity(_validateActivity(activity));
   }
 
   Future<void> updateActivity(Activity updatedActivity) async {
-    await repository.updateActivity(_normalizeActivity(updatedActivity));
+    await repository.updateActivity(_validateActivity(updatedActivity));
   }
 
   Future<void> deleteActivity(String activityId) {
     return repository.deleteActivity(activityId);
   }
 
-  Activity _normalizeActivity(Activity activity) {
-    final normalizedChecked = List<bool>.generate(
-      activity.checklistItems.length,
-      (index) => index < activity.checklistChecked.length
-          ? activity.checklistChecked[index]
-          : false,
+  Activity _validateActivity(Activity activity) {
+    if (activity.title.trim().isEmpty) {
+      throw ArgumentError('Activity title cannot be empty.');
+    }
+
+    if (!activity.endTime.isAfter(activity.startTime)) {
+      throw ArgumentError('Activity end time must be after start time.');
+    }
+
+    if (activity.recurrenceInterval < 1) {
+      throw ArgumentError('Recurrence interval must be at least 1.');
+    }
+
+    final cleanedChecklist = activity.checklistItems
+        .where((item) => item.title.trim().isNotEmpty)
+        .toList();
+
+    final normalizedChecklist = List<ActivityChecklistItem>.generate(
+      cleanedChecklist.length,
+      (index) {
+        final item = cleanedChecklist[index];
+        return ActivityChecklistItem(
+          id: item.id,
+          title: item.title.trim(),
+          isChecked: item.isChecked,
+          position: index,
+        );
+      },
     );
 
     return activity.copyWith(
-      checklistChecked: normalizedChecked,
+      title: activity.title.trim(),
+      emoji: activity.emoji.trim(),
+      description: activity.description.trim(),
+      imagePath: activity.imagePath.trim(),
+      checklistItems: normalizedChecklist,
     );
   }
 

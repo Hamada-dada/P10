@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/activity.dart';
 import '../models/profile.dart';
@@ -29,11 +30,15 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   final RewardService _rewardService = RewardService();
   final ProfileService _profileService = ProfileService();
+  final Uuid _uuid = const Uuid();
 
   List<Profile> _availableProfiles = [];
   List<String> _participantOptions = [];
   bool _isLoadingProfiles = true;
   String? _profilesError;
+
+  Profile? _currentParentProfile;
+  String? _currentFamilyId;
 
   late final TextEditingController _titleController;
   late final TextEditingController _emojiController;
@@ -101,8 +106,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _selectedDirectRewardId = activity?.directRewardId;
     _selectedStreakRewardId = activity?.streakRewardId;
 
-    _selectedParticipants =
-        List<String>.from(activity?.participants ?? <String>[]);
+    _selectedParticipants = <String>[];
+
     _selectedRecurrence = activity?.recurrence ?? ActivityRecurrence.none;
 
     _selectedCustomRecurrence =
@@ -115,7 +120,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     final initialChecklist = activity?.checklistItems ?? [];
     _checklistControllers = initialChecklist.isNotEmpty
         ? initialChecklist
-            .map((item) => TextEditingController(text: item))
+            .map((item) => TextEditingController(text: item.title))
             .toList()
         : [];
 
@@ -126,27 +131,42 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   Future<void> _loadProfiles() async {
     try {
       final profiles = await _profileService.getMyFamilyProfiles();
+      final currentParent = await _profileService.getMyParentProfile();
 
       final participantOptions = [
         ...profiles.map((profile) => profile.name),
         'Familie',
       ];
 
-      if (_selectedParticipants.isEmpty && profiles.isNotEmpty) {
-        final me = await _profileService.getMyParentProfile();
-        if (me != null) {
-          _selectedParticipants = [me.name];
-        } else {
-          _selectedParticipants = [profiles.first.name];
+      if (_isEditing &&
+          _selectedParticipants.isEmpty &&
+          widget.existingActivity != null) {
+        final existingParticipants = <String>[];
+
+        for (final participant in widget.existingActivity!.participants) {
+          if (participant.externalName != null) {
+            existingParticipants.add(participant.externalName!);
+            continue;
+          }
+
+          if (participant.profileId != null) {
+            final matchingProfile = profiles.cast<Profile?>().firstWhere(
+                  (profile) => profile?.id == participant.profileId,
+                  orElse: () => null,
+                );
+
+            if (matchingProfile != null) {
+              existingParticipants.add(matchingProfile.name);
+            }
+          }
         }
+
+        _selectedParticipants = existingParticipants;
       }
 
-      // Remove participants that no longer exist in the family list
-      _selectedParticipants = _selectedParticipants
-          .where((participant) => participantOptions.contains(participant))
-          .toList();
-
-      if (_selectedParticipants.isEmpty && profiles.isNotEmpty) {
+      if (_selectedParticipants.isEmpty && currentParent != null) {
+        _selectedParticipants = [currentParent.name];
+      } else if (_selectedParticipants.isEmpty && profiles.isNotEmpty) {
         _selectedParticipants = [profiles.first.name];
       }
 
@@ -154,6 +174,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
       setState(() {
         _availableProfiles = profiles;
+        _currentParentProfile = currentParent;
+        _currentFamilyId = currentParent?.familyId;
         _participantOptions = participantOptions;
         _isLoadingProfiles = false;
         _profilesError = null;
@@ -163,6 +185,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
       setState(() {
         _availableProfiles = [];
+        _currentParentProfile = null;
+        _currentFamilyId = null;
         _participantOptions = ['Familie'];
         _isLoadingProfiles = false;
         _profilesError = 'Kunne ikke hente profiler';
@@ -225,41 +249,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     return trimmed.runes.length <= 8;
   }
 
-  ActivityOwner _mapParticipantsToOwner(List<String> participants) {
-    if (participants.contains('Familie') || participants.length > 1) {
-      return ActivityOwner.family;
-    }
-
-    if (participants.isEmpty) {
-      return ActivityOwner.family;
-    }
-
-    final selectedName = participants.first;
-    final selectedProfile = _availableProfiles.cast<Profile?>().firstWhere(
-          (profile) => profile?.name == selectedName,
-          orElse: () => null,
-        );
-
-    if (selectedProfile == null) {
-      return ActivityOwner.family;
-    }
-
-    if (selectedProfile.role == ProfileRole.parent) {
-      final parentProfiles = _availableProfiles
-          .where((profile) => profile.role == ProfileRole.parent)
-          .toList();
-
-      if (parentProfiles.isNotEmpty &&
-          parentProfiles.first.id == selectedProfile.id) {
-        return ActivityOwner.me;
-      }
-
-      return ActivityOwner.family;
-    }
-
-    return ActivityOwner.me;
-  }
-
   String _recurrenceLabel(ActivityRecurrence recurrence) {
     switch (recurrence) {
       case ActivityRecurrence.none:
@@ -288,22 +277,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       case ActivityRecurrence.custom:
         return _intervalSuffix(_selectedCustomRecurrence);
     }
-  }
-
-  List<bool> _buildChecklistChecked({
-    required List<String> newItems,
-    required Activity? existingActivity,
-  }) {
-    if (newItems.isEmpty) {
-      return <bool>[];
-    }
-
-    final oldChecked = existingActivity?.normalizedChecklistChecked ?? <bool>[];
-
-    return List<bool>.generate(
-      newItems.length,
-      (index) => index < oldChecked.length ? oldChecked[index] : false,
-    );
   }
 
   List<Reward> _availableRewards() {
@@ -349,6 +322,63 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   String _rewardDropdownLabel(Reward reward) {
     final emoji = reward.emoji.trim().isEmpty ? '🎁' : reward.emoji;
     return '$emoji ${reward.title}';
+  }
+
+  String? _resolveOwnerProfileId() {
+    return _currentParentProfile?.id;
+  }
+
+  List<ActivityParticipant> _buildParticipants() {
+    final participants = <ActivityParticipant>[];
+
+    for (final selected in _selectedParticipants) {
+      if (selected == 'Familie') {
+        participants.add(
+          const ActivityParticipant(externalName: 'Familie'),
+        );
+        continue;
+      }
+
+      final matchingProfile = _availableProfiles.cast<Profile?>().firstWhere(
+            (profile) => profile?.name == selected,
+            orElse: () => null,
+          );
+
+      if (matchingProfile != null) {
+        participants.add(
+          ActivityParticipant(profileId: matchingProfile.id),
+        );
+      } else if (selected.trim().isNotEmpty) {
+        participants.add(
+          ActivityParticipant(externalName: selected.trim()),
+        );
+      }
+    }
+
+    return participants;
+  }
+
+  List<ActivityChecklistItem> _buildChecklistItems() {
+    if (!_showChecklist) return const [];
+
+    final previousChecklist = widget.existingActivity?.checklistItems ?? const [];
+
+    final rawItems = _checklistControllers
+        .map((controller) => controller.text.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+
+    return List<ActivityChecklistItem>.generate(
+      rawItems.length,
+      (index) => ActivityChecklistItem(
+        id: index < previousChecklist.length ? previousChecklist[index].id : null,
+        title: rawItems[index],
+        isChecked: index < previousChecklist.length
+            ? previousChecklist[index].isChecked
+            : false,
+        position: index,
+      ),
+    );
   }
 
   Future<void> _pickDate() async {
@@ -475,6 +505,56 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     );
   }
 
+  Future<void> _showAddExternalParticipantDialog() async {
+    final controller = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Tilføj anden deltager'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'Navn',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                controller.dispose();
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Annuller'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (value.isEmpty) {
+                  return;
+                }
+
+                setState(() {
+                  if (!_participantOptions.contains(value)) {
+                    _participantOptions = [..._participantOptions, value];
+                  }
+                  if (!_selectedParticipants.contains(value)) {
+                    _selectedParticipants.add(value);
+                  }
+                });
+
+                controller.dispose();
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Tilføj'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _addChecklistItem() {
     setState(() {
       if (!_showChecklist) {
@@ -564,6 +644,15 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       return;
     }
 
+    if (_currentFamilyId == null || _currentParentProfile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kunne ikke finde familie eller profil.'),
+        ),
+      );
+      return;
+    }
+
     final parsedInterval =
         int.tryParse(_recurrenceIntervalController.text.trim()) ?? 1;
 
@@ -588,44 +677,37 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       }
     }
 
-    final checklistItems = _showChecklist
-        ? _checklistControllers
-            .map((controller) => controller.text.trim())
-            .where((item) => item.isNotEmpty)
-            .toList()
-        : <String>[];
-
-    final checklistChecked = _buildChecklistChecked(
-      newItems: checklistItems,
-      existingActivity: widget.existingActivity,
-    );
+    final checklistItems = _buildChecklistItems();
+    final participants = _buildParticipants();
 
     final activity = Activity(
-      id: widget.existingActivity?.id ??
-          DateTime.now().millisecondsSinceEpoch.toString(),
+      id: widget.existingActivity?.id ?? _uuid.v4(),
+      familyId: _currentFamilyId!,
       title: _titleController.text.trim(),
       emoji: _emojiController.text.trim(),
+      description: _descriptionController.text.trim(),
       startTime: startDateTime,
       endTime: endDateTime,
-      owner: _mapParticipantsToOwner(_selectedParticipants),
+      createdBy: _currentParentProfile!.authUserId,
+      ownerProfileId: _resolveOwnerProfileId(),
+      isCompleted: widget.existingActivity?.isCompleted ?? false,
       isImportant: widget.existingActivity?.isImportant ?? false,
       isFavorite: _isFavorite,
-      description: _descriptionController.text.trim(),
-      participants: _selectedParticipants,
-      checklistItems: checklistItems,
-      checklistChecked: checklistChecked,
+      imagePath: _imagePath.trim(),
       directRewardId: _enableDirectReward ? _selectedDirectRewardId : null,
       streakRewardId: _enableStreakReward ? _selectedStreakRewardId : null,
       streakTarget: _enableStreakReward
           ? int.tryParse(_streakTargetController.text.trim()) ?? 5
           : null,
-      imagePath: _imagePath.trim(),
       recurrence: _selectedRecurrence == ActivityRecurrence.custom
           ? _selectedCustomRecurrence
           : _selectedRecurrence,
       recurrenceInterval:
           _selectedRecurrence == ActivityRecurrence.none ? 1 : parsedInterval,
-      isCompleted: widget.existingActivity?.isCompleted ?? false,
+      createdAt: widget.existingActivity?.createdAt,
+      updatedAt: widget.existingActivity?.updatedAt,
+      participants: participants,
+      checklistItems: checklistItems,
     );
 
     Navigator.pop(context, activity);
@@ -852,6 +934,15 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                             });
                           },
                         ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: _showAddExternalParticipantDialog,
+                            icon: const Icon(Icons.person_add_alt_1),
+                            label: const Text('Tilføj anden deltager'),
+                          ),
+                        ),
                         const SizedBox(height: 10),
                         Wrap(
                           spacing: 8,
@@ -891,8 +982,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                     children: [
                                       TextField(
                                         controller: _descriptionController,
-                                        keyboardType:
-                                            TextInputType.multiline,
+                                        keyboardType: TextInputType.multiline,
                                         textInputAction:
                                             TextInputAction.newline,
                                         minLines: 4,
@@ -910,14 +1000,12 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                           children: [
                                             Container(
                                               width: double.infinity,
-                                              constraints:
-                                                  const BoxConstraints(
+                                              constraints: const BoxConstraints(
                                                 maxHeight: 140,
                                                 minHeight: 90,
                                               ),
                                               decoration: BoxDecoration(
-                                                color:
-                                                    const Color(0xFFF8F8F8),
+                                                color: const Color(0xFFF8F8F8),
                                                 borderRadius:
                                                     BorderRadius.circular(10),
                                                 border: Border.all(
@@ -932,8 +1020,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                                   File(_imagePath),
                                                   width: double.infinity,
                                                   fit: BoxFit.cover,
-                                                  errorBuilder: (context,
-                                                      error, stackTrace) {
+                                                  errorBuilder: (
+                                                    context,
+                                                    error,
+                                                    stackTrace,
+                                                  ) {
                                                     return const SizedBox(
                                                       height: 90,
                                                       child: Center(
@@ -1202,7 +1293,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                               ),
                               validator: (value) {
                                 if (!_enableStreakReward) return null;
-                                final number = int.tryParse((value ?? '').trim());
+                                final number =
+                                    int.tryParse((value ?? '').trim());
                                 if (number == null || number < 1) {
                                   return 'Skriv et tal på mindst 1';
                                 }

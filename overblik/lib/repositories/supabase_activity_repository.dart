@@ -8,14 +8,33 @@ class SupabaseActivityRepository implements ActivityRepository {
 
   SupabaseActivityRepository(this._client);
 
+  Future<String?> _getCurrentFamilyId() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+
+    final profile = await _client
+        .from('profiles')
+        .select('family_id')
+        .eq('auth_user_id', user.id)
+        .eq('role', 'parent')
+        .maybeSingle();
+
+    if (profile == null) return null;
+    return profile['family_id'] as String?;
+  }
+
   @override
   Future<List<Activity>> getActivitiesForDate(DateTime date) async {
+    final familyId = await _getCurrentFamilyId();
+    if (familyId == null) return [];
+
     final start = DateTime(date.year, date.month, date.day);
     final end = start.add(const Duration(days: 1));
 
     final activityRows = await _client
         .from('activities')
         .select()
+        .eq('family_id', familyId)
         .gte('start_time', start.toIso8601String())
         .lt('start_time', end.toIso8601String())
         .order('start_time');
@@ -27,6 +46,9 @@ class SupabaseActivityRepository implements ActivityRepository {
 
   @override
   Future<List<Activity>> getActivitiesForWeek(DateTime focusedDate) async {
+    final familyId = await _getCurrentFamilyId();
+    if (familyId == null) return [];
+
     final startOfWeek = DateTime(
       focusedDate.year,
       focusedDate.month,
@@ -38,6 +60,7 @@ class SupabaseActivityRepository implements ActivityRepository {
     final activityRows = await _client
         .from('activities')
         .select()
+        .eq('family_id', familyId)
         .gte('start_time', startOfWeek.toIso8601String())
         .lt('start_time', endOfWeek.toIso8601String())
         .order('start_time');
@@ -76,27 +99,17 @@ class SupabaseActivityRepository implements ActivityRepository {
 
     if (activity.participants.isNotEmpty) {
       await _client.from('activity_participants').insert(
-        activity.participants.map((participant) {
-          return {
-            'activity_id': activity.id,
-            'participant_name': participant,
-          };
-        }).toList(),
+        activity.participants
+            .map((participant) => participant.toDatabaseRow(activity.id))
+            .toList(),
       );
     }
 
-    final normalizedChecked = activity.normalizedChecklistChecked;
-
     if (activity.checklistItems.isNotEmpty) {
       await _client.from('checklist_items').insert(
-        List.generate(activity.checklistItems.length, (index) {
-          return {
-            'activity_id': activity.id,
-            'title': activity.checklistItems[index],
-            'is_checked': normalizedChecked[index],
-            'position': index,
-          };
-        }),
+        activity.checklistItems
+            .map((item) => item.toDatabaseRow(activity.id))
+            .toList(),
       );
     }
   }
@@ -115,12 +128,9 @@ class SupabaseActivityRepository implements ActivityRepository {
 
     if (activity.participants.isNotEmpty) {
       await _client.from('activity_participants').insert(
-        activity.participants.map((participant) {
-          return {
-            'activity_id': activity.id,
-            'participant_name': participant,
-          };
-        }).toList(),
+        activity.participants
+            .map((participant) => participant.toDatabaseRow(activity.id))
+            .toList(),
       );
     }
 
@@ -129,18 +139,11 @@ class SupabaseActivityRepository implements ActivityRepository {
         .delete()
         .eq('activity_id', activity.id);
 
-    final normalizedChecked = activity.normalizedChecklistChecked;
-
     if (activity.checklistItems.isNotEmpty) {
       await _client.from('checklist_items').insert(
-        List.generate(activity.checklistItems.length, (index) {
-          return {
-            'activity_id': activity.id,
-            'title': activity.checklistItems[index],
-            'is_checked': normalizedChecked[index],
-            'position': index,
-          };
-        }),
+        activity.checklistItems
+            .map((item) => item.toDatabaseRow(activity.id))
+            .toList(),
       );
     }
   }
@@ -157,9 +160,7 @@ class SupabaseActivityRepository implements ActivityRepository {
       return [];
     }
 
-    final activityIds = activityRows
-        .map((row) => row['id'] as String)
-        .toList();
+    final activityIds = activityRows.map((row) => row['id'] as String).toList();
 
     final participantRows = await _client
         .from('activity_participants')
@@ -172,29 +173,26 @@ class SupabaseActivityRepository implements ActivityRepository {
         .inFilter('activity_id', activityIds)
         .order('position');
 
-    final participantsByActivity = <String, List<String>>{};
+    final participantsByActivity = <String, List<ActivityParticipant>>{};
     for (final row in participantRows) {
       final map = Map<String, dynamic>.from(row);
       final activityId = map['activity_id'] as String;
-      final participantName = map['participant_name'] as String;
 
       participantsByActivity.putIfAbsent(activityId, () => []);
-      participantsByActivity[activityId]!.add(participantName);
+      participantsByActivity[activityId]!.add(
+        ActivityParticipant.fromDatabaseRow(map),
+      );
     }
 
-    final checklistTitlesByActivity = <String, List<String>>{};
-    final checklistCheckedByActivity = <String, List<bool>>{};
-
+    final checklistByActivity = <String, List<ActivityChecklistItem>>{};
     for (final row in checklistRows) {
       final map = Map<String, dynamic>.from(row);
       final activityId = map['activity_id'] as String;
 
-      checklistTitlesByActivity.putIfAbsent(activityId, () => []);
-      checklistCheckedByActivity.putIfAbsent(activityId, () => []);
-
-      checklistTitlesByActivity[activityId]!.add(map['title'] as String);
-      checklistCheckedByActivity[activityId]!
-          .add(map['is_checked'] as bool? ?? false);
+      checklistByActivity.putIfAbsent(activityId, () => []);
+      checklistByActivity[activityId]!.add(
+        ActivityChecklistItem.fromDatabaseRow(map),
+      );
     }
 
     return activityRows.map((row) {
@@ -203,8 +201,7 @@ class SupabaseActivityRepository implements ActivityRepository {
       return Activity.fromDatabase(
         activityRow: row,
         participants: participantsByActivity[id] ?? const [],
-        checklistItems: checklistTitlesByActivity[id] ?? const [],
-        checklistChecked: checklistCheckedByActivity[id] ?? const [],
+        checklistItems: checklistByActivity[id] ?? const [],
       );
     }).toList();
   }

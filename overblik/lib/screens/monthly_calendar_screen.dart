@@ -189,17 +189,20 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
-  Color _ownerColor(ActivityOwner owner) {
-    switch (owner) {
-      case ActivityOwner.me:
-        return Colors.blue;
-      case ActivityOwner.mother:
-        return Colors.pink;
-      case ActivityOwner.father:
-        return Colors.orange;
-      case ActivityOwner.family:
-        return Colors.purple;
+  Color _activityColor(Activity activity) {
+    if (activity.isCompleted) {
+      return Colors.green;
     }
+    if (activity.isImportant) {
+      return Colors.red;
+    }
+    if (activity.isFavorite) {
+      return Colors.amber;
+    }
+    if (activity.ownerProfileId != null) {
+      return Colors.blue;
+    }
+    return Colors.purple;
   }
 
   String _dateKey(DateTime date) {
@@ -304,7 +307,8 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
                                                 cellHeight: cellHeight,
                                                 getActivitiesForDate:
                                                     _getActivitiesForDate,
-                                                ownerColorBuilder: _ownerColor,
+                                                activityColorBuilder:
+                                                    _activityColor,
                                                 isSameDate: _isSameDate,
                                                 onTapDay: _openDay,
                                               ),
@@ -414,7 +418,7 @@ class _MonthWeekRow extends StatelessWidget {
   final double weekNumberWidth;
   final double cellHeight;
   final List<Activity> Function(DateTime) getActivitiesForDate;
-  final Color Function(ActivityOwner) ownerColorBuilder;
+  final Color Function(Activity activity) activityColorBuilder;
   final bool Function(DateTime, DateTime) isSameDate;
   final ValueChanged<DateTime> onTapDay;
 
@@ -426,7 +430,7 @@ class _MonthWeekRow extends StatelessWidget {
     required this.weekNumberWidth,
     required this.cellHeight,
     required this.getActivitiesForDate,
-    required this.ownerColorBuilder,
+    required this.activityColorBuilder,
     required this.isSameDate,
     required this.onTapDay,
   });
@@ -461,7 +465,7 @@ class _MonthWeekRow extends StatelessWidget {
                   isCurrentMonth: date.month == focusedMonth,
                   isToday: isSameDate(date, today),
                   cellHeight: cellHeight,
-                  ownerColorBuilder: ownerColorBuilder,
+                  activityColorBuilder: activityColorBuilder,
                   onTap: () => onTapDay(date),
                 ),
               ),
@@ -479,7 +483,7 @@ class _MonthDayCell extends StatelessWidget {
   final bool isCurrentMonth;
   final bool isToday;
   final double cellHeight;
-  final Color Function(ActivityOwner) ownerColorBuilder;
+  final Color Function(Activity activity) activityColorBuilder;
   final VoidCallback onTap;
 
   const _MonthDayCell({
@@ -488,7 +492,7 @@ class _MonthDayCell extends StatelessWidget {
     required this.isCurrentMonth,
     required this.isToday,
     required this.cellHeight,
-    required this.ownerColorBuilder,
+    required this.activityColorBuilder,
     required this.onTap,
   });
 
@@ -529,7 +533,7 @@ class _MonthDayCell extends StatelessWidget {
             if (activities.isNotEmpty)
               ActivityIndicators(
                 activities: activities,
-                ownerColorBuilder: ownerColorBuilder,
+                activityColorBuilder: activityColorBuilder,
                 maxDots: 3,
                 maxStars: 2,
                 dotSize: 8,

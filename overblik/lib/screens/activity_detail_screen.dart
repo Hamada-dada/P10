@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
+import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
+import '../services/profile_service.dart';
 import '../services/reward_service.dart';
 import 'create_activity_screen.dart';
 
@@ -23,20 +25,21 @@ class ActivityDetailScreen extends StatefulWidget {
 
 class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   late Activity _activity;
-  late List<bool> _checkedItems;
+
   final RewardService _rewardService = RewardService();
+  final ProfileService _profileService = ProfileService();
 
   late final ActivityService _activityService = ActivityService(
     SupabaseActivityRepository(Supabase.instance.client),
   );
 
   bool _isLoading = true;
+  Map<String, Profile> _profilesById = {};
 
   @override
   void initState() {
     super.initState();
     _activity = widget.activity;
-    _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
     _loadActivity();
   }
 
@@ -45,24 +48,42 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       final freshActivity =
           await _activityService.getActivityById(widget.activity.id);
 
+      final familyProfiles = await _profileService.getMyFamilyProfiles();
+
       if (!mounted) return;
 
       setState(() {
         _activity = freshActivity ?? widget.activity;
-        _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
+        _profilesById = {
+          for (final profile in familyProfiles) profile.id: profile,
+        };
         _isLoading = false;
       });
     } catch (e, st) {
       debugPrint('ActivityDetailScreen _loadActivity failed: $e');
       debugPrintStack(stackTrace: st);
 
-      if (!mounted) return;
+      try {
+        final familyProfiles = await _profileService.getMyFamilyProfiles();
 
-      setState(() {
-        _activity = widget.activity;
-        _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
-        _isLoading = false;
-      });
+        if (!mounted) return;
+
+        setState(() {
+          _activity = widget.activity;
+          _profilesById = {
+            for (final profile in familyProfiles) profile.id: profile,
+          };
+          _isLoading = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+
+        setState(() {
+          _activity = widget.activity;
+          _profilesById = {};
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -91,12 +112,30 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     return '$hour:$minute';
   }
 
+  String _participantDisplayText(ActivityParticipant participant) {
+    if (participant.externalName != null &&
+        participant.externalName!.trim().isNotEmpty) {
+      return participant.externalName!;
+    }
+
+    if (participant.profileId != null) {
+      final profile = _profilesById[participant.profileId!];
+      if (profile != null) {
+        return profile.name;
+      }
+    }
+
+    return 'Ukendt deltager';
+  }
+
   String _buildParticipantsText() {
     if (_activity.participants.isEmpty) {
       return 'Ingen deltagere';
     }
 
-    return _activity.participants.join(', ');
+    return _activity.participants
+        .map(_participantDisplayText)
+        .join(', ');
   }
 
   String _buildDescriptionText() {
@@ -133,11 +172,21 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   Future<void> _toggleChecklistItem(int index) async {
     try {
-      final updatedCheckedItems = List<bool>.from(_checkedItems);
-      updatedCheckedItems[index] = !updatedCheckedItems[index];
+      final updatedChecklist = List<ActivityChecklistItem>.from(
+        _activity.checklistItems,
+      );
+
+      final currentItem = updatedChecklist[index];
+
+      updatedChecklist[index] = ActivityChecklistItem(
+        id: currentItem.id,
+        title: currentItem.title,
+        isChecked: !currentItem.isChecked,
+        position: currentItem.position,
+      );
 
       final updatedActivity = _activity.copyWith(
-        checklistChecked: updatedCheckedItems,
+        checklistItems: updatedChecklist,
       );
 
       await _activityService.updateActivity(updatedActivity);
@@ -145,7 +194,6 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       if (!mounted) return;
 
       setState(() {
-        _checkedItems = updatedCheckedItems;
         _activity = updatedActivity;
       });
     } catch (e, st) {
@@ -181,9 +229,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
         setState(() {
           _activity = updatedActivity;
-          _checkedItems = List<bool>.from(_activity.normalizedChecklistChecked);
         });
 
+        if (!context.mounted) return;
         Navigator.pop(context, true);
       }
     } catch (e, st) {
@@ -203,17 +251,17 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   Future<void> _deleteActivity(BuildContext context) async {
     final shouldDelete = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Slet aktivitet'),
           content: Text('Vil du slette "${_activity.title}"?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Annuller'),
             ),
             TextButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Slet'),
             ),
           ],
@@ -440,46 +488,56 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: List.generate(
                                   _activity.checklistItems.length,
-                                  (index) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(8),
-                                      onTap: () => _toggleChecklistItem(index),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Padding(
-                                            padding:
-                                                const EdgeInsets.only(top: 2),
-                                            child: Icon(
-                                              _checkedItems[index]
-                                                  ? Icons.check_box
-                                                  : Icons.check_box_outline_blank,
-                                              size: 20,
-                                              color: Colors.black87,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              _activity.checklistItems[index],
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w400,
-                                                color: const Color(0xFF1D1B20),
-                                                height: 1.5,
-                                                letterSpacing: 0.5,
-                                                decoration: _checkedItems[index]
-                                                    ? TextDecoration.lineThrough
-                                                    : TextDecoration.none,
+                                  (index) {
+                                    final checklistItem =
+                                        _activity.checklistItems[index];
+
+                                    return Padding(
+                                      padding:
+                                          const EdgeInsets.only(bottom: 8),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(8),
+                                        onTap: () => _toggleChecklistItem(index),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.only(top: 2),
+                                              child: Icon(
+                                                checklistItem.isChecked
+                                                    ? Icons.check_box
+                                                    : Icons
+                                                        .check_box_outline_blank,
+                                                size: 20,
+                                                color: Colors.black87,
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                checklistItem.title,
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w400,
+                                                  color:
+                                                      const Color(0xFF1D1B20),
+                                                  height: 1.5,
+                                                  letterSpacing: 0.5,
+                                                  decoration:
+                                                      checklistItem.isChecked
+                                                          ? TextDecoration
+                                                              .lineThrough
+                                                          : TextDecoration.none,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  },
                                 ),
                               ),
                             ),
