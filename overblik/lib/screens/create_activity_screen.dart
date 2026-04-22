@@ -30,8 +30,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   final RewardService _rewardService = RewardService();
   final ProfileService _profileService = ProfileService();
 
-  late final List<Profile> _availableProfiles;
-  late final List<String> _participantOptions;
+  List<Profile> _availableProfiles = [];
+  List<String> _participantOptions = [];
+  bool _isLoadingProfiles = true;
+  String? _profilesError;
 
   late final TextEditingController _titleController;
   late final TextEditingController _emojiController;
@@ -70,12 +72,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     final baseDate = widget.initialDate ?? DateTime.now();
     final roundedNow = _roundToNextQuarter(baseDate);
 
-    _availableProfiles = _profileService.getAllProfiles();
-    _participantOptions = [
-      ..._availableProfiles.map((profile) => profile.name),
-      'Familie',
-    ];
-
     _titleController = TextEditingController(text: activity?.title ?? '');
     _emojiController = TextEditingController(text: activity?.emoji ?? '');
     _descriptionController =
@@ -105,7 +101,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _selectedDirectRewardId = activity?.directRewardId;
     _selectedStreakRewardId = activity?.streakRewardId;
 
-    _selectedParticipants = List<String>.from(activity?.participants ?? ['Mig']);
+    _selectedParticipants =
+        List<String>.from(activity?.participants ?? <String>[]);
     _selectedRecurrence = activity?.recurrence ?? ActivityRecurrence.none;
 
     _selectedCustomRecurrence =
@@ -123,6 +120,54 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         : [];
 
     _revalidateSelectedRewards();
+    _loadProfiles();
+  }
+
+  Future<void> _loadProfiles() async {
+    try {
+      final profiles = await _profileService.getMyFamilyProfiles();
+
+      final participantOptions = [
+        ...profiles.map((profile) => profile.name),
+        'Familie',
+      ];
+
+      if (_selectedParticipants.isEmpty && profiles.isNotEmpty) {
+        final me = await _profileService.getMyParentProfile();
+        if (me != null) {
+          _selectedParticipants = [me.name];
+        } else {
+          _selectedParticipants = [profiles.first.name];
+        }
+      }
+
+      // Remove participants that no longer exist in the family list
+      _selectedParticipants = _selectedParticipants
+          .where((participant) => participantOptions.contains(participant))
+          .toList();
+
+      if (_selectedParticipants.isEmpty && profiles.isNotEmpty) {
+        _selectedParticipants = [profiles.first.name];
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _availableProfiles = profiles;
+        _participantOptions = participantOptions;
+        _isLoadingProfiles = false;
+        _profilesError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _availableProfiles = [];
+        _participantOptions = ['Familie'];
+        _isLoadingProfiles = false;
+        _profilesError = 'Kunne ikke hente profiler';
+      });
+    }
   }
 
   @override
@@ -181,18 +226,37 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   }
 
   ActivityOwner _mapParticipantsToOwner(List<String> participants) {
-    if (participants.contains('Familie')) {
+    if (participants.contains('Familie') || participants.length > 1) {
       return ActivityOwner.family;
     }
-    if (participants.length > 1) {
+
+    if (participants.isEmpty) {
       return ActivityOwner.family;
     }
-    if (participants.contains('Mor')) {
-      return ActivityOwner.mother;
+
+    final selectedName = participants.first;
+    final selectedProfile = _availableProfiles.cast<Profile?>().firstWhere(
+          (profile) => profile?.name == selectedName,
+          orElse: () => null,
+        );
+
+    if (selectedProfile == null) {
+      return ActivityOwner.family;
     }
-    if (participants.contains('Far')) {
-      return ActivityOwner.father;
+
+    if (selectedProfile.role == ProfileRole.parent) {
+      final parentProfiles = _availableProfiles
+          .where((profile) => profile.role == ProfileRole.parent)
+          .toList();
+
+      if (parentProfiles.isNotEmpty &&
+          parentProfiles.first.id == selectedProfile.id) {
+        return ActivityOwner.me;
+      }
+
+      return ActivityOwner.family;
     }
+
     return ActivityOwner.me;
   }
 
@@ -569,6 +633,36 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingProfiles) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_profilesError != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _profilesError!,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: _loadProfiles,
+                  child: const Text('Prøv igen'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final title = _isEditing ? 'Rediger aktivitet' : 'Ny aktivitet';
     final directRewards = _directRewards();
     final streakRewards = _streakRewards();

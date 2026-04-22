@@ -17,14 +17,38 @@ class _RewardsScreenState extends State<RewardsScreen> {
   final RewardService _rewardService = RewardService();
   final ProfileService _profileService = ProfileService();
 
-  late final List<Profile> _profiles;
+  List<Profile> _profiles = [];
+  bool _isLoadingProfiles = true;
+  String? _profilesError;
 
   String _selectedProfileFilter = 'Alle';
 
   @override
   void initState() {
     super.initState();
-    _profiles = _profileService.getAllProfiles();
+    _loadProfiles();
+  }
+
+  Future<void> _loadProfiles() async {
+    try {
+      final profiles = await _profileService.getMyFamilyProfiles();
+
+      if (!mounted) return;
+
+      setState(() {
+        _profiles = profiles;
+        _isLoadingProfiles = false;
+        _profilesError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _profiles = [];
+        _isLoadingProfiles = false;
+        _profilesError = 'Kunne ikke hente profiler';
+      });
+    }
   }
 
   List<String> get _profileFilterOptions {
@@ -47,6 +71,15 @@ class _RewardsScreenState extends State<RewardsScreen> {
   }
 
   void _openCreateRewardDialog() {
+    if (_profiles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingen profiler fundet endnu.'),
+        ),
+      );
+      return;
+    }
+
     final titleController = TextEditingController();
     final emojiController = TextEditingController();
     final descriptionController = TextEditingController();
@@ -54,8 +87,16 @@ class _RewardsScreenState extends State<RewardsScreen> {
     final childProfiles =
         _profiles.where((profile) => profile.role == ProfileRole.child).toList();
 
-    String selectedProfile =
-        childProfiles.isNotEmpty ? childProfiles.first.name : _profiles.first.name;
+    if (childProfiles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Du skal oprette et barn først, før du kan lave en belønning.'),
+        ),
+      );
+      return;
+    }
+
+    String selectedProfile = childProfiles.first.name;
 
     bool isDirectReward = true;
     bool isStreakReward = false;
@@ -225,6 +266,38 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingProfiles) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_profilesError != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _profilesError!,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: _loadProfiles,
+                  child: const Text('Prøv igen'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final rewards = _filteredRewards;
     final profileFilters = _profileFilterOptions;
 

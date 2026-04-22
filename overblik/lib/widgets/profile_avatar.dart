@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/profile.dart';
 import '../screens/profile_screen.dart';
 import '../services/profile_service.dart';
 
@@ -9,39 +10,50 @@ class ProfileAvatarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final profileService = ProfileService();
-    final currentProfile = profileService.getProfileById('profile-me');
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () {
-        if (currentProfile == null) return;
+    return FutureBuilder<Profile?>(
+      future: profileService.getMyParentProfile(),
+      builder: (context, snapshot) {
+        final currentProfile = snapshot.data;
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ProfileScreen(
-              profile: currentProfile,
-              familyMembers: profileService
-                  .getAllProfiles()
-                  .map((profile) => profile.name)
-                  .toList(),
-            ),
+        return InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: currentProfile == null
+              ? null
+              : () async {
+                  final familyProfiles = await profileService.getFamilyProfiles(
+                    currentProfile.familyId,
+                  );
+
+                  if (!context.mounted) return;
+
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProfileScreen(
+                        profile: currentProfile,
+                        familyMembers: familyProfiles
+                            .map((profile) => profile.name)
+                            .toList(),
+                      ),
+                    ),
+                  );
+                },
+          child: CircleAvatar(
+            radius: 22,
+            backgroundColor: Colors.white,
+            child: currentProfile != null
+                ? Text(
+                    currentProfile.emoji,
+                    style: const TextStyle(fontSize: 20),
+                  )
+                : Icon(
+                    Icons.person,
+                    color: Colors.grey.shade700,
+                  ),
           ),
         );
       },
-      child: CircleAvatar(
-        radius: 22,
-        backgroundColor: Colors.white,
-        child: currentProfile != null
-            ? Text(
-                currentProfile.emoji,
-                style: const TextStyle(fontSize: 20),
-              )
-            : Icon(
-                Icons.person,
-                color: Colors.grey.shade700,
-              ),
-      ),
     );
   }
 }
