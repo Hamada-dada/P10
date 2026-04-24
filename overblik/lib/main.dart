@@ -6,42 +6,43 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_config.dart';
 import 'screens/auth_gate.dart';
+import 'screens/daily_calendar_screen.dart';
 import 'screens/monthly_calendar_screen.dart';
 import 'screens/weekly_calendar_screen.dart';
-import 'screens/daily_calendar_screen.dart';
 
 Future<void> main() async {
-  
-  await runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
+  await runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-    FlutterError.onError = (FlutterErrorDetails details) {
-      FlutterError.presentError(details);
-      debugPrint('FlutterError: ${details.exception}');
-      debugPrintStack(stackTrace: details.stack);
-    };
+      FlutterError.onError = (FlutterErrorDetails details) {
+        FlutterError.presentError(details);
+        debugPrint('FlutterError: ${details.exception}');
+        debugPrintStack(stackTrace: details.stack);
+      };
 
-    PlatformDispatcher.instance.onError = (error, stack) {
-      debugPrint('PlatformDispatcher error: $error');
+      PlatformDispatcher.instance.onError = (error, stack) {
+        debugPrint('PlatformDispatcher error: $error');
+        debugPrintStack(stackTrace: stack);
+        return true;
+      };
+
+      await Supabase.initialize(
+        url: SupabaseConfig.url,
+        anonKey: SupabaseConfig.anonKey,
+      );
+
+      debugPrint(
+        'Current session user id: ${Supabase.instance.client.auth.currentUser?.id}',
+      );
+
+      runApp(const MyApp());
+    },
+    (error, stack) {
+      debugPrint('runZonedGuarded error: $error');
       debugPrintStack(stackTrace: stack);
-      return true;
-    };
-
-    await Supabase.initialize(
-      url: SupabaseConfig.url,
-      anonKey: SupabaseConfig.anonKey,
-    );
-    
-  final client = Supabase.instance.client;
-  await client.auth.signOut();
-  debugPrint('Current session user id: ${client.auth.currentUser?.id}');
-
-
-    runApp(const MyApp());
-  }, (error, stack) {
-    debugPrint('runZonedGuarded error: $error');
-    debugPrintStack(stackTrace: stack);
-  });
+    },
+  );
 }
 
 class MyApp extends StatelessWidget {

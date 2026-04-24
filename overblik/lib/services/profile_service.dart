@@ -1,4 +1,9 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../models/profile.dart';
 
 class ChildLoginResult {
@@ -39,6 +44,9 @@ class ProfileService {
 
   final SupabaseClient _client = Supabase.instance.client;
 
+  static const String _cachedParentProfilePrefix = 'cached_parent_profile_';
+  static const String _cachedFamilyProfilesPrefix = 'cached_family_profiles_';
+
   Map<String, dynamic> _asMap(dynamic value, {String? errorContext}) {
     if (value is Map<String, dynamic>) {
       return value;
@@ -55,43 +63,184 @@ class ProfileService {
     );
   }
 
+  String? _currentUserId() {
+    return _client.auth.currentUser?.id;
+  }
+
+  Future<void> _cacheParentProfile(String authUserId, Profile profile) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_cachedParentProfilePrefix$authUserId';
+
+      await prefs.setString(
+        key,
+        jsonEncode(profile.toMap()),
+      );
+
+      debugPrint('ProfileService: cached parent profile for user=$authUserId');
+    } catch (e, st) {
+      debugPrint('ProfileService: failed to cache parent profile: $e');
+      debugPrintStack(stackTrace: st);
+    }
+  }
+
+  Future<Profile?> _getCachedParentProfile(String authUserId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_cachedParentProfilePrefix$authUserId';
+      final raw = prefs.getString(key);
+
+      if (raw == null || raw.trim().isEmpty) {
+        debugPrint('ProfileService: no cached parent profile found');
+        return null;
+      }
+
+      final decoded = jsonDecode(raw);
+      final profile = Profile.fromMap(
+        _asMap(decoded, errorContext: '_getCachedParentProfile'),
+      );
+
+      debugPrint('ProfileService: loaded cached parent profile');
+      return profile;
+    } catch (e, st) {
+      debugPrint('ProfileService: failed to read cached parent profile: $e');
+      debugPrintStack(stackTrace: st);
+      return null;
+    }
+  }
+
+  Future<void> _cacheFamilyProfiles(
+    String familyId,
+    List<Profile> profiles,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_cachedFamilyProfilesPrefix$familyId';
+
+      await prefs.setString(
+        key,
+        jsonEncode(
+          profiles.map((profile) => profile.toMap()).toList(),
+        ),
+      );
+
+      debugPrint(
+        'ProfileService: cached ${profiles.length} family profiles for family=$familyId',
+      );
+    } catch (e, st) {
+      debugPrint('ProfileService: failed to cache family profiles: $e');
+      debugPrintStack(stackTrace: st);
+    }
+  }
+
+  Future<List<Profile>> _getCachedFamilyProfiles(String familyId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_cachedFamilyProfilesPrefix$familyId';
+      final raw = prefs.getString(key);
+
+      if (raw == null || raw.trim().isEmpty) {
+        debugPrint('ProfileService: no cached family profiles found');
+        return [];
+      }
+
+      final decoded = jsonDecode(raw);
+
+      if (decoded is! List) {
+        debugPrint('ProfileService: cached family profiles had wrong shape');
+        return [];
+      }
+
+      final profiles = decoded
+          .map(
+            (row) => Profile.fromMap(
+              _asMap(row, errorContext: '_getCachedFamilyProfiles'),
+            ),
+          )
+          .toList();
+
+      debugPrint(
+        'ProfileService: loaded ${profiles.length} cached family profiles',
+      );
+
+      return profiles;
+    } catch (e, st) {
+      debugPrint('ProfileService: failed to read cached family profiles: $e');
+      debugPrintStack(stackTrace: st);
+      return [];
+    }
+  }
+
   Future<Profile?> getMyParentProfile() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return null;
+    final userId = _currentUserId();
 
-    final result = await _client
-        .from('profiles')
-        .select()
-        .eq('auth_user_id', user.id)
-        .eq('role', 'parent')
-        .maybeSingle();
+    if (userId == null) {
+      debugPrint('ProfileService: no current user for getMyParentProfile');
+      return null;
+    }
 
-    if (result == null) return null;
+    try {
+      final result = await _client
+          .from('profiles')
+          .select()
+          .eq('auth_user_id', userId)
+          .eq('role', 'parent')
+          .maybeSingle();
 
-    return Profile.fromMap(
-      _asMap(result, errorContext: 'getMyParentProfile'),
-    );
+      if (result == null) {
+        debugPrint('ProfileService: no parent profile found online');
+        return await _getCachedParentProfile(userId);
+      }
+
+      final profile = Profile.fromMap(
+        _asMap(result, errorContext: 'getMyParentProfile'),
+      );
+
+      await _cacheParentProfile(userId, profile);
+
+      return profile;
+    } catch (e, st) {
+      debugPrint('ProfileService: getMyParentProfile online failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      return await _getCachedParentProfile(userId);
+    }
   }
 
   Future<List<Profile>> getFamilyProfiles(String familyId) async {
-    final result = await _client
-        .from('profiles')
-        .select()
-        .eq('family_id', familyId)
-        .order('created_at', ascending: true);
+    try {
+      final result = await _client
+          .from('profiles')
+          .select()
+          .eq('family_id', familyId)
+          .order('created_at', ascending: true);
 
-    return (result as List)
-        .map(
-          (row) => Profile.fromMap(
-            _asMap(row, errorContext: 'getFamilyProfiles'),
-          ),
-        )
-        .toList();
+      final profiles = (result as List)
+          .map(
+            (row) => Profile.fromMap(
+              _asMap(row, errorContext: 'getFamilyProfiles'),
+            ),
+          )
+          .toList();
+
+      await _cacheFamilyProfiles(familyId, profiles);
+
+      return profiles;
+    } catch (e, st) {
+      debugPrint('ProfileService: getFamilyProfiles online failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      return await _getCachedFamilyProfiles(familyId);
+    }
   }
 
   Future<List<Profile>> getMyFamilyProfiles() async {
     final currentProfile = await getMyParentProfile();
-    if (currentProfile == null) return [];
+
+    if (currentProfile == null) {
+      debugPrint('ProfileService: no parent profile for getMyFamilyProfiles');
+      return [];
+    }
 
     return await getFamilyProfiles(currentProfile.familyId);
   }
@@ -102,51 +251,58 @@ class ProfileService {
   }
 
   Future<List<Profile>> getChildProfiles(String familyId) async {
-    final result = await _client
-        .from('profiles')
-        .select()
-        .eq('family_id', familyId)
-        .eq('role', 'child')
-        .order('created_at', ascending: true);
+    final profiles = await getFamilyProfiles(familyId);
 
-    return (result as List)
-        .map(
-          (row) => Profile.fromMap(
-            _asMap(row, errorContext: 'getChildProfiles'),
-          ),
-        )
+    return profiles
+        .where((profile) => profile.role == ProfileRole.child)
         .toList();
   }
 
   Future<List<Profile>> getParentProfiles(String familyId) async {
-    final result = await _client
-        .from('profiles')
-        .select()
-        .eq('family_id', familyId)
-        .eq('role', 'parent')
-        .order('created_at', ascending: true);
+    final profiles = await getFamilyProfiles(familyId);
 
-    return (result as List)
-        .map(
-          (row) => Profile.fromMap(
-            _asMap(row, errorContext: 'getParentProfiles'),
-          ),
-        )
+    return profiles
+        .where((profile) => profile.role == ProfileRole.parent)
         .toList();
   }
 
   Future<Profile?> getProfileById(String profileId) async {
-    final result = await _client
-        .from('profiles')
-        .select()
-        .eq('id', profileId)
-        .maybeSingle();
+    try {
+      final result = await _client
+          .from('profiles')
+          .select()
+          .eq('id', profileId)
+          .maybeSingle();
 
-    if (result == null) return null;
+      if (result == null) {
+        final familyProfiles = await getMyFamilyProfiles();
 
-    return Profile.fromMap(
-      _asMap(result, errorContext: 'getProfileById'),
-    );
+        for (final profile in familyProfiles) {
+          if (profile.id == profileId) {
+            return profile;
+          }
+        }
+
+        return null;
+      }
+
+      return Profile.fromMap(
+        _asMap(result, errorContext: 'getProfileById'),
+      );
+    } catch (e, st) {
+      debugPrint('ProfileService: getProfileById online failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      final familyProfiles = await getMyFamilyProfiles();
+
+      for (final profile in familyProfiles) {
+        if (profile.id == profileId) {
+          return profile;
+        }
+      }
+
+      return null;
+    }
   }
 
   Future<Profile> createParentProfile({
@@ -171,9 +327,21 @@ class ProfileService {
         .select()
         .single();
 
-    return Profile.fromMap(
+    final profile = Profile.fromMap(
       _asMap(result, errorContext: 'createParentProfile'),
     );
+
+    await _cacheParentProfile(authUserId, profile);
+
+    final cachedFamilyProfiles = await _getCachedFamilyProfiles(familyId);
+    final updatedProfiles = [
+      ...cachedFamilyProfiles.where((p) => p.id != profile.id),
+      profile,
+    ];
+
+    await _cacheFamilyProfiles(familyId, updatedProfiles);
+
+    return profile;
   }
 
   Future<Profile> createChildProfile({
@@ -194,15 +362,27 @@ class ProfileService {
       },
     );
 
+    final Profile profile;
+
     if (result is List && result.isNotEmpty) {
-      return Profile.fromMap(
+      profile = Profile.fromMap(
         _asMap(result.first, errorContext: 'createChildProfile'),
+      );
+    } else {
+      profile = Profile.fromMap(
+        _asMap(result, errorContext: 'createChildProfile'),
       );
     }
 
-    return Profile.fromMap(
-      _asMap(result, errorContext: 'createChildProfile'),
-    );
+    final cachedFamilyProfiles = await _getCachedFamilyProfiles(familyId);
+    final updatedProfiles = [
+      ...cachedFamilyProfiles.where((p) => p.id != profile.id),
+      profile,
+    ];
+
+    await _cacheFamilyProfiles(familyId, updatedProfiles);
+
+    return profile;
   }
 
   Future<Profile> updateProfile({
@@ -226,13 +406,38 @@ class ProfileService {
         .select()
         .single();
 
-    return Profile.fromMap(
+    final profile = Profile.fromMap(
       _asMap(result, errorContext: 'updateProfile'),
     );
+
+    final cachedFamilyProfiles = await _getCachedFamilyProfiles(profile.familyId);
+    final updatedProfiles = [
+      ...cachedFamilyProfiles.where((p) => p.id != profile.id),
+      profile,
+    ];
+
+    await _cacheFamilyProfiles(profile.familyId, updatedProfiles);
+
+    final userId = _currentUserId();
+    if (userId != null && profile.authUserId == userId) {
+      await _cacheParentProfile(userId, profile);
+    }
+
+    return profile;
   }
 
   Future<void> deleteProfile(String profileId) async {
     await _client.from('profiles').delete().eq('id', profileId);
+
+    final profiles = await getMyFamilyProfiles();
+
+    if (profiles.isEmpty) return;
+
+    final familyId = profiles.first.familyId;
+    final updatedProfiles =
+        profiles.where((profile) => profile.id != profileId).toList();
+
+    await _cacheFamilyProfiles(familyId, updatedProfiles);
   }
 
   Future<String> resetChildCode(String profileId) async {

@@ -181,16 +181,25 @@ Future<void> _loadMonthActivities() async {
     );
   }
 
-  List<List<DateTime>> _buildWeekRows(DateTime monthDate) {
-    final dates = _buildMonthGrid(monthDate);
-    final rows = <List<DateTime>>[];
+List<List<DateTime>> _buildWeekRows(DateTime monthDate) {
+  final dates = List<DateTime>.from(_buildMonthGrid(monthDate));
 
-    for (int i = 0; i < dates.length; i += 7) {
-      rows.add(dates.sublist(i, i + 7));
-    }
-
-    return rows;
+  if (dates.isEmpty) {
+    return [];
   }
+
+  while (dates.length % 7 != 0) {
+    dates.add(dates.last.add(const Duration(days: 1)));
+  }
+
+  final rows = <List<DateTime>>[];
+
+  for (int i = 0; i < dates.length; i += 7) {
+    rows.add(dates.sublist(i, i + 7));
+  }
+
+  return rows;
+}
 
   int _getWeekNumber(DateTime date) {
     final thursday =

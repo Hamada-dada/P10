@@ -24,27 +24,53 @@ class DailyCalendarScreen extends StatefulWidget {
   State<DailyCalendarScreen> createState() => _DailyCalendarScreenState();
 }
 
-class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
+class _DailyCalendarScreenState extends State<DailyCalendarScreen>
+    with WidgetsBindingObserver {
   late final ActivityService _activityService = ActivityService(
     SupabaseActivityRepository(Supabase.instance.client),
   );
 
   late DateTime _focusedDate;
+
   List<Activity> _activities = [];
   bool _isLoading = true;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addObserver(this);
+
     _focusedDate = widget.initialDate ?? DateTime.now();
     _loadActivities();
   }
 
-  Future<void> _loadActivities() async {
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('DailyCalendarScreen: app resumed, reloading activities');
+      _loadActivities(showFullLoader: false);
+    }
+  }
+
+  Future<void> _loadActivities({bool showFullLoader = true}) async {
+    if (_isRefreshing) return;
+
     try {
-      setState(() {
-        _isLoading = true;
-      });
+      _isRefreshing = true;
+
+      if (showFullLoader && mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
 
       final activities =
           await _activityService.getActivitiesForDate(_focusedDate);
@@ -62,9 +88,10 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
       if (!mounted) return;
 
       setState(() {
-        _activities = [];
         _isLoading = false;
       });
+    } finally {
+      _isRefreshing = false;
     }
   }
 
@@ -72,6 +99,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
     setState(() {
       _focusedDate = _focusedDate.subtract(const Duration(days: 1));
     });
+
     await _loadActivities();
   }
 
@@ -79,6 +107,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
     setState(() {
       _focusedDate = _focusedDate.add(const Duration(days: 1));
     });
+
     await _loadActivities();
   }
 
@@ -86,70 +115,83 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
     setState(() {
       _focusedDate = DateTime.now();
     });
+
     await _loadActivities();
   }
 
   Future<void> _openCreateActivityScreen() async {
-  try {
-    final createdActivity = await Navigator.push<Activity>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
-      ),
-    );
-
-    if (createdActivity == null) {
-      debugPrint('DailyCalendarScreen: create activity cancelled');
-      return;
-    }
-
-    debugPrint('DailyCalendarScreen: saving activity id=${createdActivity.id}');
-    debugPrint('DailyCalendarScreen: familyId=${createdActivity.familyId}');
-    debugPrint('DailyCalendarScreen: createdBy=${createdActivity.createdBy}');
-    debugPrint('DailyCalendarScreen: ownerProfileId=${createdActivity.ownerProfileId}');
-    debugPrint('DailyCalendarScreen: participants=${createdActivity.participants.length}');
-    debugPrint('DailyCalendarScreen: checklistItems=${createdActivity.checklistItems.length}');
-
-    await _activityService.addActivity(createdActivity);
-
-    debugPrint('DailyCalendarScreen: activity saved successfully');
-
-    await _loadActivities();
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Aktivitet gemt'),
-      ),
-    );
-  } catch (e, st) {
-    debugPrint('DailyCalendarScreen _openCreateActivityScreen failed: $e');
-    debugPrintStack(stackTrace: st);
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Kunne ikke gemme aktivitet: $e'),
-        duration: const Duration(seconds: 6),
-      ),
-    );
-  }
-}
-
-    Future<void> _openActivityDetail(Activity activity) async {
-      final result = await Navigator.push<dynamic>(
+    try {
+      final createdActivity = await Navigator.push<Activity>(
         context,
         MaterialPageRoute(
-          builder: (_) => ActivityDetailScreen(activity: activity),
+          builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
         ),
       );
 
-      if (result == true) {
-        await _loadActivities();
+      if (createdActivity == null) {
+        debugPrint('DailyCalendarScreen: create activity cancelled');
+        return;
       }
+
+      debugPrint(
+        'DailyCalendarScreen: saving activity id=${createdActivity.id}',
+      );
+      debugPrint(
+        'DailyCalendarScreen: familyId=${createdActivity.familyId}',
+      );
+      debugPrint(
+        'DailyCalendarScreen: createdBy=${createdActivity.createdBy}',
+      );
+      debugPrint(
+        'DailyCalendarScreen: ownerProfileId=${createdActivity.ownerProfileId}',
+      );
+      debugPrint(
+        'DailyCalendarScreen: participants=${createdActivity.participants.length}',
+      );
+      debugPrint(
+        'DailyCalendarScreen: checklistItems=${createdActivity.checklistItems.length}',
+      );
+
+      await _activityService.addActivity(createdActivity);
+
+      debugPrint('DailyCalendarScreen: activity saved successfully');
+
+      await _loadActivities(showFullLoader: false);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aktivitet gemt'),
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('DailyCalendarScreen _openCreateActivityScreen failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Kunne ikke gemme aktivitet: $e'),
+          duration: const Duration(seconds: 6),
+        ),
+      );
     }
+  }
+
+  Future<void> _openActivityDetail(Activity activity) async {
+    final result = await Navigator.push<dynamic>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ActivityDetailScreen(activity: activity),
+      ),
+    );
+
+    if (result == true) {
+      await _loadActivities(showFullLoader: false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,26 +242,32 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
                       _DailySummaryCard(activities: activities),
                       const SizedBox(height: 12),
                       Expanded(
-                        child: _isLoading
-                            ? const Center(
-                                child: CircularProgressIndicator(),
-                              )
-                            : activities.isEmpty
-                                ? const _EmptyActivitiesView()
-                                : ListView.separated(
-                                    itemCount: activities.length,
-                                    separatorBuilder: (_, _) =>
-                                        const SizedBox(height: 10),
-                                    itemBuilder: (context, index) {
-                                      final activity = activities[index];
+                        child: RefreshIndicator(
+                          onRefresh: () =>
+                              _loadActivities(showFullLoader: false),
+                          child: _isLoading
+                              ? const Center(
+                                  child: CircularProgressIndicator(),
+                                )
+                              : activities.isEmpty
+                                  ? const _EmptyActivitiesView()
+                                  : ListView.separated(
+                                      physics:
+                                          const AlwaysScrollableScrollPhysics(),
+                                      itemCount: activities.length,
+                                      separatorBuilder: (_, _) =>
+                                          const SizedBox(height: 10),
+                                      itemBuilder: (context, index) {
+                                        final activity = activities[index];
 
-                                      return ActivityCard(
-                                        activity: activity,
-                                        onTap: () =>
-                                            _openActivityDetail(activity),
-                                      );
-                                    },
-                                  ),
+                                        return ActivityCard(
+                                          activity: activity,
+                                          onTap: () =>
+                                              _openActivityDetail(activity),
+                                        );
+                                      },
+                                    ),
+                        ),
                       ),
                     ],
                   ),
@@ -354,25 +402,28 @@ class _EmptyActivitiesView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.event_note_outlined,
-            size: 38,
-            color: Colors.black45,
-          ),
-          SizedBox(height: 10),
-          Text(
-            'Ingen aktiviteter',
-            style: TextStyle(
-              fontFamily: 'Italiana',
-              fontSize: 24,
-              fontWeight: FontWeight.w400,
-              color: Colors.black,
+      child: SingleChildScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.event_note_outlined,
+              size: 38,
+              color: Colors.black45,
             ),
-          ),
-        ],
+            SizedBox(height: 10),
+            Text(
+              'Ingen aktiviteter',
+              style: TextStyle(
+                fontFamily: 'Italiana',
+                fontSize: 24,
+                fontWeight: FontWeight.w400,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

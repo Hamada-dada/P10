@@ -1,13 +1,45 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
 import 'activity_repository.dart';
+import 'local_activity_cache.dart';
 
 class SupabaseActivityRepository implements ActivityRepository {
   final SupabaseClient _client;
+  final LocalActivityCache _localCache = LocalActivityCache();
+
+  static const String _cachedFamilyIdKey = 'cached_current_family_id_v1';
 
   SupabaseActivityRepository(this._client);
+
+  bool _isNetworkException(Object error) {
+    if (error is SocketException) return true;
+    if (error is http.ClientException) return true;
+
+    final text = error.toString().toLowerCase();
+
+    return text.contains('socketexception') ||
+        text.contains('failed host lookup') ||
+        text.contains('no address associated with hostname') ||
+        text.contains('network is unreachable') ||
+        text.contains('connection refused') ||
+        text.contains('connection failed');
+  }
+
+  Future<void> _cacheCurrentFamilyId(String familyId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_cachedFamilyIdKey, familyId);
+  }
+
+  Future<String?> _getCachedFamilyId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_cachedFamilyIdKey);
+  }
 
   Future<String?> _getCurrentFamilyId() async {
     final user = _client.auth.currentUser;
@@ -16,21 +48,49 @@ class SupabaseActivityRepository implements ActivityRepository {
       'SupabaseActivityRepository: current auth user = ${user?.id}',
     );
 
-    if (user == null) return null;
+    if (user == null) {
+      return _getCachedFamilyId();
+    }
 
-    final profile = await _client
-        .from('profiles')
-        .select('family_id')
-        .eq('auth_user_id', user.id)
-        .eq('role', 'parent')
-        .maybeSingle();
+    try {
+      final profile = await _client
+          .from('profiles')
+          .select('family_id')
+          .eq('auth_user_id', user.id)
+          .eq('role', 'parent')
+          .maybeSingle();
 
-    debugPrint(
-      'SupabaseActivityRepository: parent profile lookup = $profile',
-    );
+      debugPrint(
+        'SupabaseActivityRepository: parent profile lookup = $profile',
+      );
 
-    if (profile == null) return null;
-    return profile['family_id'] as String?;
+      if (profile == null) {
+        return _getCachedFamilyId();
+      }
+
+      final familyId = profile['family_id'] as String?;
+
+      if (familyId != null && familyId.trim().isNotEmpty) {
+        await _cacheCurrentFamilyId(familyId);
+      }
+
+      return familyId;
+    } catch (e, st) {
+      debugPrint('SupabaseActivityRepository: family lookup failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (_isNetworkException(e)) {
+        final cachedFamilyId = await _getCachedFamilyId();
+
+        debugPrint(
+          'SupabaseActivityRepository: using cached family id = $cachedFamilyId',
+        );
+
+        return cachedFamilyId;
+      }
+
+      rethrow;
+    }
   }
 
   @override
@@ -51,17 +111,44 @@ class SupabaseActivityRepository implements ActivityRepository {
       'SupabaseActivityRepository: loading date activities familyId=$familyId start=$start end=$end',
     );
 
-    final activities = await _getActivitiesForRange(
-      familyId: familyId,
-      rangeStart: start,
-      rangeEnd: end,
-    );
+    try {
+      await _trySyncPendingActivities();
 
-    debugPrint(
-      'SupabaseActivityRepository: returning ${activities.length} expanded activities for date',
-    );
+      final activities = await _getActivitiesForRangeOnline(
+        familyId: familyId,
+        rangeStart: start,
+        rangeEnd: end,
+      );
 
-    return activities;
+      await _localCache.upsertCachedActivities(activities);
+
+      debugPrint(
+        'SupabaseActivityRepository: returning ${activities.length} expanded activities for date',
+      );
+
+      return activities;
+    } catch (e, st) {
+      debugPrint(
+        'SupabaseActivityRepository: date online load failed, using local cache: $e',
+      );
+      debugPrintStack(stackTrace: st);
+
+      if (!_isNetworkException(e)) {
+        rethrow;
+      }
+
+      final localActivities = await _getActivitiesForRangeFromLocalCache(
+        familyId: familyId,
+        rangeStart: start,
+        rangeEnd: end,
+      );
+
+      debugPrint(
+        'SupabaseActivityRepository: returning ${localActivities.length} local activities for date',
+      );
+
+      return localActivities;
+    }
   }
 
   @override
@@ -87,20 +174,47 @@ class SupabaseActivityRepository implements ActivityRepository {
       'SupabaseActivityRepository: loading week activities familyId=$familyId start=$startOfWeek end=$endOfWeek',
     );
 
-    final activities = await _getActivitiesForRange(
-      familyId: familyId,
-      rangeStart: startOfWeek,
-      rangeEnd: endOfWeek,
-    );
+    try {
+      await _trySyncPendingActivities();
 
-    debugPrint(
-      'SupabaseActivityRepository: returning ${activities.length} expanded activities for week',
-    );
+      final activities = await _getActivitiesForRangeOnline(
+        familyId: familyId,
+        rangeStart: startOfWeek,
+        rangeEnd: endOfWeek,
+      );
 
-    return activities;
+      await _localCache.upsertCachedActivities(activities);
+
+      debugPrint(
+        'SupabaseActivityRepository: returning ${activities.length} expanded activities for week',
+      );
+
+      return activities;
+    } catch (e, st) {
+      debugPrint(
+        'SupabaseActivityRepository: week online load failed, using local cache: $e',
+      );
+      debugPrintStack(stackTrace: st);
+
+      if (!_isNetworkException(e)) {
+        rethrow;
+      }
+
+      final localActivities = await _getActivitiesForRangeFromLocalCache(
+        familyId: familyId,
+        rangeStart: startOfWeek,
+        rangeEnd: endOfWeek,
+      );
+
+      debugPrint(
+        'SupabaseActivityRepository: returning ${localActivities.length} local activities for week',
+      );
+
+      return localActivities;
+    }
   }
 
-  Future<List<Activity>> _getActivitiesForRange({
+  Future<List<Activity>> _getActivitiesForRangeOnline({
     required String familyId,
     required DateTime rangeStart,
     required DateTime rangeEnd,
@@ -108,13 +222,6 @@ class SupabaseActivityRepository implements ActivityRepository {
     final rangeStartIso = rangeStart.toIso8601String();
     final rangeEndIso = rangeEnd.toIso8601String();
 
-    /*
-      This fetches:
-      1. normal activities that start inside the selected range
-      2. recurring activities that started before the range ends
-
-      Then Dart expands recurring activities into virtual occurrences.
-    */
     final activityRows = await _client
         .from('activities')
         .select()
@@ -133,6 +240,39 @@ class SupabaseActivityRepository implements ActivityRepository {
 
     final expandedActivities = _expandRecurringActivitiesForRange(
       activities: baseActivities,
+      rangeStart: rangeStart,
+      rangeEnd: rangeEnd,
+    );
+
+    expandedActivities.sort((a, b) => a.startTime.compareTo(b.startTime));
+
+    return expandedActivities;
+  }
+
+  Future<List<Activity>> _getActivitiesForRangeFromLocalCache({
+    required String familyId,
+    required DateTime rangeStart,
+    required DateTime rangeEnd,
+  }) async {
+    final allLocalActivities = await _localCache.getAllLocalActivities();
+    final pendingActivities = await _localCache.getPendingActivities();
+
+    final mergedById = <String, Activity>{};
+
+    for (final activity in allLocalActivities) {
+      mergedById[activity.id] = activity;
+    }
+
+    for (final activity in pendingActivities) {
+      mergedById[activity.id] = activity;
+    }
+
+    final familyActivities = mergedById.values
+        .where((activity) => activity.familyId == familyId)
+        .toList();
+
+    final expandedActivities = _expandRecurringActivitiesForRange(
+      activities: familyActivities,
       rangeStart: rangeStart,
       rangeEnd: rangeEnd,
     );
@@ -189,28 +329,27 @@ class SupabaseActivityRepository implements ActivityRepository {
           rangeStart: rangeStart,
           rangeEnd: rangeEnd,
         );
+
       case ActivityRecurrence.weekly:
         return _generateWeeklyOccurrences(
           activity: activity,
           rangeStart: rangeStart,
           rangeEnd: rangeEnd,
         );
+
       case ActivityRecurrence.monthly:
         return _generateMonthlyOccurrences(
           activity: activity,
           rangeStart: rangeStart,
           rangeEnd: rangeEnd,
         );
+
       case ActivityRecurrence.custom:
-        /*
-          Your CreateActivityScreen currently stores custom recurrence as
-          daily/weekly/monthly before saving. If custom still appears somehow,
-          we do not guess. Better to show only the original.
-        */
         if (_startsInsideRange(activity.startTime, rangeStart, rangeEnd)) {
           return [activity];
         }
         return [];
+
       case ActivityRecurrence.none:
         if (_startsInsideRange(activity.startTime, rangeStart, rangeEnd)) {
           return [activity];
@@ -224,9 +363,8 @@ class SupabaseActivityRepository implements ActivityRepository {
     required DateTime rangeStart,
     required DateTime rangeEnd,
   }) {
-    final interval = activity.recurrenceInterval < 1
-        ? 1
-        : activity.recurrenceInterval;
+    final interval =
+        activity.recurrenceInterval < 1 ? 1 : activity.recurrenceInterval;
 
     final occurrenceDuration = activity.endTime.difference(activity.startTime);
     final originalStart = activity.startTime;
@@ -277,9 +415,8 @@ class SupabaseActivityRepository implements ActivityRepository {
     required DateTime rangeStart,
     required DateTime rangeEnd,
   }) {
-    final interval = activity.recurrenceInterval < 1
-        ? 1
-        : activity.recurrenceInterval;
+    final interval =
+        activity.recurrenceInterval < 1 ? 1 : activity.recurrenceInterval;
 
     final periodDays = interval * 7;
     final occurrenceDuration = activity.endTime.difference(activity.startTime);
@@ -331,9 +468,8 @@ class SupabaseActivityRepository implements ActivityRepository {
     required DateTime rangeStart,
     required DateTime rangeEnd,
   }) {
-    final interval = activity.recurrenceInterval < 1
-        ? 1
-        : activity.recurrenceInterval;
+    final interval =
+        activity.recurrenceInterval < 1 ? 1 : activity.recurrenceInterval;
 
     final occurrenceDuration = activity.endTime.difference(activity.startTime);
     final originalStart = activity.startTime;
@@ -342,11 +478,6 @@ class SupabaseActivityRepository implements ActivityRepository {
 
     var monthStep = 0;
     var occurrenceStart = originalStart;
-
-    /*
-      Safety limit prevents infinite loops if DateTime logic breaks.
-      600 monthly iterations = 50 years.
-    */
     var safetyCounter = 0;
 
     while (occurrenceStart.isBefore(rangeEnd) && safetyCounter < 600) {
@@ -410,26 +541,92 @@ class SupabaseActivityRepository implements ActivityRepository {
   Future<Activity?> getActivityById(String id) async {
     debugPrint('SupabaseActivityRepository: loading activity id=$id');
 
-    final rows = await _client
-        .from('activities')
-        .select()
-        .eq('id', id)
-        .limit(1);
+    final localActivity = await _getActivityByIdFromLocal(id);
 
-    if (rows.isEmpty) {
-      debugPrint('SupabaseActivityRepository: no activity found id=$id');
-      return null;
+    if (localActivity != null) {
+      debugPrint(
+        'SupabaseActivityRepository: found activity locally id=$id',
+      );
     }
 
-    final activities = await _buildActivitiesFromRows(
-      List<Map<String, dynamic>>.from(rows),
-    );
+    try {
+      await _trySyncPendingActivities();
 
-    if (activities.isEmpty) {
-      return null;
+      final rows = await _client
+          .from('activities')
+          .select()
+          .eq('id', id)
+          .limit(1);
+
+      if (rows.isEmpty) {
+        debugPrint(
+          'SupabaseActivityRepository: no online activity found id=$id',
+        );
+
+        return localActivity;
+      }
+
+      final activities = await _buildActivitiesFromRows(
+        List<Map<String, dynamic>>.from(rows),
+      );
+
+      if (activities.isEmpty) {
+        debugPrint(
+          'SupabaseActivityRepository: online activity build returned empty id=$id',
+        );
+
+        return localActivity;
+      }
+
+      await _localCache.upsertCachedActivities(activities);
+
+      debugPrint(
+        'SupabaseActivityRepository: returning online activity id=$id',
+      );
+
+      return activities.first;
+    } catch (e, st) {
+      debugPrint(
+        'SupabaseActivityRepository: getActivityById online failed: $e',
+      );
+      debugPrintStack(stackTrace: st);
+
+      if (_isNetworkException(e)) {
+        if (localActivity != null) {
+          debugPrint(
+            'SupabaseActivityRepository: returning local activity id=$id',
+          );
+        } else {
+          debugPrint(
+            'SupabaseActivityRepository: no local fallback found id=$id',
+          );
+        }
+
+        return localActivity;
+      }
+
+      rethrow;
+    }
+  }
+
+  Future<Activity?> _getActivityByIdFromLocal(String id) async {
+    final localActivities = await _localCache.getAllLocalActivities();
+
+    for (final activity in localActivities) {
+      if (activity.id == id) {
+        return activity;
+      }
     }
 
-    return activities.first;
+    final pendingActivities = await _localCache.getPendingActivities();
+
+    for (final activity in pendingActivities) {
+      if (activity.id == id) {
+        return activity;
+      }
+    }
+
+    return null;
   }
 
   @override
@@ -449,59 +646,12 @@ class SupabaseActivityRepository implements ActivityRepository {
     );
 
     try {
-      final activityRow = activity.toActivityRow();
+      await _insertActivityOnline(activity);
 
-      debugPrint(
-        'SupabaseActivityRepository: activity row = $activityRow',
-      );
+      await _localCache.upsertCachedActivities([activity]);
+      await _localCache.removePendingActivity(activity.id);
 
-      final insertedActivity = await _client
-          .from('activities')
-          .insert(activityRow)
-          .select('id')
-          .single();
-
-      debugPrint(
-        'SupabaseActivityRepository: activity inserted id=${insertedActivity['id']}',
-      );
-
-      if (activity.participants.isNotEmpty) {
-        final participantRows = activity.participants
-            .map((participant) => participant.toDatabaseRow(activity.id))
-            .toList();
-
-        debugPrint(
-          'SupabaseActivityRepository: participant rows = $participantRows',
-        );
-
-        await _client.from('activity_participants').insert(participantRows);
-
-        debugPrint('SupabaseActivityRepository: participants inserted');
-      }
-
-      if (activity.checklistItems.isNotEmpty) {
-        final checklistRows = activity.checklistItems.map((item) {
-          final row = Map<String, dynamic>.from(
-            item.toDatabaseRow(activity.id),
-          );
-
-          if (row['id'] == null) {
-            row.remove('id');
-          }
-
-          return row;
-        }).toList();
-
-        debugPrint(
-          'SupabaseActivityRepository: checklist rows = $checklistRows',
-        );
-
-        await _client.from('checklist_items').insert(checklistRows);
-
-        debugPrint('SupabaseActivityRepository: checklist inserted');
-      }
-
-      debugPrint('SupabaseActivityRepository: addActivity completed');
+      debugPrint('SupabaseActivityRepository: addActivity completed online');
     } on PostgrestException catch (e, st) {
       debugPrint(
         'SupabaseActivityRepository addActivity PostgrestException: ${e.message}',
@@ -514,7 +664,119 @@ class SupabaseActivityRepository implements ActivityRepository {
     } catch (e, st) {
       debugPrint('SupabaseActivityRepository addActivity failed: $e');
       debugPrintStack(stackTrace: st);
+
+      if (_isNetworkException(e)) {
+        await _localCache.upsertPendingActivity(activity);
+        await _localCache.upsertCachedActivities([activity]);
+
+        debugPrint(
+          'SupabaseActivityRepository: activity saved locally as pending',
+        );
+
+        return;
+      }
+
       rethrow;
+    }
+  }
+
+  Future<void> _insertActivityOnline(Activity activity) async {
+    final activityRow = activity.toActivityRow();
+
+    debugPrint(
+      'SupabaseActivityRepository: activity row = $activityRow',
+    );
+
+    final insertedActivity = await _client
+        .from('activities')
+        .insert(activityRow)
+        .select('id')
+        .single();
+
+    debugPrint(
+      'SupabaseActivityRepository: activity inserted id=${insertedActivity['id']}',
+    );
+
+    if (activity.participants.isNotEmpty) {
+      final participantRows = activity.participants
+          .map((participant) => participant.toDatabaseRow(activity.id))
+          .toList();
+
+      debugPrint(
+        'SupabaseActivityRepository: participant rows = $participantRows',
+      );
+
+      await _client.from('activity_participants').insert(participantRows);
+
+      debugPrint('SupabaseActivityRepository: participants inserted');
+    }
+
+    if (activity.checklistItems.isNotEmpty) {
+      final checklistRows = activity.checklistItems.map((item) {
+        final row = Map<String, dynamic>.from(
+          item.toDatabaseRow(activity.id),
+        );
+
+        if (row['id'] == null) {
+          row.remove('id');
+        }
+
+        return row;
+      }).toList();
+
+      debugPrint(
+        'SupabaseActivityRepository: checklist rows = $checklistRows',
+      );
+
+      await _client.from('checklist_items').insert(checklistRows);
+
+      debugPrint('SupabaseActivityRepository: checklist inserted');
+    }
+  }
+
+  Future<void> _trySyncPendingActivities() async {
+    final pendingActivities = await _localCache.getPendingActivities();
+
+    if (pendingActivities.isEmpty) {
+      return;
+    }
+
+    debugPrint(
+      'SupabaseActivityRepository: trying to sync ${pendingActivities.length} pending activities',
+    );
+
+    for (final activity in pendingActivities) {
+      try {
+        await _insertActivityOnline(activity);
+        await _localCache.removePendingActivity(activity.id);
+        await _localCache.upsertCachedActivities([activity]);
+
+        debugPrint(
+          'SupabaseActivityRepository: synced pending activity id=${activity.id}',
+        );
+      } on PostgrestException catch (e) {
+        if (e.code == '23505') {
+          await _localCache.removePendingActivity(activity.id);
+          await _localCache.upsertCachedActivities([activity]);
+
+          debugPrint(
+            'SupabaseActivityRepository: pending activity already exists online id=${activity.id}',
+          );
+
+          continue;
+        }
+
+        rethrow;
+      } catch (e) {
+        if (_isNetworkException(e)) {
+          debugPrint(
+            'SupabaseActivityRepository: still offline, pending sync stopped',
+          );
+          return;
+        }
+
+        rethrow;
+      }
     }
   }
 
@@ -562,6 +824,8 @@ class SupabaseActivityRepository implements ActivityRepository {
         await _client.from('checklist_items').insert(checklistRows);
       }
 
+      await _localCache.upsertCachedActivities([activity]);
+
       debugPrint('SupabaseActivityRepository: updateActivity completed');
     } on PostgrestException catch (e, st) {
       debugPrint(
@@ -575,6 +839,18 @@ class SupabaseActivityRepository implements ActivityRepository {
     } catch (e, st) {
       debugPrint('SupabaseActivityRepository updateActivity failed: $e');
       debugPrintStack(stackTrace: st);
+
+      if (_isNetworkException(e)) {
+        await _localCache.upsertPendingActivity(activity);
+        await _localCache.upsertCachedActivities([activity]);
+
+        debugPrint(
+          'SupabaseActivityRepository: updated activity saved locally as pending',
+        );
+
+        return;
+      }
+
       rethrow;
     }
   }
@@ -585,6 +861,9 @@ class SupabaseActivityRepository implements ActivityRepository {
 
     try {
       await _client.from('activities').delete().eq('id', activityId);
+
+      await _localCache.removeCachedActivity(activityId);
+      await _localCache.removePendingActivity(activityId);
 
       debugPrint('SupabaseActivityRepository: deleteActivity completed');
     } on PostgrestException catch (e, st) {
@@ -599,6 +878,18 @@ class SupabaseActivityRepository implements ActivityRepository {
     } catch (e, st) {
       debugPrint('SupabaseActivityRepository deleteActivity failed: $e');
       debugPrintStack(stackTrace: st);
+
+      if (_isNetworkException(e)) {
+        await _localCache.removeCachedActivity(activityId);
+        await _localCache.removePendingActivity(activityId);
+
+        debugPrint(
+          'SupabaseActivityRepository: deleted activity locally only while offline',
+        );
+
+        return;
+      }
+
       rethrow;
     }
   }
@@ -630,6 +921,7 @@ class SupabaseActivityRepository implements ActivityRepository {
     debugPrint(
       'SupabaseActivityRepository: loaded ${participantRows.length} participant rows',
     );
+
     debugPrint(
       'SupabaseActivityRepository: loaded ${checklistRows.length} checklist rows',
     );
