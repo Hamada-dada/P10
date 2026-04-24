@@ -90,36 +90,66 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen> {
   }
 
   Future<void> _openCreateActivityScreen() async {
-    try {
-      final createdActivity = await Navigator.push<Activity>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
-        ),
-      );
-
-      if (createdActivity != null) {
-        await _activityService.addActivity(createdActivity);
-        await _loadActivities();
-      }
-    } catch (e, st) {
-      debugPrint('DailyCalendarScreen _openCreateActivityScreen failed: $e');
-      debugPrintStack(stackTrace: st);
-    }
-  }
-
-  Future<void> _openActivityDetail(Activity activity) async {
-    final result = await Navigator.push<dynamic>(
+  try {
+    final createdActivity = await Navigator.push<Activity>(
       context,
       MaterialPageRoute(
-        builder: (_) => ActivityDetailScreen(activity: activity),
+        builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
       ),
     );
 
-    if (result == true) {
-      await _loadActivities();
+    if (createdActivity == null) {
+      debugPrint('DailyCalendarScreen: create activity cancelled');
+      return;
     }
+
+    debugPrint('DailyCalendarScreen: saving activity id=${createdActivity.id}');
+    debugPrint('DailyCalendarScreen: familyId=${createdActivity.familyId}');
+    debugPrint('DailyCalendarScreen: createdBy=${createdActivity.createdBy}');
+    debugPrint('DailyCalendarScreen: ownerProfileId=${createdActivity.ownerProfileId}');
+    debugPrint('DailyCalendarScreen: participants=${createdActivity.participants.length}');
+    debugPrint('DailyCalendarScreen: checklistItems=${createdActivity.checklistItems.length}');
+
+    await _activityService.addActivity(createdActivity);
+
+    debugPrint('DailyCalendarScreen: activity saved successfully');
+
+    await _loadActivities();
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Aktivitet gemt'),
+      ),
+    );
+  } catch (e, st) {
+    debugPrint('DailyCalendarScreen _openCreateActivityScreen failed: $e');
+    debugPrintStack(stackTrace: st);
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Kunne ikke gemme aktivitet: $e'),
+        duration: const Duration(seconds: 6),
+      ),
+    );
   }
+}
+
+    Future<void> _openActivityDetail(Activity activity) async {
+      final result = await Navigator.push<dynamic>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ActivityDetailScreen(activity: activity),
+        ),
+      );
+
+      if (result == true) {
+        await _loadActivities();
+      }
+    }
 
   @override
   Widget build(BuildContext context) {

@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/activity.dart';
@@ -34,6 +36,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
   List<Profile> _availableProfiles = [];
   List<String> _participantOptions = [];
+
   bool _isLoadingProfiles = true;
   String? _profilesError;
 
@@ -129,23 +132,48 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   }
 
   Future<void> _loadProfiles() async {
+    debugPrint(
+      'CreateActivityScreen current auth user = ${Supabase.instance.client.auth.currentUser?.id}',
+    );
+
     try {
-      final profiles = await _profileService.getMyFamilyProfiles();
       final currentParent = await _profileService.getMyParentProfile();
 
-      final participantOptions = [
-        ...profiles.map((profile) => profile.name),
-        'Familie',
-      ];
+      if (currentParent == null) {
+        if (!mounted) return;
 
-      if (_isEditing &&
-          _selectedParticipants.isEmpty &&
-          widget.existingActivity != null) {
-        final existingParticipants = <String>[];
+        setState(() {
+          _availableProfiles = [];
+          _currentParentProfile = null;
+          _currentFamilyId = null;
+          _participantOptions = [];
+          _selectedParticipants = [];
+          _isLoadingProfiles = false;
+          _profilesError =
+              'Kunne ikke finde din forælderprofil. Din bruger er sandsynligvis ikke koblet til en profil i databasen.';
+        });
 
+        return;
+      }
+
+      final profiles = await _profileService.getFamilyProfiles(
+        currentParent.familyId,
+      );
+
+      final selectedParticipants = <String>[];
+      final externalParticipantOptions = <String>[];
+
+      if (_isEditing && widget.existingActivity != null) {
         for (final participant in widget.existingActivity!.participants) {
-          if (participant.externalName != null) {
-            existingParticipants.add(participant.externalName!);
+          final externalName = participant.externalName?.trim();
+
+          if (externalName != null && externalName.isNotEmpty) {
+            selectedParticipants.add(externalName);
+
+            if (!externalParticipantOptions.contains(externalName)) {
+              externalParticipantOptions.add(externalName);
+            }
+
             continue;
           }
 
@@ -156,18 +184,28 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                 );
 
             if (matchingProfile != null) {
-              existingParticipants.add(matchingProfile.name);
+              selectedParticipants.add(matchingProfile.name);
             }
           }
         }
-
-        _selectedParticipants = existingParticipants;
       }
 
-      if (_selectedParticipants.isEmpty && currentParent != null) {
-        _selectedParticipants = [currentParent.name];
-      } else if (_selectedParticipants.isEmpty && profiles.isNotEmpty) {
-        _selectedParticipants = [profiles.first.name];
+      if (selectedParticipants.isEmpty) {
+        selectedParticipants.add(currentParent.name);
+      }
+
+      final participantOptions = <String>[
+        ...profiles.map((profile) => profile.name),
+        ...externalParticipantOptions,
+        'Familie',
+      ];
+
+      final uniqueSelectedParticipants = <String>[];
+
+      for (final participant in selectedParticipants) {
+        if (!uniqueSelectedParticipants.contains(participant)) {
+          uniqueSelectedParticipants.add(participant);
+        }
       }
 
       if (!mounted) return;
@@ -175,21 +213,26 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       setState(() {
         _availableProfiles = profiles;
         _currentParentProfile = currentParent;
-        _currentFamilyId = currentParent?.familyId;
+        _currentFamilyId = currentParent.familyId;
         _participantOptions = participantOptions;
+        _selectedParticipants = uniqueSelectedParticipants;
         _isLoadingProfiles = false;
         _profilesError = null;
       });
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('CreateActivityScreen _loadProfiles failed: $e');
+      debugPrintStack(stackTrace: st);
+
       if (!mounted) return;
 
       setState(() {
         _availableProfiles = [];
         _currentParentProfile = null;
         _currentFamilyId = null;
-        _participantOptions = ['Familie'];
+        _participantOptions = [];
+        _selectedParticipants = [];
         _isLoadingProfiles = false;
-        _profilesError = 'Kunne ikke hente profiler';
+        _profilesError = 'Kunne ikke hente profiler: $e';
       });
     }
   }
@@ -332,7 +375,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     final participants = <ActivityParticipant>[];
 
     for (final selected in _selectedParticipants) {
-      if (selected == 'Familie') {
+      final cleanSelected = selected.trim();
+      if (cleanSelected.isEmpty) continue;
+
+      if (cleanSelected == 'Familie') {
         participants.add(
           const ActivityParticipant(externalName: 'Familie'),
         );
@@ -340,7 +386,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       }
 
       final matchingProfile = _availableProfiles.cast<Profile?>().firstWhere(
-            (profile) => profile?.name == selected,
+            (profile) => profile?.name == cleanSelected,
             orElse: () => null,
           );
 
@@ -348,9 +394,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         participants.add(
           ActivityParticipant(profileId: matchingProfile.id),
         );
-      } else if (selected.trim().isNotEmpty) {
+      } else {
         participants.add(
-          ActivityParticipant(externalName: selected.trim()),
+          ActivityParticipant(externalName: cleanSelected),
         );
       }
     }
@@ -389,11 +435,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       lastDate: DateTime(2030),
     );
 
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
-    }
+    if (picked == null) return;
+
+    setState(() {
+      _selectedDate = picked;
+    });
   }
 
   Future<void> _pickStartTime() async {
@@ -408,11 +454,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       },
     );
 
-    if (picked != null) {
-      setState(() {
-        _startTime = picked;
-      });
-    }
+    if (picked == null) return;
+
+    setState(() {
+      _startTime = picked;
+    });
   }
 
   Future<void> _pickEndTime() async {
@@ -427,11 +473,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       },
     );
 
-    if (picked != null) {
-      setState(() {
-        _endTime = picked;
-      });
-    }
+    if (picked == null) return;
+
+    setState(() {
+      _endTime = picked;
+    });
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -441,15 +487,14 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         imageQuality: 85,
       );
 
-      if (pickedFile == null) {
-        return;
-      }
+      if (pickedFile == null) return;
 
       setState(() {
         _imagePath = pickedFile.path;
       });
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Kunne ikke vælge billede: $e')),
       );
@@ -465,7 +510,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   Future<void> _showImageSourceDialog() async {
     await showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -476,7 +521,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                   leading: const Icon(Icons.photo_library_outlined),
                   title: const Text('Vælg fra billeder'),
                   onTap: () async {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     await _pickImage(ImageSource.gallery);
                   },
                 ),
@@ -484,7 +529,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                   leading: const Icon(Icons.camera_alt_outlined),
                   title: const Text('Tag billede med kamera'),
                   onTap: () async {
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                     await _pickImage(ImageSource.camera);
                   },
                 ),
@@ -493,7 +538,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                     leading: const Icon(Icons.delete_outline),
                     title: const Text('Slet billede'),
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(sheetContext);
                       _removeImage();
                     },
                   ),
@@ -508,7 +553,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   Future<void> _showAddExternalParticipantDialog() async {
     final controller = TextEditingController();
 
-    await showDialog<void>(
+    final value = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
@@ -522,30 +567,15 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                controller.dispose();
-                Navigator.pop(dialogContext);
-              },
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Annuller'),
             ),
             ElevatedButton(
               onPressed: () {
-                final value = controller.text.trim();
-                if (value.isEmpty) {
-                  return;
-                }
+                final text = controller.text.trim();
+                if (text.isEmpty) return;
 
-                setState(() {
-                  if (!_participantOptions.contains(value)) {
-                    _participantOptions = [..._participantOptions, value];
-                  }
-                  if (!_selectedParticipants.contains(value)) {
-                    _selectedParticipants.add(value);
-                  }
-                });
-
-                controller.dispose();
-                Navigator.pop(dialogContext);
+                Navigator.pop(dialogContext, text);
               },
               child: const Text('Tilføj'),
             ),
@@ -553,6 +583,24 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         );
       },
     );
+
+    controller.dispose();
+
+    if (!mounted || value == null || value.trim().isEmpty) return;
+
+    final participant = value.trim();
+
+    setState(() {
+      if (!_participantOptions.contains(participant)) {
+        _participantOptions = [..._participantOptions, participant];
+      }
+
+      if (!_selectedParticipants.contains(participant)) {
+        _selectedParticipants.add(participant);
+      }
+
+      _revalidateSelectedRewards();
+    });
   }
 
   void _addChecklistItem() {
@@ -560,6 +608,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       if (!_showChecklist) {
         _showChecklist = true;
       }
+
       _checklistControllers.add(TextEditingController());
     });
   }
@@ -581,6 +630,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         for (final controller in _checklistControllers) {
           controller.dispose();
         }
+
         _checklistControllers = [];
         _showChecklist = false;
       } else {
@@ -613,9 +663,73 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     );
 
     if (!mounted) return;
+
     setState(() {
       _revalidateSelectedRewards();
     });
+  }
+
+  Widget _buildImagePreview() {
+    if (_imagePath.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (kIsWeb) {
+      return Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(
+          maxHeight: 140,
+          minHeight: 90,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F8F8),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: const Color(0xFFE0E0E0),
+          ),
+        ),
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(12),
+            child: Text(
+              'Billede valgt, men forhåndsvisning understøttes ikke i webversionen endnu.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(
+        maxHeight: 140,
+        minHeight: 90,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: const Color(0xFFE0E0E0),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.file(
+          File(_imagePath),
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return const SizedBox(
+              height: 90,
+              child: Center(
+                child: Text('Kunne ikke vise billedet'),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   void _saveActivity() {
@@ -635,6 +749,15 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       return;
     }
 
+    if (_currentFamilyId == null || _currentParentProfile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kunne ikke finde familie eller profil.'),
+        ),
+      );
+      return;
+    }
+
     if (_selectedParticipants.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -644,10 +767,12 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       return;
     }
 
-    if (_currentFamilyId == null || _currentParentProfile == null) {
+    final participants = _buildParticipants();
+
+    if (participants.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Kunne ikke finde familie eller profil.'),
+          content: Text('Vælg mindst én gyldig deltager.'),
         ),
       );
       return;
@@ -667,6 +792,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
     if (_enableStreakReward) {
       final streakTarget = int.tryParse(_streakTargetController.text.trim());
+
       if (streakTarget == null || streakTarget < 1) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -678,7 +804,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     }
 
     final checklistItems = _buildChecklistItems();
-    final participants = _buildParticipants();
 
     final activity = Activity(
       id: widget.existingActivity?.id ?? _uuid.v4(),
@@ -717,28 +842,62 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   Widget build(BuildContext context) {
     if (_isLoadingProfiles) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: Color(0xFFA2E5AD),
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
       );
     }
 
     if (_profilesError != null) {
       return Scaffold(
+        backgroundColor: const Color(0xFFA2E5AD),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _profilesError!,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: _loadProfiles,
-                  child: const Text('Prøv igen'),
-                ),
-              ],
+            child: Container(
+              width: 420,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 34,
+                    color: Colors.black54,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _profilesError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: Colors.black87,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _isLoadingProfiles = true;
+                        _profilesError = null;
+                      });
+
+                      _loadProfiles();
+                    },
+                    child: const Text('Prøv igen'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Tilbage'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -784,6 +943,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                             if (value == null || value.trim().isEmpty) {
                               return 'Skriv en titel';
                             }
+
                             return null;
                           },
                         ),
@@ -797,9 +957,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                           ),
                           validator: (value) {
                             if (value == null) return null;
+
                             if (!_looksLikeSingleEmoji(value)) {
                               return 'Brug kun én emoji';
                             }
+
                             return null;
                           },
                         ),
@@ -847,6 +1009,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                           }).toList(),
                           onChanged: (value) {
                             if (value == null) return;
+
                             setState(() {
                               _selectedRecurrence = value;
                             });
@@ -854,7 +1017,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                         ),
                         if (_selectedRecurrence != ActivityRecurrence.none) ...[
                           const SizedBox(height: 12),
-                          if (_selectedRecurrence == ActivityRecurrence.custom) ...[
+                          if (_selectedRecurrence ==
+                              ActivityRecurrence.custom) ...[
                             DropdownButtonFormField<ActivityRecurrence>(
                               initialValue: _selectedCustomRecurrence,
                               decoration: const InputDecoration(
@@ -877,6 +1041,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                               ],
                               onChanged: (value) {
                                 if (value == null) return;
+
                                 setState(() {
                                   _selectedCustomRecurrence = value;
                                 });
@@ -900,10 +1065,15 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                   ActivityRecurrence.none) {
                                 return null;
                               }
-                              final number = int.tryParse((value ?? '').trim());
+
+                              final number = int.tryParse(
+                                (value ?? '').trim(),
+                              );
+
                               if (number == null || number < 1) {
                                 return 'Skriv et tal på mindst 1';
                               }
+
                               return null;
                             },
                           ),
@@ -944,25 +1114,37 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _selectedParticipants.map((participant) {
-                            return Chip(
-                              label: Text(participant),
-                              onDeleted: () {
-                                setState(() {
-                                  _selectedParticipants.remove(participant);
-                                  _revalidateSelectedRewards();
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
+                        if (_selectedParticipants.isEmpty)
+                          const Text(
+                            'Ingen deltagere valgt',
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontSize: 14,
+                            ),
+                          )
+                        else
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children:
+                                _selectedParticipants.map((participant) {
+                              return Chip(
+                                label: Text(participant),
+                                onDeleted: () {
+                                  setState(() {
+                                    _selectedParticipants.remove(participant);
+                                    _revalidateSelectedRewards();
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
                         const SizedBox(height: 12),
                         Container(
                           decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFBDBDBD)),
+                            border: Border.all(
+                              color: const Color(0xFFBDBDBD),
+                            ),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Column(
@@ -998,45 +1180,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                         const SizedBox(height: 12),
                                         Stack(
                                           children: [
-                                            Container(
-                                              width: double.infinity,
-                                              constraints: const BoxConstraints(
-                                                maxHeight: 140,
-                                                minHeight: 90,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFF8F8F8),
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                border: Border.all(
-                                                  color:
-                                                      const Color(0xFFE0E0E0),
-                                                ),
-                                              ),
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                child: Image.file(
-                                                  File(_imagePath),
-                                                  width: double.infinity,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (
-                                                    context,
-                                                    error,
-                                                    stackTrace,
-                                                  ) {
-                                                    return const SizedBox(
-                                                      height: 90,
-                                                      child: Center(
-                                                        child: Text(
-                                                          'Kunne ikke vise billedet',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
-                                                ),
-                                              ),
-                                            ),
+                                            _buildImagePreview(),
                                             Positioned(
                                               top: 6,
                                               right: 6,
@@ -1293,11 +1437,15 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                               ),
                               validator: (value) {
                                 if (!_enableStreakReward) return null;
-                                final number =
-                                    int.tryParse((value ?? '').trim());
+
+                                final number = int.tryParse(
+                                  (value ?? '').trim(),
+                                );
+
                                 if (number == null || number < 1) {
                                   return 'Skriv et tal på mindst 1';
                                 }
+
                                 return null;
                               },
                             ),

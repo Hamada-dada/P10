@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -133,9 +134,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       return 'Ingen deltagere';
     }
 
-    return _activity.participants
-        .map(_participantDisplayText)
-        .join(', ');
+    return _activity.participants.map(_participantDisplayText).join(', ');
   }
 
   String _buildDescriptionText() {
@@ -295,6 +294,17 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   void _openImagePreview(BuildContext context) {
     if (_activity.imagePath.trim().isEmpty) return;
 
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Billedvisning understøttes ikke i webversionen endnu.',
+          ),
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -327,6 +337,52 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDetailImagePreview() {
+    if (_activity.imagePath.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (kIsWeb) {
+      return Container(
+        height: 120,
+        width: double.infinity,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F1F1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'Billede gemt, men forhåndsvisning understøttes ikke i webversionen endnu.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.black87,
+            height: 1.4,
+          ),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.file(
+        File(_activity.imagePath),
+        height: 160,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            height: 90,
+            alignment: Alignment.center,
+            color: const Color(0xFFF1F1F1),
+            child: const Text('Kunne ikke vise billedet'),
+          );
+        },
       ),
     );
   }
@@ -458,25 +514,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(12),
                                 onTap: () => _openImagePreview(context),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.file(
-                                    File(_activity.imagePath),
-                                    height: 160,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        height: 90,
-                                        alignment: Alignment.center,
-                                        color: const Color(0xFFF1F1F1),
-                                        child: const Text(
-                                          'Kunne ikke vise billedet',
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
+                                child: _buildDetailImagePreview(),
                               ),
                             ),
                           ],
@@ -497,7 +535,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                           const EdgeInsets.only(bottom: 8),
                                       child: InkWell(
                                         borderRadius: BorderRadius.circular(8),
-                                        onTap: () => _toggleChecklistItem(index),
+                                        onTap: () =>
+                                            _toggleChecklistItem(index),
                                         child: Row(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
@@ -554,8 +593,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                     _RewardCard(
                                       title: 'Direkte belønning',
                                       emoji: directReward?.emoji ?? '🎁',
-                                      rewardTitle:
-                                          directReward?.title ??
+                                      rewardTitle: directReward?.title ??
                                           'Ukendt belønning',
                                       subtitle:
                                           'Kan opnås efter denne aktivitet',
@@ -571,8 +609,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                     _RewardCard(
                                       title: 'Langsigtet belønning',
                                       emoji: streakReward?.emoji ?? '🏆',
-                                      rewardTitle:
-                                          streakReward?.title ??
+                                      rewardTitle: streakReward?.title ??
                                           'Ukendt belønning',
                                       subtitle: _activity.streakTarget != null
                                           ? 'Opnås efter ${_activity.streakTarget} gange'

@@ -33,69 +33,84 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     _loadMonthActivities();
   }
 
-  Future<void> _loadMonthActivities() async {
-    try {
-      setState(() {
-        _isLoading = true;
-      });
+Future<void> _loadMonthActivities() async {
+  try {
+    setState(() {
+      _isLoading = true;
+    });
 
-      final gridDates = _buildMonthGrid(_focusedDate);
-      if (gridDates.isEmpty) {
-        if (!mounted) return;
-        setState(() {
-          _activitiesByDate = {};
-          _isLoading = false;
-        });
-        return;
-      }
+    final gridDates = _buildMonthGrid(_focusedDate);
 
-      final allActivities = <Activity>[];
-      final loadedIds = <String>{};
-
-      DateTime cursor = gridDates.first;
-      final end = gridDates.last;
-
-      while (!cursor.isAfter(end)) {
-        final weekActivities = await _activityService.getActivitiesForWeek(cursor);
-
-        for (final activity in weekActivities) {
-          if (loadedIds.add(activity.id)) {
-            allActivities.add(activity);
-          }
-        }
-
-        cursor = cursor.add(const Duration(days: 7));
-      }
-
-      final grouped = <String, List<Activity>>{};
-      for (final activity in allActivities) {
-        final key = _dateKey(activity.startTime);
-        grouped.putIfAbsent(key, () => []);
-        grouped[key]!.add(activity);
-      }
-
-      for (final entry in grouped.entries) {
-        entry.value.sort((a, b) => a.startTime.compareTo(b.startTime));
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        _activitiesByDate = grouped;
-        _isLoading = false;
-      });
-    } catch (e, st) {
-      debugPrint('MonthlyCalendarScreen _loadMonthActivities failed: $e');
-      debugPrintStack(stackTrace: st);
-
+    if (gridDates.isEmpty) {
       if (!mounted) return;
 
       setState(() {
         _activitiesByDate = {};
         _isLoading = false;
       });
+
+      return;
     }
+
+    final allActivities = <Activity>[];
+
+    DateTime cursor = gridDates.first;
+    final end = gridDates.last;
+
+    while (!cursor.isAfter(end)) {
+      final weekActivities = await _activityService.getActivitiesForWeek(cursor);
+
+      // Do NOT deduplicate by id here.
+      // Recurring activities have the same database id,
+      // but each occurrence has a different startTime.
+      allActivities.addAll(weekActivities);
+
+      cursor = cursor.add(const Duration(days: 7));
+    }
+
+    final grouped = <String, List<Activity>>{};
+
+    for (final activity in allActivities) {
+      final key = _dateKey(activity.startTime);
+
+      grouped.putIfAbsent(key, () => []);
+
+      final alreadyAddedForSameDay = grouped[key]!.any((existing) {
+        return existing.id == activity.id &&
+            existing.startTime.year == activity.startTime.year &&
+            existing.startTime.month == activity.startTime.month &&
+            existing.startTime.day == activity.startTime.day &&
+            existing.startTime.hour == activity.startTime.hour &&
+            existing.startTime.minute == activity.startTime.minute;
+      });
+
+      if (!alreadyAddedForSameDay) {
+        grouped[key]!.add(activity);
+      }
+    }
+
+    for (final entry in grouped.entries) {
+      entry.value.sort((a, b) => a.startTime.compareTo(b.startTime));
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _activitiesByDate = grouped;
+      _isLoading = false;
+    });
+  } catch (e, st) {
+    debugPrint('MonthlyCalendarScreen _loadMonthActivities failed: $e');
+    debugPrintStack(stackTrace: st);
+
+    if (!mounted) return;
+
+    setState(() {
+      _activitiesByDate = {};
+      _isLoading = false;
+    });
   }
+}
 
   Future<void> _goToPreviousMonth() async {
     setState(() {
