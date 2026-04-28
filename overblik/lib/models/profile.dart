@@ -1,11 +1,22 @@
-enum ProfileRole { parent, child }
+enum ProfileRole {
+  parent,
+  childExtended,
+  childLimited,
+}
 
 ProfileRole profileRoleFromString(String value) {
   switch (value) {
     case 'parent':
       return ProfileRole.parent;
+    case 'child_extended':
+      return ProfileRole.childExtended;
+    case 'child_limited':
+      return ProfileRole.childLimited;
+
+    // Temporary fallback if your database still has old rows with role = 'child'
     case 'child':
-      return ProfileRole.child;
+      return ProfileRole.childLimited;
+
     default:
       throw ArgumentError('Unknown profile role: $value');
   }
@@ -15,8 +26,10 @@ String profileRoleToString(ProfileRole role) {
   switch (role) {
     case ProfileRole.parent:
       return 'parent';
-    case ProfileRole.child:
-      return 'child';
+    case ProfileRole.childExtended:
+      return 'child_extended';
+    case ProfileRole.childLimited:
+      return 'child_limited';
   }
 }
 
@@ -46,6 +59,15 @@ class Profile {
     required this.createdAt,
     required this.updatedAt,
   });
+
+  bool get isParent => role == ProfileRole.parent;
+
+  bool get isChildExtended => role == ProfileRole.childExtended;
+
+  bool get isChildLimited => role == ProfileRole.childLimited;
+
+  bool get isChild =>
+      role == ProfileRole.childExtended || role == ProfileRole.childLimited;
 
   factory Profile.fromMap(Map<String, dynamic> map) {
     return Profile(

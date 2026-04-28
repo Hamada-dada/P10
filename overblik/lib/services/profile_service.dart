@@ -184,7 +184,7 @@ class ProfileService {
           .from('profiles')
           .select()
           .eq('auth_user_id', userId)
-          .eq('role', 'parent')
+          .eq('role', profileRoleToString(ProfileRole.parent))
           .maybeSingle();
 
       if (result == null) {
@@ -253,9 +253,7 @@ class ProfileService {
   Future<List<Profile>> getChildProfiles(String familyId) async {
     final profiles = await getFamilyProfiles(familyId);
 
-    return profiles
-        .where((profile) => profile.role == ProfileRole.child)
-        .toList();
+    return profiles.where((profile) => profile.isChild).toList();
   }
 
   Future<List<Profile>> getParentProfiles(String familyId) async {
@@ -322,7 +320,7 @@ class ProfileService {
               ? name.trim()
               : displayName.trim(),
           'emoji': emoji,
-          'role': 'parent',
+          'role': profileRoleToString(ProfileRole.parent),
         })
         .select()
         .single();
@@ -349,7 +347,12 @@ class ProfileService {
     required String name,
     String? displayName,
     String emoji = '🧒',
+    ProfileRole role = ProfileRole.childLimited,
   }) async {
+    if (role == ProfileRole.parent) {
+      throw ArgumentError('createChildProfile cannot create a parent profile.');
+    }
+
     final result = await _client.rpc(
       'create_child_profile',
       params: {
@@ -359,6 +362,7 @@ class ProfileService {
             ? null
             : displayName.trim(),
         'p_emoji': emoji,
+        'p_role': profileRoleToString(role),
       },
     );
 
@@ -390,14 +394,30 @@ class ProfileService {
     String? name,
     String? displayName,
     String? emoji,
+    ProfileRole? role,
     bool? isActive,
   }) async {
+    if (role == ProfileRole.parent) {
+      throw ArgumentError(
+        'updateProfile should not promote a child profile to parent.',
+      );
+    }
+
     final updates = <String, dynamic>{};
 
     if (name != null) updates['name'] = name.trim();
     if (displayName != null) updates['display_name'] = displayName.trim();
     if (emoji != null) updates['emoji'] = emoji;
+    if (role != null) updates['role'] = profileRoleToString(role);
     if (isActive != null) updates['is_active'] = isActive;
+
+    if (updates.isEmpty) {
+      final existingProfile = await getProfileById(profileId);
+      if (existingProfile == null) {
+        throw Exception('Profile not found: $profileId');
+      }
+      return existingProfile;
+    }
 
     final result = await _client
         .from('profiles')
@@ -410,7 +430,8 @@ class ProfileService {
       _asMap(result, errorContext: 'updateProfile'),
     );
 
-    final cachedFamilyProfiles = await _getCachedFamilyProfiles(profile.familyId);
+    final cachedFamilyProfiles =
+        await _getCachedFamilyProfiles(profile.familyId);
     final updatedProfiles = [
       ...cachedFamilyProfiles.where((p) => p.id != profile.id),
       profile,

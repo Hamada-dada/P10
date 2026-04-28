@@ -39,16 +39,11 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
   String _generateFamilyCode({int length = 6}) {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final random = Random();
+
     return List.generate(
       length,
       (_) => chars[random.nextInt(chars.length)],
     ).join();
-  }
-
-  String _generateProfileId() {
-    final milliseconds = DateTime.now().millisecondsSinceEpoch;
-    final random = Random().nextInt(99999).toString().padLeft(5, '0');
-    return 'profile-$milliseconds-$random';
   }
 
   Future<String> _generateUniqueFamilyCode(SupabaseClient client) async {
@@ -86,17 +81,37 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
       final parentName = _parentNameController.text.trim();
       final familyName = _familyNameController.text.trim();
 
+      debugPrint('CreateFamilyScreen: signing up user email=$email');
+
       final authResponse = await client.auth.signUp(
         email: email,
         password: password,
       );
 
       final user = authResponse.user;
+      final session = authResponse.session ?? client.auth.currentSession;
+
+      debugPrint('CreateFamilyScreen: auth user id=${user?.id}');
+      debugPrint('CreateFamilyScreen: session exists=${session != null}');
+      debugPrint(
+        'CreateFamilyScreen: current user id=${client.auth.currentUser?.id}',
+      );
+
       if (user == null) {
         throw Exception('User creation failed.');
       }
 
+      if (session == null) {
+        throw Exception(
+          'No active session after signup. Check that email confirmation is disabled in Supabase.',
+        );
+      }
+
       final familyCode = await _generateUniqueFamilyCode(client);
+
+      debugPrint(
+        'CreateFamilyScreen: creating family name=$familyName code=$familyCode createdBy=${user.id}',
+      );
 
       final familyInsertResponse = await client
           .from('families')
@@ -110,8 +125,13 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
 
       final familyId = familyInsertResponse['id'] as String;
 
+      debugPrint('CreateFamilyScreen: family created id=$familyId');
+
+      debugPrint(
+        'CreateFamilyScreen: creating parent profile authUserId=${user.id} familyId=$familyId',
+      );
+
       await client.from('profiles').insert({
-        'id': _generateProfileId(),
         'name': parentName,
         'display_name': parentName,
         'emoji': '🙂',
@@ -120,48 +140,60 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
         'family_id': familyId,
       });
 
-      if (!mounted) return;
+      debugPrint('CreateFamilyScreen: parent profile created successfully');
 
-      final hasSession = client.auth.currentSession != null;
-
-      if (hasSession) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const DailyCalendarScreen(),
-          ),
-          (route) => false,
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Familien er oprettet. Familiekode: $familyCode. '
-              'Tjek din email, hvis bekræftelse er slået til.',
-            ),
-            duration: const Duration(seconds: 6),
-          ),
-        );
-
-        Navigator.pop(context);
-      }
-    } on AuthException catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: Text('Familien er oprettet. Velkommen, $parentName!'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const DailyCalendarScreen(),
+        ),
+        (route) => false,
+      );
+    } on AuthException catch (e) {
+      debugPrint('CreateFamilyScreen AuthException: ${e.message}');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          duration: const Duration(seconds: 5),
+        ),
       );
     } on PostgrestException catch (e) {
+      debugPrint('CreateFamilyScreen PostgrestException message: ${e.message}');
+      debugPrint('CreateFamilyScreen PostgrestException details: ${e.details}');
+      debugPrint('CreateFamilyScreen PostgrestException hint: ${e.hint}');
+      debugPrint('CreateFamilyScreen PostgrestException code: ${e.code}');
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: Text('Database error: ${e.message}'),
+          duration: const Duration(seconds: 6),
+        ),
       );
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('CreateFamilyScreen _handleCreateFamily failed: $e');
+      debugPrintStack(stackTrace: st);
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not create family: $e')),
+        SnackBar(
+          content: Text('Could not create family: $e'),
+          duration: const Duration(seconds: 6),
+        ),
       );
     } finally {
       if (!mounted) return;
@@ -170,6 +202,30 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
         _isSubmitting = false;
       });
     }
+  }
+
+  InputDecoration _inputDecoration({
+    required String labelText,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      filled: true,
+      fillColor: const Color(0xFFF7F7F7),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: Color(0xFFE0E0E0),
+        ),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: Color(0xFFE0E0E0),
+        ),
+      ),
+      suffixIcon: suffixIcon,
+    );
   }
 
   @override
@@ -216,24 +272,12 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
                         ),
                       ),
                       const SizedBox(height: 18),
+
                       TextFormField(
                         controller: _parentNameController,
-                        decoration: InputDecoration(
+                        textInputAction: TextInputAction.next,
+                        decoration: _inputDecoration(
                           labelText: 'Forælders navn',
-                          filled: true,
-                          fillColor: const Color(0xFFF7F7F7),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0),
-                            ),
-                          ),
                         ),
                         validator: (value) {
                           final text = value?.trim() ?? '';
@@ -243,25 +287,14 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
                           return null;
                         },
                       ),
+
                       const SizedBox(height: 12),
+
                       TextFormField(
                         controller: _familyNameController,
-                        decoration: InputDecoration(
+                        textInputAction: TextInputAction.next,
+                        decoration: _inputDecoration(
                           labelText: 'Familienavn',
-                          filled: true,
-                          fillColor: const Color(0xFFF7F7F7),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0),
-                            ),
-                          ),
                         ),
                         validator: (value) {
                           final text = value?.trim() ?? '';
@@ -271,58 +304,36 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
                           return null;
                         },
                       ),
+
                       const SizedBox(height: 12),
+
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
+                        textInputAction: TextInputAction.next,
+                        decoration: _inputDecoration(
                           labelText: 'Email',
-                          filled: true,
-                          fillColor: const Color(0xFFF7F7F7),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0),
-                            ),
-                          ),
                         ),
                         validator: (value) {
                           final text = value?.trim() ?? '';
                           if (text.isEmpty) {
                             return 'Skriv email';
                           }
-                          if (!text.contains('@')) {
+                          if (!text.contains('@') || !text.contains('.')) {
                             return 'Skriv en gyldig email';
                           }
                           return null;
                         },
                       ),
+
                       const SizedBox(height: 12),
+
                       TextFormField(
                         controller: _passwordController,
                         obscureText: _obscurePassword,
-                        decoration: InputDecoration(
+                        textInputAction: TextInputAction.next,
+                        decoration: _inputDecoration(
                           labelText: 'Adgangskode',
-                          filled: true,
-                          fillColor: const Color(0xFFF7F7F7),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0),
-                            ),
-                          ),
                           suffixIcon: IconButton(
                             onPressed: () {
                               setState(() {
@@ -347,26 +358,15 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
                           return null;
                         },
                       ),
+
                       const SizedBox(height: 12),
+
                       TextFormField(
                         controller: _confirmPasswordController,
                         obscureText: _obscureConfirmPassword,
-                        decoration: InputDecoration(
+                        textInputAction: TextInputAction.done,
+                        decoration: _inputDecoration(
                           labelText: 'Gentag adgangskode',
-                          filled: true,
-                          fillColor: const Color(0xFFF7F7F7),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0),
-                            ),
-                          ),
                           suffixIcon: IconButton(
                             onPressed: () {
                               setState(() {
@@ -392,7 +392,9 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
                           return null;
                         },
                       ),
+
                       const SizedBox(height: 18),
+
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -426,9 +428,12 @@ class _CreateFamilyScreenState extends State<CreateFamilyScreen> {
                           ),
                         ),
                       ),
+
                       const SizedBox(height: 8),
+
                       TextButton(
-                        onPressed: () => Navigator.pop(context),
+                        onPressed:
+                            _isSubmitting ? null : () => Navigator.pop(context),
                         child: const Text('Tilbage'),
                       ),
                     ],
@@ -448,11 +453,11 @@ class _FamilyHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return const Column(
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             _HeroBubble(
               emoji: '👩',
               size: 62,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/app_top_header.dart';
+import 'manage_profiles_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,9 +14,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _soundEnabled = true;
   bool _vibrationEnabled = true;
-  bool _childCanMarkTasksDone = true;
-  bool _childCanEditActivities = false;
-  bool _childCanDeleteActivities = false;
 
   String _selectedTheme = 'Standard';
   String _selectedNotificationStyle = 'Rolig';
@@ -32,50 +30,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'Diskret',
   ];
 
-  void _showInviteLinkDialog() {
-    const inviteLink = 'https://familiekalender.app/invite/demo-family-123';
-
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Invitationslink'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'Del dette link med en forælder eller omsorgsperson for at give adgang til familien.',
-              ),
-              SizedBox(height: 12),
-              SelectableText(
-                inviteLink,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Luk'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Invitationslink kopieret'),
-                  ),
-                );
-              },
-              child: const Text('Kopiér link'),
-            ),
-          ],
-        );
-      },
+  void _openManageProfiles() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ManageProfilesScreen(),
+      ),
     );
   }
 
@@ -181,6 +141,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
+
                       const _SectionTitle(title: 'Udseende'),
                       const SizedBox(height: 10),
                       _SettingsCard(
@@ -219,73 +180,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      const _SectionTitle(title: 'Forældretilladelser'),
-                      const SizedBox(height: 10),
-                      _SettingsCard(
-                        child: Column(
-                          children: [
-                            SwitchListTile(
-                              value: _childCanMarkTasksDone,
-                              onChanged: (value) {
-                                setState(() {
-                                  _childCanMarkTasksDone = value;
-                                });
-                              },
-                              title: const Text('Barnet må markere opgaver som udført'),
-                              subtitle: const Text(
-                                'Giver barnet mulighed for at krydse aktiviteter af.',
-                              ),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            const Divider(),
-                            SwitchListTile(
-                              value: _childCanEditActivities,
-                              onChanged: (value) {
-                                setState(() {
-                                  _childCanEditActivities = value;
-                                });
-                              },
-                              title: const Text('Barnet må redigere aktiviteter'),
-                              subtitle: const Text(
-                                'Kan bruges til ældre børn med mere selvstændighed.',
-                              ),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            const Divider(),
-                            SwitchListTile(
-                              value: _childCanDeleteActivities,
-                              onChanged: (value) {
-                                setState(() {
-                                  _childCanDeleteActivities = value;
-                                });
-                              },
-                              title: const Text('Barnet må slette aktiviteter'),
-                              subtitle: const Text(
-                                'Anbefales normalt kun til forældre.',
-                              ),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const _SectionTitle(title: 'Familieadgang'),
+
+                      const _SectionTitle(title: 'Familieprofiler'),
                       const SizedBox(height: 10),
                       _SettingsCard(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             const _InlineInfoBox(
-                              icon: Icons.link_outlined,
-                              title: 'Invitér en forælder eller omsorgsperson',
+                              icon: Icons.group_outlined,
+                              title: 'Administrér profiler',
                               text:
-                                  'Send et invitationslink for at dele kalender, aktiviteter og familieoversigt.',
+                                  'Opret børneprofiler, vælg adgangsniveau, se login-koder og ændr børns rolle mellem begrænset og udvidet adgang.',
                             ),
                             const SizedBox(height: 12),
                             ElevatedButton.icon(
-                              onPressed: _showInviteLinkDialog,
-                              icon: const Icon(Icons.send_outlined),
-                              label: const Text('Vis invitationslink'),
+                              onPressed: _openManageProfiles,
+                              icon: const Icon(Icons.manage_accounts_outlined),
+                              label: const Text('Administrér profiler'),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF2E7D32),
                                 foregroundColor: Colors.white,
@@ -293,6 +205,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      const _SectionTitle(title: 'Adgangsstruktur'),
+                      const SizedBox(height: 10),
+                      const _SettingsCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _InlineInfoBox(
+                              icon: Icons.admin_panel_settings_outlined,
+                              title: 'Forælder',
+                              text:
+                                  'Har fuld adgang til at oprette, redigere og slette aktiviteter samt administrere profiler, belønninger og indstillinger.',
+                            ),
+                            SizedBox(height: 12),
+                            _InlineInfoBox(
+                              icon: Icons.child_care_outlined,
+                              title: 'Barn · begrænset adgang',
+                              text:
+                                  'Kan se kalenderen, markere aktiviteter som udført og krydse checklisten af.',
+                            ),
+                            SizedBox(height: 12),
+                            _InlineInfoBox(
+                              icon: Icons.edit_calendar_outlined,
+                              title: 'Barn · udvidet adgang',
+                              text:
+                                  'Kan også oprette, redigere og slette egne aktiviteter.',
                             ),
                           ],
                         ),
