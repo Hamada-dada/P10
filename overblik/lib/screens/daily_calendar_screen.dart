@@ -189,8 +189,16 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     );
 
     if (result == true) {
-      await _loadActivities(showFullLoader: false);
-    }
+  await _loadActivities(showFullLoader: false);
+
+  if (!mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Aktivitet opdateret'),
+    ),
+  );
+}
   }
 
   @override
