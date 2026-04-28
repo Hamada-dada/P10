@@ -22,16 +22,31 @@ class ProfileScreen extends StatelessWidget {
     this.onBack,
   });
 
-  String get _roleLabel {
-    switch (profile.role) {
-      case ProfileRole.child:
-        return 'Barn';
-      case ProfileRole.parent:
-        return 'Forælder';
-    }
+String get _roleLabel {
+  switch (profile.role) {
+    case ProfileRole.parent:
+      return 'Forælder';
+    case ProfileRole.childExtended:
+      return 'Barn · udvidet adgang';
+    case ProfileRole.childLimited:
+      return 'Barn · begrænset adgang';
+  }
+}
+
+  bool get _canOpenSettings {
+    return profile.role == ProfileRole.parent;
+  }
+
+  bool get _canOpenRewards {
+    return profile.role == ProfileRole.parent;
   }
 
   void _openSettings(BuildContext context) {
+    if (!_canOpenSettings) {
+      _showComingSoon(context, 'Indstillinger er kun tilgængelige for forældre');
+      return;
+    }
+
     if (onOpenSettings != null) {
       onOpenSettings!.call();
       return;
@@ -46,6 +61,11 @@ class ProfileScreen extends StatelessWidget {
   }
 
   void _openRewards(BuildContext context) {
+    if (!_canOpenRewards) {
+      _showComingSoon(context, 'Belønninger kan kun administreres af forældre');
+      return;
+    }
+
     if (onOpenRewards != null) {
       onOpenRewards!.call();
       return;
@@ -62,7 +82,7 @@ class ProfileScreen extends StatelessWidget {
   void _showComingSoon(BuildContext context, String label) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$label kommer snart'),
+        content: Text(label),
       ),
     );
   }
@@ -70,7 +90,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final calendarAction =
-        onOpenCalendar ?? () => _showComingSoon(context, 'Kalender');
+        onOpenCalendar ?? () => _showComingSoon(context, 'Kalender kommer snart');
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -119,6 +139,7 @@ class ProfileScreen extends StatelessWidget {
                               child: _ActionCard(
                                 icon: Icons.card_giftcard_outlined,
                                 label: 'Belønninger',
+                                isDisabled: !_canOpenRewards,
                                 onTap: () => _openRewards(context),
                               ),
                             ),
@@ -131,6 +152,7 @@ class ProfileScreen extends StatelessWidget {
                               child: _ActionCard(
                                 icon: Icons.settings_outlined,
                                 label: 'Indstillinger',
+                                isDisabled: !_canOpenSettings,
                                 onTap: () => _openSettings(context),
                               ),
                             ),
@@ -346,15 +368,20 @@ class _ActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
+  final bool isDisabled;
 
   const _ActionCard({
     required this.icon,
     required this.label,
     this.onTap,
+    this.isDisabled = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final contentColor = isDisabled ? Colors.black38 : Colors.black87;
+    final textColor = isDisabled ? Colors.black38 : Colors.black;
+
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
@@ -366,14 +393,14 @@ class _ActionCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Icon(icon, size: 28, color: Colors.black87),
+            Icon(icon, size: 28, color: contentColor),
             const SizedBox(height: 10),
             Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
-                color: Colors.black,
+                color: textColor,
                 fontWeight: FontWeight.w500,
               ),
             ),

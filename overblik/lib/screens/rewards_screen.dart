@@ -80,21 +80,22 @@ class _RewardsScreenState extends State<RewardsScreen> {
       return;
     }
 
-    final titleController = TextEditingController();
-    final emojiController = TextEditingController();
-    final descriptionController = TextEditingController();
-
-    final childProfiles =
-        _profiles.where((profile) => profile.role == ProfileRole.child).toList();
+    final childProfiles = _profiles.where((profile) => profile.isChild).toList();
 
     if (childProfiles.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Du skal oprette et barn først, før du kan lave en belønning.'),
+          content: Text(
+            'Du skal oprette et barn først, før du kan lave en belønning.',
+          ),
         ),
       );
       return;
     }
+
+    final titleController = TextEditingController();
+    final emojiController = TextEditingController();
+    final descriptionController = TextEditingController();
 
     String selectedProfile = childProfiles.first.name;
 
@@ -152,6 +153,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       }).toList(),
                       onChanged: (value) {
                         if (value == null) return;
+
                         setDialogState(() {
                           selectedProfile = value;
                         });
@@ -193,6 +195,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                     titleController.dispose();
                     emojiController.dispose();
                     descriptionController.dispose();
+
                     Navigator.pop(dialogContext);
                   },
                   child: const Text('Annuller'),
@@ -216,6 +219,17 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       if (isDirectReward) RewardType.direct,
                       if (isStreakReward) RewardType.streak,
                     ];
+
+                    if (types.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Vælg mindst én type belønning.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
 
                     _rewardService.addReward(
                       Reward(
@@ -278,7 +292,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
       return Scaffold(
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

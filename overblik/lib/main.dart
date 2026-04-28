@@ -31,7 +31,7 @@ Future<void> main() async {
         url: SupabaseConfig.url,
         anonKey: SupabaseConfig.anonKey,
       );
-
+  
       debugPrint(
         'Current session user id: ${Supabase.instance.client.auth.currentUser?.id}',
       );
