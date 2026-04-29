@@ -129,7 +129,7 @@ case CalendarViewType.day:
                       IconButton(
                         onPressed: onFilterTap,
                         icon: Icon(
-                          Icons.filter_alt_outlined,
+                          Icons.tune,
                           size: iconSize,
                           color: Colors.black,
                         ),
