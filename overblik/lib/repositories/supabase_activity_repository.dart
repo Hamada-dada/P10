@@ -32,9 +32,7 @@ class SupabaseActivityRepository implements ActivityRepository {
         childRole != null;
   }
 
-  bool get _isChildExtended {
-    return childRole == 'child_extended';
-  }
+
 
   bool _isNetworkException(Object error) {
     if (error is SocketException) return true;

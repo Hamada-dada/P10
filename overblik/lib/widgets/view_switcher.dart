@@ -9,9 +9,16 @@ enum CalendarScreenType {
 class ViewSwitcher extends StatelessWidget {
   final CalendarScreenType selectedView;
 
+  final VoidCallback? onDayTap;
+  final VoidCallback? onWeekTap;
+  final VoidCallback? onMonthTap;
+
   const ViewSwitcher({
     super.key,
     required this.selectedView,
+    this.onDayTap,
+    this.onWeekTap,
+    this.onMonthTap,
   });
 
   void _handleTap(BuildContext context, CalendarScreenType targetView) {
@@ -19,13 +26,27 @@ class ViewSwitcher extends StatelessWidget {
 
     switch (targetView) {
       case CalendarScreenType.day:
-        Navigator.pushReplacementNamed(context, '/');
+        if (onDayTap != null) {
+          onDayTap!();
+        } else {
+          Navigator.pushReplacementNamed(context, '/');
+        }
         break;
+
       case CalendarScreenType.week:
-        Navigator.pushReplacementNamed(context, '/weekly');
+        if (onWeekTap != null) {
+          onWeekTap!();
+        } else {
+          Navigator.pushReplacementNamed(context, '/weekly');
+        }
         break;
+
       case CalendarScreenType.month:
-        Navigator.pushReplacementNamed(context, '/monthly');
+        if (onMonthTap != null) {
+          onMonthTap!();
+        } else {
+          Navigator.pushReplacementNamed(context, '/monthly');
+        }
         break;
     }
   }

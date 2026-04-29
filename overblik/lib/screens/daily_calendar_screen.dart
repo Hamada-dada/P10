@@ -12,6 +12,8 @@ import '../widgets/view_switcher.dart';
 import 'activity_detail_screen.dart';
 import 'create_activity_screen.dart';
 import 'login_screen.dart';
+import 'monthly_calendar_screen.dart';
+import 'weekly_calendar_screen.dart';
 
 class DailyCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -50,14 +52,14 @@ class DailyCalendarScreen extends StatefulWidget {
 
 class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     with WidgetsBindingObserver {
-late final ActivityService _activityService = ActivityService(
-  SupabaseActivityRepository(
-    Supabase.instance.client,
-    childFamilyId: widget.childFamilyId,
-    childProfileId: widget.childProfileId,
-    childRole: widget.childRole,
-  ),
-);
+  late final ActivityService _activityService = ActivityService(
+    SupabaseActivityRepository(
+      Supabase.instance.client,
+      childFamilyId: widget.childFamilyId,
+      childProfileId: widget.childProfileId,
+      childRole: widget.childRole,
+    ),
+  );
 
   late DateTime _focusedDate;
 
@@ -78,15 +80,13 @@ late final ActivityService _activityService = ActivityService(
   }
 
   bool get _canCreateActivity {
-    if (_hasAuthUser) return true;
-    if (widget.isChildExtended) return true;
-    return false;
+    // Parent creation works now.
+    // Child creation is intentionally disabled until child_create_activity RPC is implemented.
+    return _hasAuthUser && !_isChildSession;
   }
 
   bool get _canOpenActivityDetail {
-    if (_hasAuthUser) return true;
-    if (_isChildSession) return true;
-    return false;
+    return _hasAuthUser || _isChildSession;
   }
 
   @override
@@ -143,22 +143,6 @@ late final ActivityService _activityService = ActivityService(
     if (!_canUseScreen) {
       debugPrint(
         'DailyCalendarScreen: no auth user or child session, skipping activity load',
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _activities = [];
-        _isLoading = false;
-      });
-
-      return;
-    }
-
-    if (_isChildSession && !_hasAuthUser) {
-      debugPrint(
-        'DailyCalendarScreen: child session detected. '
-        'Activity loading for child session still needs repository/RPC support.',
       );
 
       if (!mounted) return;
@@ -244,17 +228,6 @@ late final ActivityService _activityService = ActivityService(
       return;
     }
 
-    if (!_hasAuthUser) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Oprettelse fra børnelogin kræver næste backend-trin.',
-          ),
-        ),
-      );
-      return;
-    }
-
     try {
       final createdActivity = await Navigator.push<Activity>(
         context,
@@ -328,7 +301,13 @@ late final ActivityService _activityService = ActivityService(
     final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(
-        builder: (_) => ActivityDetailScreen(activity: activity),
+        builder: (_) => ActivityDetailScreen(
+          activity: activity,
+          childFamilyId: widget.childFamilyId,
+          childProfileId: widget.childProfileId,
+          childDisplayName: widget.childDisplayName,
+          childRole: widget.childRole,
+        ),
       ),
     );
 
@@ -396,6 +375,36 @@ late final ActivityService _activityService = ActivityService(
     }
   }
 
+  void _openWeekView() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WeeklyCalendarScreen(
+          initialDate: _focusedDate,
+          childFamilyId: widget.childFamilyId,
+          childProfileId: widget.childProfileId,
+          childDisplayName: widget.childDisplayName,
+          childRole: widget.childRole,
+        ),
+      ),
+    );
+  }
+
+  void _openMonthView() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MonthlyCalendarScreen(
+          initialDate: _focusedDate,
+          childFamilyId: widget.childFamilyId,
+          childProfileId: widget.childProfileId,
+          childDisplayName: widget.childDisplayName,
+          childRole: widget.childRole,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final activities = _activities;
@@ -417,7 +426,11 @@ late final ActivityService _activityService = ActivityService(
               const SizedBox(height: 8),
               const _ScreenTitle(),
               const SizedBox(height: 12),
-              const ViewSwitcher(selectedView: CalendarScreenType.day),
+              ViewSwitcher(
+                selectedView: CalendarScreenType.day,
+                onWeekTap: _openWeekView,
+                onMonthTap: _openMonthView,
+              ),
               const SizedBox(height: 12),
               CalendarNavigationBar(
                 focusedDate: _focusedDate,
@@ -645,19 +658,19 @@ class _EmptyActivitiesView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return const Center(
       child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
+        physics: AlwaysScrollableScrollPhysics(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.event_note_outlined,
               size: 38,
               color: Colors.black45,
             ),
-            const SizedBox(height: 10),
-            const Text(
+            SizedBox(height: 10),
+            Text(
               'Ingen aktiviteter',
               style: TextStyle(
                 fontFamily: 'Italiana',
@@ -666,20 +679,6 @@ class _EmptyActivitiesView extends StatelessWidget {
                 color: Colors.black,
               ),
             ),
-            if (isChildSession) ...[
-              const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'Børnelogin virker nu, men hentning af aktiviteter kræver næste backend-trin.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.black54,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),

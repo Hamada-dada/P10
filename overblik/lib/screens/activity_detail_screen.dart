@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
-import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
 import '../services/profile_service.dart';
@@ -15,10 +14,33 @@ import 'create_activity_screen.dart';
 class ActivityDetailScreen extends StatefulWidget {
   final Activity activity;
 
+  final String? childFamilyId;
+  final String? childProfileId;
+  final String? childDisplayName;
+  final String? childRole;
+
   const ActivityDetailScreen({
     super.key,
     required this.activity,
+    this.childFamilyId,
+    this.childProfileId,
+    this.childDisplayName,
+    this.childRole,
   });
+
+  bool get isChildSession {
+    return childFamilyId != null &&
+        childProfileId != null &&
+        childRole != null;
+  }
+
+  bool get isChildLimited {
+    return childRole == 'child_limited';
+  }
+
+  bool get isChildExtended {
+    return childRole == 'child_extended';
+  }
 
   @override
   State<ActivityDetailScreen> createState() => _ActivityDetailScreenState();
@@ -31,11 +53,68 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   final ProfileService _profileService = ProfileService();
 
   late final ActivityService _activityService = ActivityService(
-    SupabaseActivityRepository(Supabase.instance.client),
+    SupabaseActivityRepository(
+      Supabase.instance.client,
+      childFamilyId: widget.childFamilyId,
+      childProfileId: widget.childProfileId,
+      childRole: widget.childRole,
+    ),
   );
 
   bool _isLoading = true;
-  Map<String, Profile> _profilesById = {};
+
+  Map<String, String> _profileNamesById = {};
+
+  bool get _isChildSession => widget.isChildSession;
+
+  bool get _hasAuthUser {
+    return Supabase.instance.client.auth.currentUser != null;
+  }
+
+  bool get _isParentSession {
+    return _hasAuthUser && !_isChildSession;
+  }
+
+  bool get _isOwnedByCurrentChild {
+    return widget.childProfileId != null &&
+        _activity.ownerProfileId == widget.childProfileId;
+  }
+
+  bool get _canEditActivity {
+    if (_isParentSession) {
+      return true;
+    }
+
+    if (widget.isChildExtended && _isOwnedByCurrentChild) {
+      return true;
+    }
+
+    return false;
+  }
+
+  bool get _canDeleteActivity {
+    if (_isParentSession) {
+      return true;
+    }
+
+    if (widget.isChildExtended && _isOwnedByCurrentChild) {
+      return true;
+    }
+
+    return false;
+  }
+
+  bool get _canToggleChecklist {
+    if (_isParentSession) {
+      return true;
+    }
+
+    if (_isChildSession) {
+      return true;
+    }
+
+    return false;
+  }
 
   @override
   void initState() {
@@ -44,20 +123,70 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     _loadActivity();
   }
 
+  Future<Map<String, String>> _loadProfileNamesForSession() async {
+    if (_isChildSession) {
+      return _loadProfileNamesForChild();
+    }
+
+    final familyProfiles = await _profileService.getMyFamilyProfiles();
+
+    return {
+      for (final profile in familyProfiles)
+        profile.id: profile.displayName.trim().isNotEmpty
+            ? profile.displayName
+            : profile.name,
+    };
+  }
+
+  Future<Map<String, String>> _loadProfileNamesForChild() async {
+    final childProfileId = widget.childProfileId;
+
+    if (childProfileId == null) {
+      return {};
+    }
+
+    final result = await Supabase.instance.client.rpc(
+      'child_get_family_profiles',
+      params: {
+        'input_profile_id': childProfileId,
+      },
+    );
+
+    final rows = List<Map<String, dynamic>>.from(result as List);
+
+    final namesById = <String, String>{};
+
+    for (final row in rows) {
+      final id = row['id'] as String?;
+      final name = row['name'] as String? ?? '';
+      final displayName = row['display_name'] as String? ?? '';
+
+      if (id == null || id.trim().isEmpty) {
+        continue;
+      }
+
+      final preferredName = displayName.trim().isNotEmpty
+          ? displayName.trim()
+          : name.trim();
+
+      namesById[id] = preferredName.isNotEmpty ? preferredName : 'Ukendt';
+    }
+
+    return namesById;
+  }
+
   Future<void> _loadActivity() async {
     try {
       final freshActivity =
           await _activityService.getActivityById(widget.activity.id);
 
-      final familyProfiles = await _profileService.getMyFamilyProfiles();
+      final profileNamesById = await _loadProfileNamesForSession();
 
       if (!mounted) return;
 
       setState(() {
         _activity = freshActivity ?? widget.activity;
-        _profilesById = {
-          for (final profile in familyProfiles) profile.id: profile,
-        };
+        _profileNamesById = profileNamesById;
         _isLoading = false;
       });
     } catch (e, st) {
@@ -65,23 +194,26 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       debugPrintStack(stackTrace: st);
 
       try {
-        final familyProfiles = await _profileService.getMyFamilyProfiles();
+        final profileNamesById = await _loadProfileNamesForSession();
 
         if (!mounted) return;
 
         setState(() {
           _activity = widget.activity;
-          _profilesById = {
-            for (final profile in familyProfiles) profile.id: profile,
-          };
+          _profileNamesById = profileNamesById;
           _isLoading = false;
         });
-      } catch (_) {
+      } catch (profileError, profileSt) {
+        debugPrint(
+          'ActivityDetailScreen profile fallback failed: $profileError',
+        );
+        debugPrintStack(stackTrace: profileSt);
+
         if (!mounted) return;
 
         setState(() {
           _activity = widget.activity;
-          _profilesById = {};
+          _profileNamesById = {};
           _isLoading = false;
         });
       }
@@ -120,9 +252,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     }
 
     if (participant.profileId != null) {
-      final profile = _profilesById[participant.profileId!];
-      if (profile != null) {
-        return profile.name;
+      final profileName = _profileNamesById[participant.profileId!];
+
+      if (profileName != null && profileName.trim().isNotEmpty) {
+        return profileName;
       }
     }
 
@@ -170,6 +303,15 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   }
 
   Future<void> _toggleChecklistItem(int index) async {
+    if (!_canToggleChecklist) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Du har ikke adgang til at ændre tjeklisten.'),
+        ),
+      );
+      return;
+    }
+
     try {
       final updatedChecklist = List<ActivityChecklistItem>.from(
         _activity.checklistItems,
@@ -203,13 +345,24 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Kunne ikke opdatere tjeklisten.'),
+          content: Text(
+            'Tjeklisteændringer for børnelogin kræver næste backend-trin.',
+          ),
         ),
       );
     }
   }
 
-  Future<void> _editActivity(BuildContext context) async {
+  Future<void> _editActivity() async {
+    if (!_canEditActivity) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Du har ikke adgang til at redigere denne aktivitet.'),
+        ),
+      );
+      return;
+    }
+
     try {
       final updatedActivity = await Navigator.push<Activity>(
         context,
@@ -230,7 +383,6 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
           _activity = updatedActivity;
         });
 
-        if (!context.mounted) return;
         Navigator.pop(context, true);
       }
     } catch (e, st) {
@@ -247,7 +399,16 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     }
   }
 
-  Future<void> _deleteActivity(BuildContext context) async {
+  Future<void> _deleteActivity() async {
+    if (!_canDeleteActivity) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Du har ikke adgang til at slette denne aktivitet.'),
+        ),
+      );
+      return;
+    }
+
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -275,13 +436,14 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     try {
       await _activityService.deleteActivity(_activity.id);
 
-      if (!context.mounted) return;
+      if (!mounted) return;
+
       Navigator.pop(context, true);
     } catch (e, st) {
       debugPrint('ActivityDetailScreen _deleteActivity failed: $e');
       debugPrintStack(stackTrace: st);
 
-      if (!context.mounted) return;
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -405,6 +567,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         _activity.directRewardId != null || _activity.streakRewardId != null;
     final hasChecklist = _activity.checklistItems.isNotEmpty;
     final hasRecurrence = _activity.recurrence != ActivityRecurrence.none;
+    final showBottomActions = _canEditActivity || _canDeleteActivity;
 
     final directReward = _activity.directRewardId != null
         ? _rewardService.getRewardById(_activity.directRewardId!)
@@ -438,7 +601,12 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                   ),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        4,
+                        16,
+                        showBottomActions ? 16 : 24,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -650,32 +818,38 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 20),
                         ],
                       ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
+                  if (showBottomActions)
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (_canDeleteActivity)
+                            _BottomActionButton(
+                              icon: Icons.delete_outline,
+                              label: 'Slet',
+                              onTap: _deleteActivity,
+                            )
+                          else
+                            const SizedBox(width: 80),
+                          if (_canEditActivity)
+                            _BottomActionButton(
+                              icon: Icons.edit_outlined,
+                              label: 'Rediger',
+                              onTap: _editActivity,
+                            )
+                          else
+                            const SizedBox(width: 80),
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _BottomActionButton(
-                          icon: Icons.delete_outline,
-                          label: 'Slet',
-                          onTap: () => _deleteActivity(context),
-                        ),
-                        _BottomActionButton(
-                          icon: Icons.edit_outlined,
-                          label: 'Rediger',
-                          onTap: () => _editActivity(context),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),

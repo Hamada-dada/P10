@@ -10,36 +10,97 @@ import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
 import 'daily_calendar_screen.dart';
+import 'monthly_calendar_screen.dart';
 
 class WeeklyCalendarScreen extends StatefulWidget {
-  const WeeklyCalendarScreen({super.key});
+  final DateTime? initialDate;
+
+  final String? childFamilyId;
+  final String? childProfileId;
+  final String? childDisplayName;
+  final String? childRole;
+
+  const WeeklyCalendarScreen({
+    super.key,
+    this.initialDate,
+    this.childFamilyId,
+    this.childProfileId,
+    this.childDisplayName,
+    this.childRole,
+  });
+
+  bool get isChildSession {
+    return childFamilyId != null &&
+        childProfileId != null &&
+        childRole != null;
+  }
+
+  bool get isChildLimited {
+    return childRole == 'child_limited';
+  }
+
+  bool get isChildExtended {
+    return childRole == 'child_extended';
+  }
 
   @override
   State<WeeklyCalendarScreen> createState() => _WeeklyCalendarScreenState();
 }
 
 class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
-  late final ActivityService _activityService = ActivityService(
-    SupabaseActivityRepository(Supabase.instance.client),
-  );
+  late final ActivityService _activityService;
 
-  DateTime _focusedDate = DateTime.now();
+  late DateTime _focusedDate;
+
   Map<String, List<Activity>> _activitiesByDate = {};
   bool _isLoading = true;
+
+  bool get _isChildSession => widget.isChildSession;
+
+  bool get _hasAuthUser {
+    return Supabase.instance.client.auth.currentUser != null;
+  }
+
+  bool get _canCreateActivity {
+    return _hasAuthUser && !_isChildSession;
+  }
 
   @override
   void initState() {
     super.initState();
+
+    _focusedDate = widget.initialDate ?? DateTime.now();
+
+    _activityService = ActivityService(
+      SupabaseActivityRepository(
+        Supabase.instance.client,
+        childFamilyId: widget.childFamilyId,
+        childProfileId: widget.childProfileId,
+        childRole: widget.childRole,
+      ),
+    );
+
+    debugPrint('WeeklyCalendarScreen: init');
+    debugPrint('WeeklyCalendarScreen: hasAuthUser=$_hasAuthUser');
+    debugPrint('WeeklyCalendarScreen: isChildSession=$_isChildSession');
+    debugPrint('WeeklyCalendarScreen: childFamilyId=${widget.childFamilyId}');
+    debugPrint('WeeklyCalendarScreen: childProfileId=${widget.childProfileId}');
+    debugPrint('WeeklyCalendarScreen: childRole=${widget.childRole}');
+
     _loadWeekActivities();
   }
 
   Future<void> _loadWeekActivities() async {
     try {
-      setState(() {
-        _isLoading = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
 
-      final activities = await _activityService.getActivitiesForWeek(_focusedDate);
+      final activities =
+          await _activityService.getActivitiesForWeek(_focusedDate);
+
       final grouped = <String, List<Activity>>{};
 
       for (final activity in activities) {
@@ -68,6 +129,13 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
         _activitiesByDate = {};
         _isLoading = false;
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Kunne ikke hente ugeaktiviteter: $e'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
     }
   }
 
@@ -75,6 +143,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     setState(() {
       _focusedDate = _focusedDate.subtract(const Duration(days: 7));
     });
+
     await _loadWeekActivities();
   }
 
@@ -82,6 +151,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     setState(() {
       _focusedDate = _focusedDate.add(const Duration(days: 7));
     });
+
     await _loadWeekActivities();
   }
 
@@ -89,6 +159,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     setState(() {
       _focusedDate = DateTime.now();
     });
+
     await _loadWeekActivities();
   }
 
@@ -96,14 +167,61 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => DailyCalendarScreen(initialDate: selectedDate),
+        builder: (_) => DailyCalendarScreen(
+          initialDate: selectedDate,
+          childFamilyId: widget.childFamilyId,
+          childProfileId: widget.childProfileId,
+          childDisplayName: widget.childDisplayName,
+          childRole: widget.childRole,
+        ),
       ),
     );
 
     await _loadWeekActivities();
   }
 
+  void _openDayView() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DailyCalendarScreen(
+          initialDate: _focusedDate,
+          childFamilyId: widget.childFamilyId,
+          childProfileId: widget.childProfileId,
+          childDisplayName: widget.childDisplayName,
+          childRole: widget.childRole,
+        ),
+      ),
+    );
+  }
+
+  void _openMonthView() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MonthlyCalendarScreen(
+          initialDate: _focusedDate,
+          childFamilyId: widget.childFamilyId,
+          childProfileId: widget.childProfileId,
+          childDisplayName: widget.childDisplayName,
+          childRole: widget.childRole,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openCreateActivityScreen() async {
+    if (!_canCreateActivity) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Oprettelse fra børnelogin kræver næste backend-trin.',
+          ),
+        ),
+      );
+      return;
+    }
+
     try {
       final createdActivity = await Navigator.push<Activity>(
         context,
@@ -119,6 +237,15 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     } catch (e, st) {
       debugPrint('WeeklyCalendarScreen _openCreateActivityScreen failed: $e');
       debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Kunne ikke oprette aktivitet: $e'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
     }
   }
 
@@ -131,6 +258,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
 
     final importantActivities =
         activities.where((activity) => activity.isImportant).toList();
+
     if (importantActivities.isNotEmpty) {
       importantActivities.sort((a, b) => b.duration.compareTo(a.duration));
       return importantActivities.first;
@@ -138,6 +266,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
 
     final favoriteActivities =
         activities.where((activity) => activity.isFavorite).toList();
+
     if (favoriteActivities.isNotEmpty) {
       favoriteActivities.sort((a, b) => b.duration.compareTo(a.duration));
       return favoriteActivities.first;
@@ -145,6 +274,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
 
     final sorted = List<Activity>.from(activities)
       ..sort((a, b) => b.duration.compareTo(a.duration));
+
     return sorted.first;
   }
 
@@ -160,6 +290,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final weekDays = _activityService.getWeekDates(_focusedDate);
+
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
 
@@ -181,11 +312,18 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _TopHeader(),
+              _TopHeader(
+                isChildSession: _isChildSession,
+                childDisplayName: widget.childDisplayName,
+              ),
               SizedBox(height: smallGap),
               _ScreenTitle(fontSize: titleFontSize),
               SizedBox(height: mediumGap),
-              const ViewSwitcher(selectedView: CalendarScreenType.week),
+              ViewSwitcher(
+                selectedView: CalendarScreenType.week,
+                onDayTap: _openDayView,
+                onMonthTap: _openMonthView,
+              ),
               SizedBox(height: largeGap),
               CalendarNavigationBar(
                 focusedDate: _focusedDate,
@@ -206,15 +344,16 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
                   clipBehavior: Clip.antiAlias,
                   child: Column(
                     children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _openCreateActivityScreen,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Ny aktivitet'),
+                      if (_canCreateActivity)
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _openCreateActivityScreen,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Ny aktivitet'),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
+                      if (_canCreateActivity) const SizedBox(height: 12),
                       Expanded(
                         child: _isLoading
                             ? const Center(
@@ -228,7 +367,8 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
                                         const SizedBox(height: 10),
                                     itemBuilder: (context, index) {
                                       final day = weekDays[index];
-                                      final activities = _activitiesForDate(day);
+                                      final activities =
+                                          _activitiesForDate(day);
                                       final highlight =
                                           _getWeeklyHighlight(activities);
 
@@ -254,7 +394,13 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
 }
 
 class _TopHeader extends StatelessWidget {
-  const _TopHeader();
+  final bool isChildSession;
+  final String? childDisplayName;
+
+  const _TopHeader({
+    required this.isChildSession,
+    this.childDisplayName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +417,17 @@ class _TopHeader extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        const ProfileAvatarButton(),
+        if (isChildSession)
+          Text(
+            childDisplayName ?? 'Barn',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          )
+        else
+          const ProfileAvatarButton(),
       ],
     );
   }
@@ -323,6 +479,7 @@ class _WeekDayCard extends StatelessWidget {
       'Lørdag',
       'Søndag',
     ];
+
     return weekdays[weekday - 1];
   }
 
@@ -336,15 +493,19 @@ class _WeekDayCard extends StatelessWidget {
     if (activity.isCompleted) {
       return Colors.green;
     }
+
     if (activity.isImportant) {
       return Colors.red;
     }
+
     if (activity.isFavorite) {
       return Colors.amber;
     }
+
     if (activity.ownerProfileId != null) {
       return Colors.blue;
     }
+
     return Colors.purple;
   }
 

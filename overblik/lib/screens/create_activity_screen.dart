@@ -131,6 +131,22 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _loadProfiles();
   }
 
+  List<String> _uniqueStrings(List<String> values) {
+    final result = <String>[];
+
+    for (final value in values) {
+      final cleanValue = value.trim();
+
+      if (cleanValue.isEmpty) continue;
+
+      if (!result.contains(cleanValue)) {
+        result.add(cleanValue);
+      }
+    }
+
+    return result;
+  }
+
   Future<void> _loadProfiles() async {
     debugPrint(
       'CreateActivityScreen current auth user = ${Supabase.instance.client.auth.currentUser?.id}',
@@ -194,18 +210,18 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         selectedParticipants.add(currentParent.name);
       }
 
-      final participantOptions = <String>[
+      final participantOptions = _uniqueStrings([
         ...profiles.map((profile) => profile.name),
         ...externalParticipantOptions,
         'Familie',
-      ];
+      ]);
 
-      final uniqueSelectedParticipants = <String>[];
+      final uniqueSelectedParticipants = _uniqueStrings(selectedParticipants)
+          .where((participant) => participantOptions.contains(participant))
+          .toList();
 
-      for (final participant in selectedParticipants) {
-        if (!uniqueSelectedParticipants.contains(participant)) {
-          uniqueSelectedParticipants.add(participant);
-        }
+      if (uniqueSelectedParticipants.isEmpty) {
+        uniqueSelectedParticipants.add(currentParent.name);
       }
 
       if (!mounted) return;
@@ -591,14 +607,18 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     final participant = value.trim();
 
     setState(() {
-      if (!_participantOptions.contains(participant)) {
-        _participantOptions = [..._participantOptions, participant];
-      }
+      final nextOptions = _uniqueStrings([
+        ..._participantOptions,
+        participant,
+      ]);
 
-      if (!_selectedParticipants.contains(participant)) {
-        _selectedParticipants.add(participant);
-      }
+      final nextSelected = _uniqueStrings([
+        ..._selectedParticipants,
+        participant,
+      ]);
 
+      _participantOptions = nextOptions;
+      _selectedParticipants = nextSelected;
       _revalidateSelectedRewards();
     });
   }
@@ -908,6 +928,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     final directRewards = _directRewards();
     final streakRewards = _streakRewards();
 
+    final availableParticipantOptions = _participantOptions
+        .where((option) => !_selectedParticipants.contains(option))
+        .toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
       body: SafeArea(
@@ -1080,29 +1104,37 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                         ],
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
+                          key: ValueKey(
+                            'participant-dropdown-${_selectedParticipants.join('|')}-${availableParticipantOptions.join('|')}',
+                          ),
+                          initialValue: null,
                           decoration: const InputDecoration(
                             labelText: 'Tilføj deltager',
                             border: OutlineInputBorder(),
                           ),
-                          items: _participantOptions
-                              .where(
-                                (option) =>
-                                    !_selectedParticipants.contains(option),
-                              )
-                              .map((participant) {
+                          hint: const Text('Vælg deltager'),
+                          items: availableParticipantOptions.map((participant) {
                             return DropdownMenuItem<String>(
                               value: participant,
                               child: Text(participant),
                             );
                           }).toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
+                          onChanged: availableParticipantOptions.isEmpty
+                              ? null
+                              : (value) {
+                                  if (value == null) return;
 
-                            setState(() {
-                              _selectedParticipants.add(value);
-                              _revalidateSelectedRewards();
-                            });
-                          },
+                                  setState(() {
+                                    if (!_selectedParticipants.contains(value)) {
+                                      _selectedParticipants.add(value);
+                                    }
+
+                                    _selectedParticipants =
+                                        _uniqueStrings(_selectedParticipants);
+
+                                    _revalidateSelectedRewards();
+                                  });
+                                },
                         ),
                         const SizedBox(height: 8),
                         Align(
@@ -1126,13 +1158,14 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children:
-                                _selectedParticipants.map((participant) {
+                            children: _selectedParticipants.map((participant) {
                               return Chip(
                                 label: Text(participant),
                                 onDeleted: () {
                                   setState(() {
                                     _selectedParticipants.remove(participant);
+                                    _selectedParticipants =
+                                        _uniqueStrings(_selectedParticipants);
                                     _revalidateSelectedRewards();
                                   });
                                 },
