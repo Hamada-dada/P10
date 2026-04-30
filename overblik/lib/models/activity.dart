@@ -130,6 +130,7 @@ class Activity {
 
   final ActivityRecurrence recurrence;
   final int recurrenceInterval;
+  final DateTime? recurrenceEndDate;
 
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -156,6 +157,7 @@ class Activity {
     required this.streakTarget,
     required this.recurrence,
     required this.recurrenceInterval,
+    required this.recurrenceEndDate,
     required this.createdAt,
     required this.updatedAt,
     required this.participants,
@@ -191,6 +193,7 @@ class Activity {
       'streak_target': streakTarget,
       'recurrence': activityRecurrenceToDatabase(recurrence),
       'recurrence_interval': recurrenceInterval,
+      //'recurrence_end_date': recurrenceEndDate?.toIso8601String(),
     };
   }
 
@@ -220,6 +223,9 @@ class Activity {
         activityRow['recurrence'] as String? ?? 'none',
       ),
       recurrenceInterval: activityRow['recurrence_interval'] as int? ?? 1,
+      recurrenceEndDate: activityRow['recurrence_end_date'] != null
+          ? DateTime.tryParse(activityRow['recurrence_end_date'] as String)
+          : null,
       createdAt: activityRow['created_at'] != null
           ? DateTime.tryParse(activityRow['created_at'] as String)
           : null,
@@ -250,6 +256,7 @@ class Activity {
     int? streakTarget,
     ActivityRecurrence? recurrence,
     int? recurrenceInterval,
+    DateTime? recurrenceEndDate,
     DateTime? createdAt,
     DateTime? updatedAt,
     List<ActivityParticipant>? participants,
@@ -274,6 +281,7 @@ class Activity {
       streakTarget: streakTarget ?? this.streakTarget,
       recurrence: recurrence ?? this.recurrence,
       recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval,
+      recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       participants: participants ?? this.participants,
