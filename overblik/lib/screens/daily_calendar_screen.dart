@@ -9,11 +9,14 @@ import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
+import '../models/profile.dart';
+import '../services/profile_service.dart';
 import 'activity_detail_screen.dart';
 import 'create_activity_screen.dart';
 import 'login_screen.dart';
 import 'monthly_calendar_screen.dart';
 import 'weekly_calendar_screen.dart';
+import '../widgets/filter_panel.dart';
 
 class DailyCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -33,9 +36,7 @@ class DailyCalendarScreen extends StatefulWidget {
   });
 
   bool get isChildSession {
-    return childFamilyId != null &&
-        childProfileId != null &&
-        childRole != null;
+    return childFamilyId != null && childProfileId != null && childRole != null;
   }
 
   bool get isChildLimited {
@@ -68,6 +69,12 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   bool _isLoading = true;
   bool _isRefreshing = false;
   bool _isLoggingOut = false;
+
+  final ProfileService _profileService = ProfileService();
+
+  List<Profile> _filterProfiles = [];
+  Set<String> _selectedFilterProfileIds = {};
+  bool _showFamilyActivities = false;
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -106,6 +113,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
     if (_canUseScreen) {
       _loadActivities();
+      _loadFilterProfiles();
     } else {
       debugPrint(
         'DailyCalendarScreen: no auth user and no child session, skipping activity load',
@@ -164,8 +172,9 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
         });
       }
 
-      final activities =
-          await _activityService.getActivitiesForDate(_focusedDate);
+      final activities = await _activityService.getActivitiesForDate(
+        _focusedDate,
+      );
 
       if (!mounted) return;
 
@@ -194,6 +203,61 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     }
   }
 
+  Future<void> _loadFilterProfiles() async {
+    try {
+      if (_isChildSession) {
+        if (widget.childProfileId == null) return;
+
+        setState(() {
+          _selectedFilterProfileIds = {widget.childProfileId!};
+          _showFamilyActivities = false;
+        });
+
+        return;
+      }
+
+      final currentParent = await _profileService.getMyParentProfile();
+
+      if (currentParent == null) return;
+
+      final profiles = await _profileService.getFamilyProfiles(
+        currentParent.familyId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _filterProfiles = profiles;
+        _selectedFilterProfileIds = {currentParent.id};
+        _showFamilyActivities = false;
+      });
+    } catch (e, st) {
+      debugPrint('DailyCalendarScreen _loadFilterProfiles failed: $e');
+      debugPrintStack(stackTrace: st);
+    }
+  }
+
+  List<Activity> get _filteredActivities {
+    if (_selectedFilterProfileIds.isEmpty && !_showFamilyActivities) {
+      return _activities;
+    }
+
+    return _activities.where((activity) {
+      final matchesProfile = activity.participants.any((participant) {
+        return participant.profileId != null &&
+            _selectedFilterProfileIds.contains(participant.profileId);
+      });
+
+      final matchesFamily =
+          _showFamilyActivities &&
+          activity.participants.any(
+            (participant) => participant.externalName == 'Familie',
+          );
+
+      return matchesProfile || matchesFamily;
+    }).toList();
+  }
+
   Future<void> _goToPreviousDay() async {
     setState(() {
       _focusedDate = _focusedDate.subtract(const Duration(days: 1));
@@ -217,7 +281,25 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
     await _loadActivities();
   }
+  Future<void> _openFilterPanel() async {
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      builder: (sheetContext) {
+        return FilterPanel(
+          profiles: _filterProfiles,
+          selectedProfileIds: _selectedFilterProfileIds,
+          showFamilyActivities: _showFamilyActivities,
+        );
+      },
+    );
 
+    if (result == null || !mounted) return;
+
+    setState(() {
+      _selectedFilterProfileIds = result['profileIds'] as Set<String>;
+      _showFamilyActivities = result['showFamily'] as bool;
+    });
+  }
   Future<void> _openCreateActivityScreen() async {
     if (!_canCreateActivity) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -244,12 +326,8 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
       debugPrint(
         'DailyCalendarScreen: saving activity id=${createdActivity.id}',
       );
-      debugPrint(
-        'DailyCalendarScreen: familyId=${createdActivity.familyId}',
-      );
-      debugPrint(
-        'DailyCalendarScreen: createdBy=${createdActivity.createdBy}',
-      );
+      debugPrint('DailyCalendarScreen: familyId=${createdActivity.familyId}');
+      debugPrint('DailyCalendarScreen: createdBy=${createdActivity.createdBy}');
       debugPrint(
         'DailyCalendarScreen: ownerProfileId=${createdActivity.ownerProfileId}',
       );
@@ -268,11 +346,9 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Aktivitet gemt'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Aktivitet gemt')));
     } catch (e, st) {
       debugPrint('DailyCalendarScreen _openCreateActivityScreen failed: $e');
       debugPrintStack(stackTrace: st);
@@ -291,9 +367,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   Future<void> _openActivityDetail(Activity activity) async {
     if (!_canOpenActivityDetail) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Du er ikke logget ind. Log ind igen.'),
-        ),
+        const SnackBar(content: Text('Du er ikke logget ind. Log ind igen.')),
       );
       return;
     }
@@ -312,16 +386,14 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     );
 
     if (result == true) {
-  await _loadActivities(showFullLoader: false);
+      await _loadActivities(showFullLoader: false);
 
-  if (!mounted) return;
+      if (!mounted) return;
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Aktivitet opdateret'),
-    ),
-  );
-}
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Aktivitet opdateret')));
+    }
   }
 
   Future<void> _logout() async {
@@ -359,9 +431,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
       if (!mounted) return;
 
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
     } catch (e, st) {
@@ -415,7 +485,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
   @override
   Widget build(BuildContext context) {
-    final activities = _activities;
+    final activities = _filteredActivities;
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -446,7 +516,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
                 onPrevious: _goToPreviousDay,
                 onNext: _goToNextDay,
                 onToday: _goToToday,
-                onFilterTap: () {},
+                onFilterTap: _openFilterPanel,
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -478,29 +548,27 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
                           onRefresh: () =>
                               _loadActivities(showFullLoader: false),
                           child: _isLoading
-                              ? const Center(
-                                  child: CircularProgressIndicator(),
-                                )
+                              ? const Center(child: CircularProgressIndicator())
                               : activities.isEmpty
-                                  ? _EmptyActivitiesView(
-                                      isChildSession: _isChildSession,
-                                    )
-                                  : ListView.separated(
-                                      physics:
-                                          const AlwaysScrollableScrollPhysics(),
-                                      itemCount: activities.length,
-                                      separatorBuilder: (_, _) =>
-                                          const SizedBox(height: 10),
-                                      itemBuilder: (context, index) {
-                                        final activity = activities[index];
+                              ? _EmptyActivitiesView(
+                                  isChildSession: _isChildSession,
+                                )
+                              : ListView.separated(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  itemCount: activities.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder: (context, index) {
+                                    final activity = activities[index];
 
-                                        return ActivityCard(
-                                          activity: activity,
-                                          onTap: () =>
-                                              _openActivityDetail(activity),
-                                        );
-                                      },
-                                    ),
+                                    return ActivityCard(
+                                      activity: activity,
+                                      onTap: () =>
+                                          _openActivityDetail(activity),
+                                    );
+                                  },
+                                ),
                         ),
                       ),
                     ],
@@ -543,11 +611,7 @@ class _TopHeader extends StatelessWidget {
                   height: 24,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Icon(
-                  Icons.logout,
-                  size: 28,
-                  color: Colors.black,
-                ),
+              : const Icon(Icons.logout, size: 28, color: Colors.black),
         ),
         const Spacer(),
         if (isChildSession)
@@ -588,9 +652,7 @@ class _ScreenTitle extends StatelessWidget {
 class _DailySummaryCard extends StatelessWidget {
   final List<Activity> activities;
 
-  const _DailySummaryCard({
-    required this.activities,
-  });
+  const _DailySummaryCard({required this.activities});
 
   Color _activityColor(Activity activity) {
     if (activity.isCompleted) {
@@ -616,17 +678,12 @@ class _DailySummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF8F8F8),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE0E0E0),
-        ),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
       ),
       child: activities.isEmpty
           ? const Text(
               'Ingen aktiviteter planlagt for denne dag',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.black54,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.black54),
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -660,9 +717,7 @@ class _DailySummaryCard extends StatelessWidget {
 class _EmptyActivitiesView extends StatelessWidget {
   final bool isChildSession;
 
-  const _EmptyActivitiesView({
-    required this.isChildSession,
-  });
+  const _EmptyActivitiesView({required this.isChildSession});
 
   @override
   Widget build(BuildContext context) {
@@ -672,11 +727,7 @@ class _EmptyActivitiesView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.event_note_outlined,
-              size: 38,
-              color: Colors.black45,
-            ),
+            Icon(Icons.event_note_outlined, size: 38, color: Colors.black45),
             SizedBox(height: 10),
             Text(
               'Ingen aktiviteter',
