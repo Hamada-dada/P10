@@ -10,6 +10,9 @@ import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
 import 'daily_calendar_screen.dart';
 import 'weekly_calendar_screen.dart';
+import '../models/profile.dart';
+import '../services/profile_service.dart';
+import '../widgets/filter_panel.dart';
 
 class MonthlyCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -52,7 +55,13 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   late DateTime _focusedDate;
 
   Map<String, List<Activity>> _activitiesByDate = {};
-  bool _isLoading = true;
+bool _isLoading = true;
+
+final ProfileService _profileService = ProfileService();
+
+List<Profile> _filterProfiles = [];
+Set<String> _selectedFilterProfileIds = {};
+bool _showFamilyActivities = false;
 
   bool get _isChildSession => widget.isChildSession;
 
@@ -89,6 +98,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     debugPrint('MonthlyCalendarScreen: childRole=${widget.childRole}');
 
     _loadMonthActivities();
+    _loadFilterProfiles();
   }
 
   Future<void> _loadMonthActivities() async {
@@ -179,6 +189,39 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
       );
     }
   }
+  Future<void> _loadFilterProfiles() async {
+  try {
+    if (_isChildSession) {
+      if (widget.childProfileId == null) return;
+
+      setState(() {
+        _selectedFilterProfileIds = {widget.childProfileId!};
+        _showFamilyActivities = false;
+      });
+
+      return;
+    }
+
+    final currentParent = await _profileService.getMyParentProfile();
+
+    if (currentParent == null) return;
+
+    final profiles = await _profileService.getFamilyProfiles(
+      currentParent.familyId,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _filterProfiles = profiles;
+      _selectedFilterProfileIds = {currentParent.id};
+      _showFamilyActivities = false;
+    });
+  } catch (e, st) {
+    debugPrint('MonthlyCalendarScreen _loadFilterProfiles failed: $e');
+    debugPrintStack(stackTrace: st);
+  }
+}
 
   Future<void> _goToPreviousMonth() async {
     setState(() {
@@ -220,7 +263,25 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
 
     await _loadMonthActivities();
   }
+  Future<void> _openFilterPanel() async {
+  final result = await showModalBottomSheet<Map<String, dynamic>>(
+    context: context,
+    builder: (sheetContext) {
+      return FilterPanel(
+        profiles: _filterProfiles,
+        selectedProfileIds: _selectedFilterProfileIds,
+        showFamilyActivities: _showFamilyActivities,
+      );
+    },
+  );
 
+  if (result == null || !mounted) return;
+
+  setState(() {
+    _selectedFilterProfileIds = result['profileIds'] as Set<String>;
+    _showFamilyActivities = result['showFamily'] as bool;
+  });
+}
   Future<void> _openCreateActivityScreen() async {
     if (!_canCreateActivity) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -366,13 +427,36 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     return '${normalized.year}-${normalized.month}-${normalized.day}';
   }
 
-  List<Activity> _getActivitiesForDate(DateTime date) {
-    return _activitiesByDate[_dateKey(date)] ?? const [];
+  List<Activity> _filterActivities(List<Activity> activities) {
+  if (_selectedFilterProfileIds.isEmpty && !_showFamilyActivities) {
+    return activities;
   }
 
+  return activities.where((activity) {
+    final matchesProfile = activity.participants.any((participant) {
+      return participant.profileId != null &&
+          _selectedFilterProfileIds.contains(participant.profileId);
+    });
+
+    final matchesFamily = _showFamilyActivities &&
+        activity.participants.any(
+          (participant) => participant.externalName == 'Familie',
+        );
+
+    return matchesProfile || matchesFamily;
+  }).toList();
+}
+
+List<Activity> _getActivitiesForDate(DateTime date) {
+  final activities = _activitiesByDate[_dateKey(date)] ?? const [];
+  return _filterActivities(activities);
+}
+
   bool get _hasAnyActivities {
-    return _activitiesByDate.values.any((activities) => activities.isNotEmpty);
-  }
+  return _activitiesByDate.values.any(
+    (activities) => _filterActivities(activities).isNotEmpty,
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -429,7 +513,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
                 onPrevious: _goToPreviousMonth,
                 onNext: _goToNextMonth,
                 onToday: _goToToday,
-                onFilterTap: () {},
+                onFilterTap: _openFilterPanel,
               ),
               SizedBox(height: mediumGap),
               Expanded(
