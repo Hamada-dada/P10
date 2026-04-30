@@ -568,11 +568,20 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
                                     final activity = activities[index];
 
                                     return ActivityCard(
-                                      activity: activity,
-                                      profiles: _filterProfiles,
-                                      onTap: () =>
-                                          _openActivityDetail(activity),
-                                    );
+  activity: activity,
+  profiles: _filterProfiles,
+  onTap: () => _openActivityDetail(activity),
+  onCompletedChanged: (isCompleted) async {
+    // TODO: save this change to Supabase
+    setState(() {
+      _activities = _activities.map((existing) {
+        if (existing.id != activity.id) return existing;
+
+        return existing.copyWith(isCompleted: isCompleted);
+      }).toList();
+    });
+  },
+);
                                   },
                                 ),
                         ),

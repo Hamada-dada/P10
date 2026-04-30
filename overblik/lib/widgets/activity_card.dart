@@ -6,12 +6,14 @@ class ActivityCard extends StatelessWidget {
   final Activity activity;
   final List<Profile> profiles;
   final VoidCallback? onTap;
+  final ValueChanged<bool>? onCompletedChanged;
 
   const ActivityCard({
     super.key,
     required this.activity,
     required this.profiles,
     this.onTap,
+    this.onCompletedChanged,
   });
 
   String _formatTime(DateTime dateTime) {
@@ -72,19 +74,32 @@ class ActivityCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              IconButton(
+  tooltip: activity.isCompleted ? 'Marker som ikke færdig' : 'Marker som færdig',
+  onPressed: onCompletedChanged == null
+      ? null
+      : () => onCompletedChanged!(!activity.isCompleted),
+  icon: Icon(
+    activity.isCompleted
+        ? Icons.check_box
+        : Icons.check_box_outline_blank,
+    color: activity.isCompleted ? Colors.green : Colors.black54,
+  ),
+),
+const SizedBox(width: 4),
               SizedBox(
                 width: 72,
                 child: Text(
                   '${_formatTime(activity.startTime)}\n${_formatTime(activity.endTime)}',
                   style: const TextStyle(
                     fontFamily: 'Italiana',
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.w400,
                     color: Colors.black,
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   '${activity.title} ${activity.emoji}',
@@ -92,7 +107,7 @@ class ActivityCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontFamily: 'Italiana',
-                    fontSize: 24,
+                    fontSize: 20,
                     fontWeight: FontWeight.w400,
                     color: Colors.black,
                   ),
@@ -121,12 +136,12 @@ class ActivityCard extends StatelessWidget {
                         return Padding(
                           padding: const EdgeInsets.only(right: 4),
                           child: CircleAvatar(
-                            radius: 15,
+                            radius: 13,
                             backgroundColor: const Color(0xFFA2E5AD),
                             child: Text(
                               initials,
                               style: const TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.black,
                               ),
