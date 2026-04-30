@@ -281,6 +281,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
     await _loadActivities();
   }
+
   Future<void> _openFilterPanel() async {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -300,6 +301,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
       _showFamilyActivities = result['showFamily'] as bool;
     });
   }
+
   Future<void> _openCreateActivityScreen() async {
     if (!_canCreateActivity) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -486,6 +488,9 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   @override
   Widget build(BuildContext context) {
     final activities = _filteredActivities;
+    debugPrint(
+      'DailyCalendarScreen: raw=${_activities.length}, filtered=${activities.length}, profiles=${_filterProfiles.length}, selected=$_selectedFilterProfileIds, showFamily=$_showFamilyActivities',
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -564,6 +569,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
                                     return ActivityCard(
                                       activity: activity,
+                                      profiles: _filterProfiles,
                                       onTap: () =>
                                           _openActivityDetail(activity),
                                     );
