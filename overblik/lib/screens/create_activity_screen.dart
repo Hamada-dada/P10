@@ -28,6 +28,7 @@ class CreateActivityScreen extends StatefulWidget {
 }
 
 class _CreateActivityScreenState extends State<CreateActivityScreen> {
+  int _participantDropdownResetKey = 0;
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _imagePicker = ImagePicker();
   final RewardService _rewardService = RewardService();
@@ -601,7 +602,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       },
     );
 
-    controller.dispose();
+    //controller.dispose();
 
     if (!mounted || value == null || value.trim().isEmpty) return;
 
@@ -620,6 +621,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
       _participantOptions = nextOptions;
       _selectedParticipants = nextSelected;
+      _participantDropdownResetKey++;
       _revalidateSelectedRewards();
     });
   }
@@ -636,7 +638,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
   void _removeChecklistItem(int index) {
     setState(() {
-      _checklistControllers[index].dispose();
       _checklistControllers.removeAt(index);
 
       if (_checklistControllers.isEmpty) {
@@ -648,10 +649,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   void _toggleChecklist() {
     setState(() {
       if (_showChecklist) {
-        for (final controller in _checklistControllers) {
-          controller.dispose();
-        }
-
         _checklistControllers = [];
         _showChecklist = false;
       } else {
@@ -1121,26 +1118,29 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                   ],
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<String>(
+                                    key: ValueKey(_participantDropdownResetKey),
+                                    initialValue: null,
                                     decoration: const InputDecoration(
                                       labelText: 'Tilføj deltagere',
                                       border: OutlineInputBorder(),
                                     ),
-                                    items: _participantOptions
-                                        .where(
-                                          (option) =>
-                                      !_selectedParticipants.contains(option),
-                                    )
-                                        .map((participant) {
+                                    items: availableParticipantOptions.map((participant) {
                                       return DropdownMenuItem<String>(
                                         value: participant,
                                         child: Text(participant),
                                       );
                                     }).toList(),
-                                    onChanged: (value) {
+                                    onChanged: availableParticipantOptions.isEmpty
+                                        ? null
+                                        : (value) {
                                       if (value == null) return;
 
                                       setState(() {
-                                        _selectedParticipants.add(value);
+                                        _selectedParticipants = _uniqueStrings([
+                                          ..._selectedParticipants,
+                                          value,
+                                        ]);
+                                        _participantDropdownResetKey++;
                                         _revalidateSelectedRewards();
                                       });
                                     },
@@ -1174,6 +1174,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                           onDeleted: () {
                                             setState(() {
                                               _selectedParticipants.remove(participant);
+                                              _participantDropdownResetKey++;
                                               _revalidateSelectedRewards();
                                             });
                                           },
