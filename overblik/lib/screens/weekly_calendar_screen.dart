@@ -11,6 +11,9 @@ import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
 import 'daily_calendar_screen.dart';
 import 'monthly_calendar_screen.dart';
+import '../models/profile.dart';
+import '../services/profile_service.dart';
+import '../widgets/filter_panel.dart';
 
 class WeeklyCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -56,7 +59,13 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   late DateTime _focusedDate;
 
   Map<String, List<Activity>> _activitiesByDate = {};
-  bool _isLoading = true;
+bool _isLoading = true;
+
+final ProfileService _profileService = ProfileService();
+
+List<Profile> _filterProfiles = [];
+Set<String> _selectedFilterProfileIds = {};
+bool _showFamilyActivities = false;
 
   bool get _isChildSession => widget.isChildSession;
 
@@ -100,6 +109,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
 
     if (_canUseScreen) {
       _loadWeekActivities();
+    _loadFilterProfiles();  
     } else {
       debugPrint(
         'WeeklyCalendarScreen: no auth user and no child session, skipping activity load',
@@ -169,6 +179,39 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       );
     }
   }
+  Future<void> _loadFilterProfiles() async {
+  try {
+    if (_isChildSession) {
+      if (widget.childProfileId == null) return;
+
+      setState(() {
+        _selectedFilterProfileIds = {widget.childProfileId!};
+        _showFamilyActivities = false;
+      });
+
+      return;
+    }
+
+    final currentParent = await _profileService.getMyParentProfile();
+
+    if (currentParent == null) return;
+
+    final profiles = await _profileService.getFamilyProfiles(
+      currentParent.familyId,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _filterProfiles = profiles;
+      _selectedFilterProfileIds = {currentParent.id};
+      _showFamilyActivities = false;
+    });
+  } catch (e, st) {
+    debugPrint('WeeklyCalendarScreen _loadFilterProfiles failed: $e');
+    debugPrintStack(stackTrace: st);
+  }
+}
 
   Future<void> _goToPreviousWeek() async {
     setState(() {
@@ -243,7 +286,25 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       ),
     );
   }
+  Future<void> _openFilterPanel() async {
+  final result = await showModalBottomSheet<Map<String, dynamic>>(
+    context: context,
+    builder: (sheetContext) {
+      return FilterPanel(
+        profiles: _filterProfiles,
+        selectedProfileIds: _selectedFilterProfileIds,
+        showFamilyActivities: _showFamilyActivities,
+      );
+    },
+  );
 
+  if (result == null || !mounted) return;
+
+  setState(() {
+    _selectedFilterProfileIds = result['profileIds'] as Set<String>;
+    _showFamilyActivities = result['showFamily'] as bool;
+  });
+  }
   Future<void> _openCreateActivityScreen() async {
     if (!_canCreateActivity) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -283,9 +344,30 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     }
   }
 
-  List<Activity> _activitiesForDate(DateTime date) {
-    return _activitiesByDate[_dateKey(date)] ?? const [];
+  List<Activity> _filterActivities(List<Activity> activities) {
+  if (_selectedFilterProfileIds.isEmpty && !_showFamilyActivities) {
+    return activities;
   }
+
+  return activities.where((activity) {
+    final matchesProfile = activity.participants.any((participant) {
+      return participant.profileId != null &&
+          _selectedFilterProfileIds.contains(participant.profileId);
+    });
+
+    final matchesFamily = _showFamilyActivities &&
+        activity.participants.any(
+          (participant) => participant.externalName == 'Familie',
+        );
+
+    return matchesProfile || matchesFamily;
+  }).toList();
+}
+
+List<Activity> _activitiesForDate(DateTime date) {
+  final activities = _activitiesByDate[_dateKey(date)] ?? const [];
+  return _filterActivities(activities);
+}
 
   Activity? _getWeeklyHighlight(List<Activity> activities) {
     if (activities.isEmpty) return null;
@@ -318,8 +400,10 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   }
 
   bool get _hasAnyActivities {
-    return _activitiesByDate.values.any((activities) => activities.isNotEmpty);
-  }
+  return _activitiesByDate.values.any(
+    (activities) => _filterActivities(activities).isNotEmpty,
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -365,7 +449,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
                 onPrevious: _goToPreviousWeek,
                 onNext: _goToNextWeek,
                 onToday: _goToToday,
-                onFilterTap: () {},
+                onFilterTap: _openFilterPanel,
               ),
               SizedBox(height: mediumGap),
               Expanded(
