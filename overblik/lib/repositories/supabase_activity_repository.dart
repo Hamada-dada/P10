@@ -18,7 +18,10 @@ class SupabaseActivityRepository implements ActivityRepository {
   final String? childRole;
   final String? childLoginCode;
 
-  static const String _cachedFamilyIdKey = 'cached_current_family_id_v1';
+  static const String _legacyCachedFamilyIdKey =
+      'cached_current_family_id_v1';
+  static const String _cachedFamilyIdPrefix =
+      'cached_current_family_id_v2';
 
   SupabaseActivityRepository(
     this._client, {
@@ -35,6 +38,10 @@ class SupabaseActivityRepository implements ActivityRepository {
         childLoginCode != null;
   }
 
+  String _cachedFamilyIdKeyForUser(String authUserId) {
+    return '${_cachedFamilyIdPrefix}_$authUserId';
+  }
+
   bool _isNetworkException(Object error) {
     if (error is SocketException) return true;
     if (error is http.ClientException) return true;
@@ -49,14 +56,34 @@ class SupabaseActivityRepository implements ActivityRepository {
         text.contains('connection failed');
   }
 
-  Future<void> _cacheCurrentFamilyId(String familyId) async {
+  Future<void> _cacheCurrentFamilyIdForUser({
+    required String authUserId,
+    required String familyId,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_cachedFamilyIdKey, familyId);
+
+    await prefs.setString(
+      _cachedFamilyIdKeyForUser(authUserId),
+      familyId,
+    );
   }
 
-  Future<String?> _getCachedFamilyId() async {
+  Future<String?> _getCachedFamilyIdForUser(String authUserId) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_cachedFamilyIdKey);
+
+    return prefs.getString(
+      _cachedFamilyIdKeyForUser(authUserId),
+    );
+  }
+
+  Future<void> _clearCachedFamilyIdForUser(String authUserId) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.remove(_cachedFamilyIdKeyForUser(authUserId));
+
+    // Remove old global cache because it can leak family context
+    // between different authenticated users.
+    await prefs.remove(_legacyCachedFamilyIdKey);
   }
 
   Future<String?> _getCurrentFamilyId() async {
@@ -65,10 +92,6 @@ class SupabaseActivityRepository implements ActivityRepository {
         'SupabaseActivityRepository: using child session '
         'familyId=$childFamilyId profileId=$childProfileId role=$childRole',
       );
-
-      if (childFamilyId != null && childFamilyId!.trim().isNotEmpty) {
-        await _cacheCurrentFamilyId(childFamilyId!);
-      }
 
       return childFamilyId;
     }
@@ -80,7 +103,11 @@ class SupabaseActivityRepository implements ActivityRepository {
     );
 
     if (user == null) {
-      return _getCachedFamilyId();
+      debugPrint(
+        'SupabaseActivityRepository: no auth user, returning null family id',
+      );
+
+      return null;
     }
 
     try {
@@ -89,6 +116,7 @@ class SupabaseActivityRepository implements ActivityRepository {
           .select('family_id')
           .eq('auth_user_id', user.id)
           .eq('role', 'parent')
+          .eq('is_active', true)
           .maybeSingle();
 
       debugPrint(
@@ -96,14 +124,33 @@ class SupabaseActivityRepository implements ActivityRepository {
       );
 
       if (profile == null) {
-        return _getCachedFamilyId();
+        debugPrint(
+          'SupabaseActivityRepository: authenticated user has no active '
+          'parent profile, clearing cache and returning null family id',
+        );
+
+        await _clearCachedFamilyIdForUser(user.id);
+
+        return null;
       }
 
       final familyId = profile['family_id'] as String?;
 
-      if (familyId != null && familyId.trim().isNotEmpty) {
-        await _cacheCurrentFamilyId(familyId);
+      if (familyId == null || familyId.trim().isEmpty) {
+        debugPrint(
+          'SupabaseActivityRepository: parent profile has no family id, '
+          'clearing cache and returning null family id',
+        );
+
+        await _clearCachedFamilyIdForUser(user.id);
+
+        return null;
       }
+
+      await _cacheCurrentFamilyIdForUser(
+        authUserId: user.id,
+        familyId: familyId,
+      );
 
       return familyId;
     } catch (e, st) {
@@ -111,10 +158,11 @@ class SupabaseActivityRepository implements ActivityRepository {
       debugPrintStack(stackTrace: st);
 
       if (_isNetworkException(e)) {
-        final cachedFamilyId = await _getCachedFamilyId();
+        final cachedFamilyId = await _getCachedFamilyIdForUser(user.id);
 
         debugPrint(
-          'SupabaseActivityRepository: using cached family id = $cachedFamilyId',
+          'SupabaseActivityRepository: network error, using user-scoped '
+          'cached family id = $cachedFamilyId',
         );
 
         return cachedFamilyId;
@@ -146,6 +194,21 @@ class SupabaseActivityRepository implements ActivityRepository {
     );
   }
 
+  bool _activitySafeForCurrentSession({
+    required Activity activity,
+    required String? currentFamilyId,
+  }) {
+    if (_isChildSession) {
+      return _activityVisibleToCurrentChild(activity);
+    }
+
+    if (currentFamilyId == null || currentFamilyId.trim().isEmpty) {
+      return false;
+    }
+
+    return activity.familyId == currentFamilyId;
+  }
+
   @override
   Future<List<Activity>> getActivitiesForDate(DateTime date) async {
     final familyId = await _getCurrentFamilyId();
@@ -166,7 +229,7 @@ class SupabaseActivityRepository implements ActivityRepository {
     );
 
     try {
-      await _trySyncPendingActivities();
+      await _trySyncPendingActivities(familyId: familyId);
 
       final activities = await _getActivitiesForRangeOnline(
         familyId: familyId,
@@ -184,7 +247,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       return activities;
     } catch (e, st) {
       debugPrint(
-        'SupabaseActivityRepository: date online load failed, using local cache: $e',
+        'SupabaseActivityRepository: date online load failed, using local '
+        'cache only if network error: $e',
       );
       debugPrintStack(stackTrace: st);
 
@@ -232,7 +296,7 @@ class SupabaseActivityRepository implements ActivityRepository {
     );
 
     try {
-      await _trySyncPendingActivities();
+      await _trySyncPendingActivities(familyId: familyId);
 
       final activities = await _getActivitiesForRangeOnline(
         familyId: familyId,
@@ -250,7 +314,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       return activities;
     } catch (e, st) {
       debugPrint(
-        'SupabaseActivityRepository: week online load failed, using local cache: $e',
+        'SupabaseActivityRepository: week online load failed, using local '
+        'cache only if network error: $e',
       );
       debugPrintStack(stackTrace: st);
 
@@ -662,6 +727,16 @@ class SupabaseActivityRepository implements ActivityRepository {
   Future<Activity?> getActivityById(String id) async {
     debugPrint('SupabaseActivityRepository: loading activity id=$id');
 
+    final currentFamilyId = await _getCurrentFamilyId();
+
+    if (currentFamilyId == null) {
+      debugPrint(
+        'SupabaseActivityRepository: no current family id, refusing '
+        'getActivityById local/online load',
+      );
+      return null;
+    }
+
     final localActivity = await _getActivityByIdFromLocal(id);
 
     if (localActivity != null) {
@@ -671,11 +746,14 @@ class SupabaseActivityRepository implements ActivityRepository {
     }
 
     try {
-      await _trySyncPendingActivities();
+      await _trySyncPendingActivities(familyId: currentFamilyId);
 
       if (_isChildSession) {
         if (localActivity != null &&
-            _activityVisibleToCurrentChild(localActivity)) {
+            _activitySafeForCurrentSession(
+              activity: localActivity,
+              currentFamilyId: currentFamilyId,
+            )) {
           return localActivity;
         }
 
@@ -686,6 +764,7 @@ class SupabaseActivityRepository implements ActivityRepository {
           .from('activities')
           .select()
           .eq('id', id)
+          .eq('family_id', currentFamilyId)
           .limit(1);
 
       if (rows.isEmpty) {
@@ -693,7 +772,15 @@ class SupabaseActivityRepository implements ActivityRepository {
           'SupabaseActivityRepository: no online activity found id=$id',
         );
 
-        return localActivity;
+        if (localActivity != null &&
+            _activitySafeForCurrentSession(
+              activity: localActivity,
+              currentFamilyId: currentFamilyId,
+            )) {
+          return localActivity;
+        }
+
+        return null;
       }
 
       final activities = await _buildActivitiesFromRows(
@@ -702,10 +789,19 @@ class SupabaseActivityRepository implements ActivityRepository {
 
       if (activities.isEmpty) {
         debugPrint(
-          'SupabaseActivityRepository: online activity build returned empty id=$id',
+          'SupabaseActivityRepository: online activity build returned empty '
+          'id=$id',
         );
 
-        return localActivity;
+        if (localActivity != null &&
+            _activitySafeForCurrentSession(
+              activity: localActivity,
+              currentFamilyId: currentFamilyId,
+            )) {
+          return localActivity;
+        }
+
+        return null;
       }
 
       await _localCache.upsertCachedActivities(activities);
@@ -723,9 +819,12 @@ class SupabaseActivityRepository implements ActivityRepository {
 
       if (_isNetworkException(e)) {
         if (localActivity != null &&
-            (!_isChildSession || _activityVisibleToCurrentChild(localActivity))) {
+            _activitySafeForCurrentSession(
+              activity: localActivity,
+              currentFamilyId: currentFamilyId,
+            )) {
           debugPrint(
-            'SupabaseActivityRepository: returning local activity id=$id',
+            'SupabaseActivityRepository: returning safe local activity id=$id',
           );
           return localActivity;
         }
@@ -771,7 +870,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       'SupabaseActivityRepository: ownerProfileId=${activity.ownerProfileId}',
     );
     debugPrint(
-      'SupabaseActivityRepository: visibility=${activityVisibilityToDatabase(activity.visibility)}',
+      'SupabaseActivityRepository: visibility='
+      '${activityVisibilityToDatabase(activity.visibility)}',
     );
     debugPrint(
       'SupabaseActivityRepository: participants=${activity.participants.length}',
@@ -787,6 +887,15 @@ class SupabaseActivityRepository implements ActivityRepository {
       );
     }
 
+    final currentFamilyId = await _getCurrentFamilyId();
+
+    if (currentFamilyId == null || activity.familyId != currentFamilyId) {
+      throw Exception(
+        'Cannot add activity because the activity family does not match the '
+        'current active parent family.',
+      );
+    }
+
     try {
       await _insertActivityOnline(activity);
 
@@ -796,7 +905,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       debugPrint('SupabaseActivityRepository: addActivity completed online');
     } on PostgrestException catch (e, st) {
       debugPrint(
-        'SupabaseActivityRepository addActivity PostgrestException: ${e.message}',
+        'SupabaseActivityRepository addActivity PostgrestException: '
+        '${e.message}',
       );
       debugPrint('SupabaseActivityRepository details: ${e.details}');
       debugPrint('SupabaseActivityRepository hint: ${e.hint}');
@@ -836,7 +946,8 @@ class SupabaseActivityRepository implements ActivityRepository {
         .single();
 
     debugPrint(
-      'SupabaseActivityRepository: activity inserted id=${insertedActivity['id']}',
+      'SupabaseActivityRepository: activity inserted '
+      'id=${insertedActivity['id']}',
     );
 
     if (activity.participants.isNotEmpty) {
@@ -876,33 +987,41 @@ class SupabaseActivityRepository implements ActivityRepository {
     }
   }
 
-  Future<void> _trySyncPendingActivities() async {
+  Future<void> _trySyncPendingActivities({
+    required String familyId,
+  }) async {
     if (_isChildSession) {
       debugPrint(
-        'SupabaseActivityRepository: child session, skipping pending activity sync',
+        'SupabaseActivityRepository: child session, skipping pending '
+        'activity sync',
       );
       return;
     }
 
     final pendingActivities = await _localCache.getPendingActivities();
 
-    if (pendingActivities.isEmpty) {
+    final safePendingActivities = pendingActivities
+        .where((activity) => activity.familyId == familyId)
+        .toList();
+
+    if (safePendingActivities.isEmpty) {
       return;
     }
 
     debugPrint(
       'SupabaseActivityRepository: trying to sync '
-      '${pendingActivities.length} pending activities',
+      '${safePendingActivities.length} pending activities for family=$familyId',
     );
 
-    for (final activity in pendingActivities) {
+    for (final activity in safePendingActivities) {
       try {
         await _insertActivityOnline(activity);
         await _localCache.removePendingActivity(activity.id);
         await _localCache.upsertCachedActivities([activity]);
 
         debugPrint(
-          'SupabaseActivityRepository: synced pending activity id=${activity.id}',
+          'SupabaseActivityRepository: synced pending activity '
+          'id=${activity.id}',
         );
       } on PostgrestException catch (e) {
         if (e.code == '23505') {
@@ -910,8 +1029,8 @@ class SupabaseActivityRepository implements ActivityRepository {
           await _localCache.upsertCachedActivities([activity]);
 
           debugPrint(
-            'SupabaseActivityRepository: pending activity already exists online '
-            'id=${activity.id}',
+            'SupabaseActivityRepository: pending activity already exists '
+            'online id=${activity.id}',
           );
 
           continue;
@@ -940,13 +1059,25 @@ class SupabaseActivityRepository implements ActivityRepository {
       );
     }
 
-    debugPrint('SupabaseActivityRepository: updating activity id=${activity.id}');
+    final currentFamilyId = await _getCurrentFamilyId();
+
+    if (currentFamilyId == null || activity.familyId != currentFamilyId) {
+      throw Exception(
+        'Cannot update activity because the activity family does not match '
+        'the current active parent family.',
+      );
+    }
+
+    debugPrint(
+      'SupabaseActivityRepository: updating activity id=${activity.id}',
+    );
 
     try {
       await _client
           .from('activities')
           .update(activity.toActivityRow())
-          .eq('id', activity.id);
+          .eq('id', activity.id)
+          .eq('family_id', currentFamilyId);
 
       await _client
           .from('activity_participants')
@@ -987,7 +1118,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       debugPrint('SupabaseActivityRepository: updateActivity completed');
     } on PostgrestException catch (e, st) {
       debugPrint(
-        'SupabaseActivityRepository updateActivity PostgrestException: ${e.message}',
+        'SupabaseActivityRepository updateActivity PostgrestException: '
+        '${e.message}',
       );
       debugPrint('SupabaseActivityRepository details: ${e.details}');
       debugPrint('SupabaseActivityRepository hint: ${e.hint}');
@@ -1003,7 +1135,8 @@ class SupabaseActivityRepository implements ActivityRepository {
         await _localCache.upsertCachedActivities([activity]);
 
         debugPrint(
-          'SupabaseActivityRepository: updated activity saved locally as pending',
+          'SupabaseActivityRepository: updated activity saved locally as '
+          'pending',
         );
 
         return;
@@ -1021,10 +1154,22 @@ class SupabaseActivityRepository implements ActivityRepository {
       );
     }
 
+    final currentFamilyId = await _getCurrentFamilyId();
+
+    if (currentFamilyId == null) {
+      throw Exception(
+        'Cannot delete activity because no active parent family was found.',
+      );
+    }
+
     debugPrint('SupabaseActivityRepository: deleting activity id=$activityId');
 
     try {
-      await _client.from('activities').delete().eq('id', activityId);
+      await _client
+          .from('activities')
+          .delete()
+          .eq('id', activityId)
+          .eq('family_id', currentFamilyId);
 
       await _localCache.removeCachedActivity(activityId);
       await _localCache.removePendingActivity(activityId);
@@ -1032,7 +1177,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       debugPrint('SupabaseActivityRepository: deleteActivity completed');
     } on PostgrestException catch (e, st) {
       debugPrint(
-        'SupabaseActivityRepository deleteActivity PostgrestException: ${e.message}',
+        'SupabaseActivityRepository deleteActivity PostgrestException: '
+        '${e.message}',
       );
       debugPrint('SupabaseActivityRepository details: ${e.details}');
       debugPrint('SupabaseActivityRepository hint: ${e.hint}');
@@ -1048,7 +1194,8 @@ class SupabaseActivityRepository implements ActivityRepository {
         await _localCache.removePendingActivity(activityId);
 
         debugPrint(
-          'SupabaseActivityRepository: deleted activity locally only while offline',
+          'SupabaseActivityRepository: deleted activity locally only while '
+          'offline',
         );
 
         return;

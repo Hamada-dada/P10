@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/parent_join_service.dart';
 import 'child_login_screen.dart';
-import 'create_family_screen.dart';
 import 'daily_calendar_screen.dart';
+import 'parent_onboarding_choice_screen.dart';
+import 'pending_parent_request_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,6 +16,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _parentFormKey = GlobalKey<FormState>();
+
+  final ParentJoinService _parentJoinService = ParentJoinService();
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -26,6 +30,45 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _routeAfterParentAuth() async {
+    final onboardingState =
+        await _parentJoinService.getParentOnboardingState();
+
+    if (!mounted) return;
+
+    switch (onboardingState.state) {
+      case ParentOnboardingStateType.activeParent:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const DailyCalendarScreen(),
+          ),
+        );
+        return;
+
+      case ParentOnboardingStateType.pendingParentRequest:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PendingParentRequestScreen(
+              requestId: onboardingState.requestId,
+              familyName: onboardingState.familyName,
+            ),
+          ),
+        );
+        return;
+
+      case ParentOnboardingStateType.needsOnboarding:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const ParentOnboardingChoiceScreen(),
+          ),
+        );
+        return;
+    }
   }
 
   Future<void> _handleParentLogin() async {
@@ -45,36 +88,31 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
 
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const DailyCalendarScreen(),
-        ),
-      );
+      await _routeAfterParentAuth();
     } on AuthException catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.message),
+          duration: const Duration(seconds: 5),
         ),
       );
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Noget gik galt under login.'),
+        SnackBar(
+          content: Text('Noget gik galt under login: $e'),
+          duration: const Duration(seconds: 5),
         ),
       );
     } finally {
-      if (!mounted) return;
-
-      setState(() {
-        _isParentLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isParentLoading = false;
+        });
+      }
     }
   }
 
@@ -87,15 +125,14 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _openCreateFamily() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const CreateFamilyScreen(),
-      ),
-    );
-  }
-
+void _openNewParentFlow() {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const ParentOnboardingChoiceScreen(),
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -122,21 +159,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         const _FamilyHero(),
                         const SizedBox(height: 22),
-                        const Text(
-                          'Log ind som forælder',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Fortsæt til familiens kalender',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black54,
-                          ),
+                        const _SectionTitle(
+                          title: 'Forælder',
+                          subtitle: 'Log ind, hvis du allerede har adgang.',
                         ),
                         const SizedBox(height: 14),
                         Form(
@@ -146,31 +171,21 @@ class _LoginScreenState extends State<LoginScreen> {
                               TextFormField(
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
-                                decoration: InputDecoration(
+                                textInputAction: TextInputAction.next,
+                                decoration: _inputDecoration(
                                   labelText: 'Email',
-                                  filled: true,
-                                  fillColor: const Color(0xFFF7F7F7),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFE0E0E0),
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFE0E0E0),
-                                    ),
-                                  ),
                                 ),
                                 validator: (value) {
                                   final text = value?.trim() ?? '';
+
                                   if (text.isEmpty) {
                                     return 'Skriv din email';
                                   }
+
                                   if (!text.contains('@')) {
                                     return 'Skriv en gyldig email';
                                   }
+
                                   return null;
                                 },
                               ),
@@ -178,22 +193,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               TextFormField(
                                 controller: _passwordController,
                                 obscureText: _obscurePassword,
-                                decoration: InputDecoration(
+                                textInputAction: TextInputAction.done,
+                                decoration: _inputDecoration(
                                   labelText: 'Adgangskode',
-                                  filled: true,
-                                  fillColor: const Color(0xFFF7F7F7),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFE0E0E0),
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(
-                                      color: Color(0xFFE0E0E0),
-                                    ),
-                                  ),
                                   suffixIcon: IconButton(
                                     onPressed: () {
                                       setState(() {
@@ -209,13 +211,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 validator: (value) {
                                   final text = value ?? '';
+
                                   if (text.isEmpty) {
                                     return 'Skriv din adgangskode';
                                   }
+
                                   if (text.length < 6) {
                                     return 'Mindst 6 tegn';
                                   }
+
                                   return null;
+                                },
+                                onFieldSubmitted: (_) {
+                                  if (!_isParentLoading) {
+                                    _handleParentLogin();
+                                  }
                                 },
                               ),
                               const SizedBox(height: 16),
@@ -250,7 +260,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             'Log ind',
                                             style: TextStyle(
                                               fontSize: 15,
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.w700,
                                             ),
                                           ),
                                   ),
@@ -259,19 +269,15 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 26),
+                        const SizedBox(height: 24),
                         const Divider(height: 1),
-                        const SizedBox(height: 18),
-                        _TextNavigationRow(
-                          icon: Icons.child_care_outlined,
-                          title: 'Log ind som barn',
+                        const SizedBox(height: 16),
+                        _ChildLoginCard(
                           onTap: _openChildLogin,
                         ),
-                        const SizedBox(height: 10),
-                        _TextNavigationRow(
-                          icon: Icons.group_add_outlined,
-                          title: 'Ny familie',
-                          onTap: _openCreateFamily,
+                        const SizedBox(height: 12),
+                        _NewParentCard(
+                          onTap: _openNewParentFlow,
                         ),
                       ],
                     ),
@@ -280,6 +286,30 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required String labelText,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      filled: true,
+      fillColor: const Color(0xFFF7F7F7),
+      suffixIcon: suffixIcon,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: Color(0xFFE0E0E0),
+        ),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: Color(0xFFE0E0E0),
         ),
       ),
     );
@@ -415,14 +445,46 @@ class _HeroBubble extends StatelessWidget {
   }
 }
 
-class _TextNavigationRow extends StatelessWidget {
-  final IconData icon;
+class _SectionTitle extends StatelessWidget {
   final String title;
+  final String subtitle;
+
+  const _SectionTitle({
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+            color: Colors.black,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.black54,
+            height: 1.3,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChildLoginCard extends StatelessWidget {
   final VoidCallback onTap;
 
-  const _TextNavigationRow({
-    required this.icon,
-    required this.title,
+  const _ChildLoginCard({
     required this.onTap,
   });
 
@@ -431,29 +493,118 @@ class _TextNavigationRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
-          child: Row(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFFE0E0E0),
+            ),
+          ),
+          child: const Row(
             children: [
               Icon(
-                icon,
-                size: 22,
+                Icons.child_care_outlined,
+                size: 26,
                 color: Colors.black87,
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.black,
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Barn',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Log ind med familiekode og børnekode.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.black54,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const Icon(
+              Icon(
+                Icons.chevron_right,
+                color: Colors.black54,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NewParentCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _NewParentCard({
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF6FBF7),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFFE4EFE6),
+            ),
+          ),
+          child: const Row(
+            children: [
+              Icon(
+                Icons.add_home_outlined,
+                size: 26,
+                color: Colors.black87,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Ny forælder?',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Opret en ny familie eller anmod om adgang til en eksisterende familie.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.black54,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
                 Icons.chevron_right,
                 color: Colors.black54,
               ),

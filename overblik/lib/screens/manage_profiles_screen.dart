@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/profile.dart';
+import '../services/parent_join_service.dart';
 import '../services/profile_service.dart';
 import '../widgets/app_top_header.dart';
 
@@ -14,12 +14,22 @@ class ManageProfilesScreen extends StatefulWidget {
 
 class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   final ProfileService _profileService = ProfileService();
+  final ParentJoinService _parentJoinService = ParentJoinService();
 
   Profile? _parentProfile;
   List<Profile> _profiles = [];
+  List<ParentJoinRequest> _joinRequests = [];
 
   bool _isLoading = true;
   String? _errorMessage;
+  String? _processingRequestId;
+  String? _processingProfileId;
+
+  List<ParentJoinRequest> get _pendingJoinRequests {
+    return _joinRequests
+        .where((request) => request.status == 'pending')
+        .toList();
+  }
 
   @override
   void initState() {
@@ -51,6 +61,9 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
         setState(() {
           _parentProfile = null;
           _profiles = [];
+          _joinRequests = [];
+          _processingRequestId = null;
+          _processingProfileId = null;
           _isLoading = false;
           _errorMessage = 'Kunne ikke finde forælderprofilen.';
         });
@@ -60,8 +73,16 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       final profiles =
           await _profileService.getFamilyProfiles(parentProfile.familyId);
 
+      final joinRequests = await _parentJoinService.getJoinRequestsForFamily(
+        parentProfile.familyId,
+      );
+
       debugPrint(
         'ManageProfilesScreen: loaded ${profiles.length} profiles from family ${parentProfile.familyId}',
+      );
+
+      debugPrint(
+        'ManageProfilesScreen: loaded ${joinRequests.length} parent join requests',
       );
 
       for (final profile in profiles) {
@@ -70,25 +91,16 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
         );
       }
 
-      profiles.sort((a, b) {
-        if (a.role == ProfileRole.parent && b.role != ProfileRole.parent) {
-          return -1;
-        }
-
-        if (a.role != ProfileRole.parent && b.role == ProfileRole.parent) {
-          return 1;
-        }
-
-        return a.displayName.toLowerCase().compareTo(
-              b.displayName.toLowerCase(),
-            );
-      });
+      profiles.sort(_sortProfiles);
 
       if (!mounted) return;
 
       setState(() {
         _parentProfile = parentProfile;
         _profiles = profiles;
+        _joinRequests = joinRequests;
+        _processingRequestId = null;
+        _processingProfileId = null;
         _isLoading = false;
       });
     } catch (e, st) {
@@ -98,10 +110,26 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       if (!mounted) return;
 
       setState(() {
+        _processingRequestId = null;
+        _processingProfileId = null;
         _isLoading = false;
         _errorMessage = 'Kunne ikke hente profiler: $e';
       });
     }
+  }
+
+  int _sortProfiles(Profile a, Profile b) {
+    if (a.role == ProfileRole.parent && b.role != ProfileRole.parent) {
+      return -1;
+    }
+
+    if (a.role != ProfileRole.parent && b.role == ProfileRole.parent) {
+      return 1;
+    }
+
+    return a.displayName.toLowerCase().compareTo(
+          b.displayName.toLowerCase(),
+        );
   }
 
   String _roleLabel(ProfileRole role) {
@@ -137,6 +165,217 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
     }
   }
 
+  bool _canRemoveParent(Profile profile) {
+    final currentParent = _parentProfile;
+
+    if (currentParent == null) return false;
+    if (profile.role != ProfileRole.parent) return false;
+    if (!profile.isActive) return false;
+
+    // A parent must not remove their own active profile.
+    if (profile.id == currentParent.id) return false;
+
+    return true;
+  }
+
+  Future<void> _removeParentFromFamily(Profile profile) async {
+    if (!_canRemoveParent(profile)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Denne forælder kan ikke fjernes her.'),
+        ),
+      );
+      return;
+    }
+
+    final shouldRemove = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Fjern forælder?'),
+          content: Text(
+            'Vil du fjerne ${profile.displayName} som forælder i familien? '
+            'Personen mister adgang til familiens kalender.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuller'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Fjern'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || shouldRemove != true) return;
+
+    try {
+      setState(() {
+        _processingProfileId = profile.id;
+      });
+
+      await _parentJoinService.removeParentFromFamily(profile.id);
+
+      await _loadProfiles();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${profile.displayName} blev fjernet som forælder.'),
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('ManageProfilesScreen: remove parent failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      setState(() {
+        _processingProfileId = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Kunne ikke fjerne forælder: $e'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  Future<void> _approveJoinRequest(ParentJoinRequest request) async {
+    final shouldApprove = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Godkend forælder?'),
+          content: Text(
+            'Vil du give ${request.requestedDisplayName} adgang som forælder?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuller'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Godkend'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || shouldApprove != true) return;
+
+    try {
+      setState(() {
+        _processingRequestId = request.requestId;
+      });
+
+      await _parentJoinService.approveJoinRequest(request.requestId);
+
+      await _loadProfiles();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${request.requestedDisplayName} blev godkendt som forælder.',
+          ),
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('ManageProfilesScreen: approve request failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      setState(() {
+        _processingRequestId = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Kunne ikke godkende anmodning: $e'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  Future<void> _rejectJoinRequest(ParentJoinRequest request) async {
+    final shouldReject = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Afvis anmodning?'),
+          content: Text(
+            'Vil du afvise anmodningen fra ${request.requestedDisplayName}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuller'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Afvis'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || shouldReject != true) return;
+
+    try {
+      setState(() {
+        _processingRequestId = request.requestId;
+      });
+
+      await _parentJoinService.rejectJoinRequest(request.requestId);
+
+      await _loadProfiles();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Anmodningen fra ${request.requestedDisplayName} blev afvist.',
+          ),
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('ManageProfilesScreen: reject request failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      setState(() {
+        _processingRequestId = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Kunne ikke afvise anmodning: $e'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
   Future<void> _showCreateChildSheet() async {
     final parentProfile = _parentProfile;
 
@@ -161,13 +400,11 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       },
     );
 
-    if (createdProfile == null) return;
+    if (!mounted || createdProfile == null) return;
 
     debugPrint(
       'ManageProfilesScreen: created profile ${createdProfile.name} | ${createdProfile.role}',
     );
-
-    if (!mounted) return;
 
     setState(() {
       _profiles = [
@@ -175,19 +412,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
         createdProfile,
       ];
 
-      _profiles.sort((a, b) {
-        if (a.role == ProfileRole.parent && b.role != ProfileRole.parent) {
-          return -1;
-        }
-
-        if (a.role != ProfileRole.parent && b.role == ProfileRole.parent) {
-          return 1;
-        }
-
-        return a.displayName.toLowerCase().compareTo(
-              b.displayName.toLowerCase(),
-            );
-      });
+      _profiles.sort(_sortProfiles);
     });
 
     await _loadProfiles();
@@ -262,7 +487,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       },
     );
 
-    if (shouldReset != true) return;
+    if (!mounted || shouldReset != true) return;
 
     try {
       final newCode = await _profileService.resetChildCode(profile.id);
@@ -375,7 +600,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       },
     );
 
-    if (shouldDeactivate != true) return;
+    if (!mounted || shouldDeactivate != true) return;
 
     try {
       await _profileService.updateProfile(
@@ -401,6 +626,43 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
         ),
       );
     }
+  }
+
+  Widget _buildJoinRequestsSection() {
+    final pendingRequests = _pendingJoinRequests;
+
+    if (pendingRequests.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 18),
+        const _SectionTitle(title: 'Afventende forældreanmodninger'),
+        const SizedBox(height: 8),
+        _InlineInfoBox(
+          icon: Icons.group_add_outlined,
+          title: 'Nye forældre',
+          text:
+              '${pendingRequests.length} anmodning(er) afventer godkendelse. Godkend kun personer, der skal have fuld forælderadgang til familien.',
+        ),
+        const SizedBox(height: 12),
+        ...pendingRequests.map(
+          (request) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _ParentJoinRequestCard(
+                request: request,
+                isProcessing: _processingRequestId == request.requestId,
+                onApprove: () => _approveJoinRequest(request),
+                onReject: () => _rejectJoinRequest(request),
+              ),
+            );
+          },
+        ),
+      ],
+    );
   }
 
   Widget _buildBody() {
@@ -494,6 +756,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
             text:
                 'Der er ${_profiles.length} profiler i familien. Forældre har fuld adgang. Børn kan enten have begrænset eller udvidet adgang.',
           ),
+          _buildJoinRequestsSection(),
           const SizedBox(height: 16),
           ..._profiles.map(
             (profile) {
@@ -504,10 +767,14 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
                   roleLabel: _roleLabel(profile.role),
                   roleDescription: _roleDescription(profile.role),
                   roleColor: _roleColor(profile.role),
+                  isProcessing: _processingProfileId == profile.id,
                   onResetCode:
                       profile.isChild ? () => _resetChildCode(profile) : null,
                   onDeactivate:
                       profile.isChild ? () => _deactivateProfile(profile) : null,
+                  onRemoveParent: _canRemoveParent(profile)
+                      ? () => _removeParentFromFamily(profile)
+                      : null,
                   onChangeRole: profile.isChild
                       ? (newRole) => _changeChildRole(profile, newRole)
                       : null,
@@ -524,13 +791,15 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isLoading ? null : _showCreateChildSheet,
-        backgroundColor: const Color(0xFF2E7D32),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.person_add_alt_1),
-        label: const Text('Tilføj barn'),
-      ),
+      floatingActionButton: _parentProfile == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _isLoading ? null : _showCreateChildSheet,
+              backgroundColor: const Color(0xFF2E7D32),
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.person_add_alt_1),
+              label: const Text('Tilføj barn'),
+            ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -768,7 +1037,6 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                     onChanged: _isSaving
                         ? null
                         : (value) {
-                            if (value == null) return;
                             setState(() {
                               _selectedRole = value;
                             });
@@ -783,7 +1051,6 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                     onChanged: _isSaving
                         ? null
                         : (value) {
-                            if (value == null) return;
                             setState(() {
                               _selectedRole = value;
                             });
@@ -837,13 +1104,138 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
   }
 }
 
+class _ParentJoinRequestCard extends StatelessWidget {
+  final ParentJoinRequest request;
+  final bool isProcessing;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+
+  const _ParentJoinRequestCard({
+    required this.request,
+    required this.isProcessing,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  String _formatDateTime(DateTime? dateTime) {
+    if (dateTime == null) {
+      return 'Ukendt tidspunkt';
+    }
+
+    final localDateTime = dateTime.toLocal();
+
+    final day = localDateTime.day.toString().padLeft(2, '0');
+    final month = localDateTime.month.toString().padLeft(2, '0');
+    final year = localDateTime.year.toString();
+    final hour = localDateTime.hour.toString().padLeft(2, '0');
+    final minute = localDateTime.minute.toString().padLeft(2, '0');
+
+    return '$day/$month/$year $hour:$minute';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFFFECB3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: Colors.white,
+                child: Text(
+                  request.requestedEmoji,
+                  style: const TextStyle(fontSize: 23),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      request.requestedDisplayName,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Anmodet: ${_formatDateTime(request.createdAt)}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isProcessing)
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Denne person får fuld forælderadgang, hvis anmodningen godkendes.',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.black87,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: isProcessing ? null : onReject,
+                  icon: const Icon(Icons.close),
+                  label: const Text('Afvis'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: isProcessing ? null : onApprove,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E7D32),
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.check),
+                  label: const Text('Godkend'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProfileCard extends StatelessWidget {
   final Profile profile;
   final String roleLabel;
   final String roleDescription;
   final Color roleColor;
+  final bool isProcessing;
   final VoidCallback? onResetCode;
   final VoidCallback? onDeactivate;
+  final VoidCallback? onRemoveParent;
   final ValueChanged<ProfileRole>? onChangeRole;
 
   const _ProfileCard({
@@ -851,8 +1243,10 @@ class _ProfileCard extends StatelessWidget {
     required this.roleLabel,
     required this.roleDescription,
     required this.roleColor,
+    required this.isProcessing,
     this.onResetCode,
     this.onDeactivate,
+    this.onRemoveParent,
     this.onChangeRole,
   });
 
@@ -868,7 +1262,7 @@ class _ProfileCard extends StatelessWidget {
         border: Border.all(
           color: profile.isActive
               ? const Color(0xFFE0E0E0)
-              : Colors.redAccent.withOpacity(0.35),
+              : Colors.redAccent.withValues(alpha: 0.35),
         ),
       ),
       child: Column(
@@ -921,7 +1315,7 @@ class _ProfileCard extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: roleColor.withOpacity(0.35),
+                color: roleColor.withValues(alpha: 0.35),
               ),
             ),
             child: Row(
@@ -960,6 +1354,26 @@ class _ProfileCard extends StatelessWidget {
               ],
             ),
           ),
+          if (profile.role == ProfileRole.parent && onRemoveParent != null) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: isProcessing ? null : onRemoveParent,
+              icon: isProcessing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.person_remove_outlined),
+              label: const Text('Fjern forælder'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.redAccent,
+                side: const BorderSide(
+                  color: Colors.redAccent,
+                ),
+              ),
+            ),
+          ],
           if (isChild) ...[
             const SizedBox(height: 12),
             Row(
@@ -982,7 +1396,7 @@ class _ProfileCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<ProfileRole>(
-              value: profile.role,
+              initialValue: profile.role,
               decoration: const InputDecoration(
                 labelText: 'Adgangsniveau',
                 border: OutlineInputBorder(),
@@ -1036,7 +1450,7 @@ class _RoleOptionTile extends StatelessWidget {
   final String subtitle;
   final ProfileRole value;
   final ProfileRole groupValue;
-  final ValueChanged<ProfileRole?>? onChanged;
+  final ValueChanged<ProfileRole>? onChanged;
 
   const _RoleOptionTile({
     required this.title,
@@ -1065,13 +1479,11 @@ class _RoleOptionTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Radio<ProfileRole>(
-              value: value,
-              groupValue: groupValue,
-              onChanged: onChanged,
-              activeColor: const Color(0xFF2E7D32),
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? const Color(0xFF2E7D32) : Colors.black54,
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

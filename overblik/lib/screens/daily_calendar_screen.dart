@@ -578,20 +578,62 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
                                     final activity = activities[index];
 
                                     return ActivityCard(
-  activity: activity,
-  profiles: _filterProfiles,
-  onTap: () => _openActivityDetail(activity),
-  onCompletedChanged: (isCompleted) async {
-    // TODO: save this change to Supabase
-    setState(() {
-      _activities = _activities.map((existing) {
-        if (existing.id != activity.id) return existing;
+                                      activity: activity,
+                                      profiles: _filterProfiles,
+                                      onTap: () =>
+                                          _openActivityDetail(activity),
+                                      onCompletedChanged: (isCompleted) async {
+                                        final scaffoldMessenger =
+                                            ScaffoldMessenger.of(context);
+                                        final updatedActivity = activity
+                                            .copyWith(isCompleted: isCompleted);
 
-        return existing.copyWith(isCompleted: isCompleted);
-      }).toList();
-    });
-  },
-);
+                                        setState(() {
+                                          _activities = _activities.map((
+                                            existing,
+                                          ) {
+                                            if (existing.id != activity.id) {
+                                              return existing;
+                                            }
+
+                                            return updatedActivity;
+                                          }).toList();
+                                        });
+
+                                        try {
+                                          await _activityService.updateActivity(
+                                            updatedActivity,
+                                          );
+                                        } catch (e, st) {
+                                          debugPrint(
+                                            'DailyCalendarScreen onCompletedChanged failed: $e',
+                                          );
+                                          debugPrintStack(stackTrace: st);
+
+                                          if (!mounted) return;
+
+                                          setState(() {
+                                            _activities = _activities.map((
+                                              existing,
+                                            ) {
+                                              if (existing.id != activity.id) {
+                                                return existing;
+                                              }
+
+                                              return activity;
+                                            }).toList();
+                                          });
+
+                                          scaffoldMessenger.showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Kunne ikke opdatere aktiviteten.',
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    );
                                   },
                                 ),
                         ),

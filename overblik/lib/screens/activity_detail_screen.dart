@@ -79,10 +79,6 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     return _hasAuthUser && !_isChildSession;
   }
 
-  bool get _isOwnedByCurrentChild {
-    return widget.childProfileId != null &&
-        _activity.ownerProfileId == widget.childProfileId;
-  }
 
   bool get _canEditActivity {
     if (_isParentSession) {
