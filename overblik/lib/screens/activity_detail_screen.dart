@@ -18,6 +18,7 @@ class ActivityDetailScreen extends StatefulWidget {
   final String? childProfileId;
   final String? childDisplayName;
   final String? childRole;
+  final String? childLoginCode;
 
   const ActivityDetailScreen({
     super.key,
@@ -26,12 +27,14 @@ class ActivityDetailScreen extends StatefulWidget {
     this.childProfileId,
     this.childDisplayName,
     this.childRole,
+    this.childLoginCode,
   });
 
   bool get isChildSession {
     return childFamilyId != null &&
         childProfileId != null &&
-        childRole != null;
+        childRole != null &&
+        childLoginCode != null;
   }
 
   bool get isChildLimited {
@@ -58,6 +61,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       childFamilyId: widget.childFamilyId,
       childProfileId: widget.childProfileId,
       childRole: widget.childRole,
+      childLoginCode: widget.childLoginCode,
     ),
   );
 
@@ -85,10 +89,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       return true;
     }
 
-    if (widget.isChildExtended && _isOwnedByCurrentChild) {
-      return true;
-    }
-
+    // Child editing needs child_update_own_activity RPC.
+    // Do not enable until the backend mutation layer exists.
     return false;
   }
 
@@ -97,10 +99,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       return true;
     }
 
-    if (widget.isChildExtended && _isOwnedByCurrentChild) {
-      return true;
-    }
-
+    // Child deletion needs child_delete_own_activity RPC.
+    // Do not enable until the backend mutation layer exists.
     return false;
   }
 
@@ -120,6 +120,14 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   void initState() {
     super.initState();
     _activity = widget.activity;
+
+    debugPrint('ActivityDetailScreen: init');
+    debugPrint('ActivityDetailScreen: isChildSession=$_isChildSession');
+    debugPrint('ActivityDetailScreen: childFamilyId=${widget.childFamilyId}');
+    debugPrint('ActivityDetailScreen: childProfileId=${widget.childProfileId}');
+    debugPrint('ActivityDetailScreen: childRole=${widget.childRole}');
+    debugPrint('ActivityDetailScreen: childLoginCode=${widget.childLoginCode}');
+
     _loadActivity();
   }
 
@@ -140,15 +148,17 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   Future<Map<String, String>> _loadProfileNamesForChild() async {
     final childProfileId = widget.childProfileId;
+    final childLoginCode = widget.childLoginCode;
 
-    if (childProfileId == null) {
+    if (childProfileId == null || childLoginCode == null) {
       return {};
     }
 
     final result = await Supabase.instance.client.rpc(
-      'child_get_family_profiles',
+      'child_get_family_profiles_v2',
       params: {
         'input_profile_id': childProfileId,
+        'input_child_code': childLoginCode,
       },
     );
 
@@ -263,11 +273,33 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   }
 
   String _buildParticipantsText() {
+    if (_activity.visibility == ActivityVisibility.family) {
+      if (_activity.participants.isEmpty) {
+        return 'Hele familien';
+      }
+
+      final participantText =
+          _activity.participants.map(_participantDisplayText).join(', ');
+
+      return 'Hele familien${participantText.trim().isNotEmpty ? ' ($participantText)' : ''}';
+    }
+
     if (_activity.participants.isEmpty) {
       return 'Ingen deltagere';
     }
 
     return _activity.participants.map(_participantDisplayText).join(', ');
+  }
+
+  String _buildVisibilityText() {
+    switch (_activity.visibility) {
+      case ActivityVisibility.family:
+        return 'Synlig for hele familien';
+      case ActivityVisibility.participants:
+        return 'Synlig for valgte deltagere';
+      case ActivityVisibility.private:
+        return 'Privat aktivitet';
+    }
   }
 
   String _buildDescriptionText() {
@@ -330,6 +362,26 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         checklistItems: updatedChecklist,
       );
 
+      if (_isChildSession) {
+        // Optimistic UI only for now.
+        // Permanent child checklist updates need child_set_checklist_item_checked RPC.
+        if (!mounted) return;
+
+        setState(() {
+          _activity = updatedActivity;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Tjeklisteændringer for børnelogin kræver næste backend-trin.',
+            ),
+          ),
+        );
+
+        return;
+      }
+
       await _activityService.updateActivity(updatedActivity);
 
       if (!mounted) return;
@@ -345,9 +397,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Tjeklisteændringer for børnelogin kræver næste backend-trin.',
-          ),
+          content: Text('Kunne ikke opdatere tjeklisten.'),
         ),
       );
     }
@@ -662,6 +712,20 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 24),
+                          _InfoSection(
+                            icon: Icons.visibility_outlined,
+                            child: Text(
+                              _buildVisibilityText(),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.black,
+                                height: 1.5,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
                           _InfoSection(
                             icon: Icons.edit_note,
                             child: Text(

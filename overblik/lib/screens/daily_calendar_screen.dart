@@ -22,6 +22,7 @@ class DailyCalendarScreen extends StatefulWidget {
   final String? childProfileId;
   final String? childDisplayName;
   final String? childRole;
+  final String? childLoginCode;
 
   const DailyCalendarScreen({
     super.key,
@@ -30,12 +31,14 @@ class DailyCalendarScreen extends StatefulWidget {
     this.childProfileId,
     this.childDisplayName,
     this.childRole,
+    this.childLoginCode,
   });
 
   bool get isChildSession {
     return childFamilyId != null &&
         childProfileId != null &&
-        childRole != null;
+        childRole != null &&
+        childLoginCode != null;
   }
 
   bool get isChildLimited {
@@ -58,6 +61,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
       childFamilyId: widget.childFamilyId,
       childProfileId: widget.childProfileId,
       childRole: widget.childRole,
+      childLoginCode: widget.childLoginCode,
     ),
   );
 
@@ -80,8 +84,8 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   }
 
   bool get _canCreateActivity {
-    // Parent creation works now.
-    // Child creation is intentionally disabled until child_create_activity RPC is implemented.
+    // Parent creation works.
+    // Child creation will be enabled later for child_extended through RPC.
     return _hasAuthUser && !_isChildSession;
   }
 
@@ -103,6 +107,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     debugPrint('DailyCalendarScreen: childFamilyId=${widget.childFamilyId}');
     debugPrint('DailyCalendarScreen: childProfileId=${widget.childProfileId}');
     debugPrint('DailyCalendarScreen: childRole=${widget.childRole}');
+    debugPrint('DailyCalendarScreen: childLoginCode=${widget.childLoginCode}');
 
     if (_canUseScreen) {
       _loadActivities();
@@ -164,8 +169,9 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
         });
       }
 
-      final activities =
-          await _activityService.getActivitiesForDate(_focusedDate);
+      final activities = await _activityService.getActivitiesForDate(
+        _focusedDate,
+      );
 
       if (!mounted) return;
 
@@ -241,17 +247,14 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
         return;
       }
 
-      debugPrint(
-        'DailyCalendarScreen: saving activity id=${createdActivity.id}',
-      );
-      debugPrint(
-        'DailyCalendarScreen: familyId=${createdActivity.familyId}',
-      );
-      debugPrint(
-        'DailyCalendarScreen: createdBy=${createdActivity.createdBy}',
-      );
+      debugPrint('DailyCalendarScreen: saving activity id=${createdActivity.id}');
+      debugPrint('DailyCalendarScreen: familyId=${createdActivity.familyId}');
+      debugPrint('DailyCalendarScreen: createdBy=${createdActivity.createdBy}');
       debugPrint(
         'DailyCalendarScreen: ownerProfileId=${createdActivity.ownerProfileId}',
+      );
+      debugPrint(
+        'DailyCalendarScreen: visibility=${activityVisibilityToDatabase(createdActivity.visibility)}',
       );
       debugPrint(
         'DailyCalendarScreen: participants=${createdActivity.participants.length}',
@@ -269,9 +272,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Aktivitet gemt'),
-        ),
+        const SnackBar(content: Text('Aktivitet gemt')),
       );
     } catch (e, st) {
       debugPrint('DailyCalendarScreen _openCreateActivityScreen failed: $e');
@@ -307,21 +308,20 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
           childRole: widget.childRole,
+          childLoginCode: widget.childLoginCode,
         ),
       ),
     );
 
     if (result == true) {
-  await _loadActivities(showFullLoader: false);
+      await _loadActivities(showFullLoader: false);
 
-  if (!mounted) return;
+      if (!mounted) return;
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Aktivitet opdateret'),
-    ),
-  );
-}
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aktivitet opdateret')),
+      );
+    }
   }
 
   Future<void> _logout() async {
@@ -393,6 +393,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
           childRole: widget.childRole,
+          childLoginCode: widget.childLoginCode,
         ),
       ),
     );
@@ -408,6 +409,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
           childRole: widget.childRole,
+          childLoginCode: widget.childLoginCode,
         ),
       ),
     );
@@ -596,16 +598,24 @@ class _DailySummaryCard extends StatelessWidget {
     if (activity.isCompleted) {
       return Colors.green;
     }
+
     if (activity.isImportant) {
       return Colors.red;
     }
+
     if (activity.isFavorite) {
       return Colors.amber;
     }
+
+    if (activity.visibility == ActivityVisibility.family) {
+      return Colors.purple;
+    }
+
     if (activity.ownerProfileId != null) {
       return Colors.blue;
     }
-    return Colors.purple;
+
+    return Colors.grey;
   }
 
   @override

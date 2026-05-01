@@ -18,6 +18,7 @@ class MonthlyCalendarScreen extends StatefulWidget {
   final String? childProfileId;
   final String? childDisplayName;
   final String? childRole;
+  final String? childLoginCode;
 
   const MonthlyCalendarScreen({
     super.key,
@@ -26,12 +27,14 @@ class MonthlyCalendarScreen extends StatefulWidget {
     this.childProfileId,
     this.childDisplayName,
     this.childRole,
+    this.childLoginCode,
   });
 
   bool get isChildSession {
     return childFamilyId != null &&
         childProfileId != null &&
-        childRole != null;
+        childRole != null &&
+        childLoginCode != null;
   }
 
   bool get isChildLimited {
@@ -60,9 +63,13 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     return Supabase.instance.client.auth.currentUser != null;
   }
 
+  bool get _canUseScreen {
+    return _hasAuthUser || _isChildSession;
+  }
+
   bool get _canCreateActivity {
     // Parent creation works.
-    // Child creation is intentionally disabled until child_create_activity RPC is implemented.
+    // Child creation will be enabled later for child_extended through RPC.
     return _hasAuthUser && !_isChildSession;
   }
 
@@ -78,6 +85,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
         childFamilyId: widget.childFamilyId,
         childProfileId: widget.childProfileId,
         childRole: widget.childRole,
+        childLoginCode: widget.childLoginCode,
       ),
     );
 
@@ -87,11 +95,31 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     debugPrint('MonthlyCalendarScreen: childFamilyId=${widget.childFamilyId}');
     debugPrint('MonthlyCalendarScreen: childProfileId=${widget.childProfileId}');
     debugPrint('MonthlyCalendarScreen: childRole=${widget.childRole}');
+    debugPrint('MonthlyCalendarScreen: childLoginCode=${widget.childLoginCode}');
 
-    _loadMonthActivities();
+    if (_canUseScreen) {
+      _loadMonthActivities();
+    } else {
+      debugPrint(
+        'MonthlyCalendarScreen: no auth user and no child session, skipping activity load',
+      );
+
+      _isLoading = false;
+    }
   }
 
   Future<void> _loadMonthActivities() async {
+    if (!_canUseScreen) {
+      if (!mounted) return;
+
+      setState(() {
+        _activitiesByDate = {};
+        _isLoading = false;
+      });
+
+      return;
+    }
+
     try {
       if (mounted) {
         setState(() {
@@ -118,8 +146,9 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
       final end = gridDates.last;
 
       while (!cursor.isAfter(end)) {
-        final weekActivities =
-            await _activityService.getActivitiesForWeek(cursor);
+        final weekActivities = await _activityService.getActivitiesForWeek(
+          cursor,
+        );
 
         // Do NOT deduplicate only by id here.
         // Recurring activities may share the same database id,
@@ -214,6 +243,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
           childRole: widget.childRole,
+          childLoginCode: widget.childLoginCode,
         ),
       ),
     );
@@ -225,9 +255,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     if (!_canCreateActivity) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Oprettelse fra børnelogin kræver næste backend-trin.',
-          ),
+          content: Text('Du har ikke adgang til at oprette aktiviteter.'),
         ),
       );
       return;
@@ -241,10 +269,12 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
         ),
       );
 
-      if (createdActivity != null) {
-        await _activityService.addActivity(createdActivity);
-        await _loadMonthActivities();
+      if (createdActivity == null) {
+        return;
       }
+
+      await _activityService.addActivity(createdActivity);
+      await _loadMonthActivities();
     } catch (e, st) {
       debugPrint('MonthlyCalendarScreen _openCreateActivityScreen failed: $e');
       debugPrintStack(stackTrace: st);
@@ -270,6 +300,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
           childRole: widget.childRole,
+          childLoginCode: widget.childLoginCode,
         ),
       ),
     );
@@ -285,6 +316,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
           childRole: widget.childRole,
+          childLoginCode: widget.childLoginCode,
         ),
       ),
     );
@@ -354,11 +386,15 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
       return Colors.amber;
     }
 
+    if (activity.visibility == ActivityVisibility.family) {
+      return Colors.purple;
+    }
+
     if (activity.ownerProfileId != null) {
       return Colors.blue;
     }
 
-    return Colors.purple;
+    return Colors.grey;
   }
 
   String _dateKey(DateTime date) {

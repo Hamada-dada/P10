@@ -58,7 +58,7 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
         throw Exception('Familiekoden eller børnekoden er forkert.');
       }
 
-      final childSession = rows.first as Map<String, dynamic>;
+      final childSession = Map<String, dynamic>.from(rows.first as Map);
 
       final familyId = childSession['family_id'] as String;
       final profileId = childSession['profile_id'] as String;
@@ -72,17 +72,18 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
 
       if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DailyCalendarScreen(
-          childFamilyId: familyId,
-          childProfileId: profileId,
-          childDisplayName: displayName,
-          childRole: role,
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DailyCalendarScreen(
+            childFamilyId: familyId,
+            childProfileId: profileId,
+            childDisplayName: displayName,
+            childRole: role,
+            childLoginCode: childCode,
+          ),
         ),
-      ),
-    );
+      );
     } on PostgrestException catch (e) {
       debugPrint('ChildLoginScreen PostgrestException message: ${e.message}');
       debugPrint('ChildLoginScreen PostgrestException details: ${e.details}');
@@ -109,13 +110,13 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
           duration: const Duration(seconds: 5),
         ),
       );
-    } finally {
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-    }
+} finally {
+  if (mounted) {
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
   }
 
   InputDecoration _inputDecoration({
@@ -219,7 +220,7 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
                             textInputAction: TextInputAction.done,
                             decoration: _inputDecoration(
                               labelText: 'Børnekode',
-                              hintText: 'Indast børnekoden',
+                              hintText: 'Indtast børnekoden',
                             ),
                             validator: (value) {
                               final text = value?.trim() ?? '';

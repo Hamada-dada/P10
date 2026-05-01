@@ -29,6 +29,7 @@ class CreateActivityScreen extends StatefulWidget {
 
 class _CreateActivityScreenState extends State<CreateActivityScreen> {
   int _participantDropdownResetKey = 0;
+
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _imagePicker = ImagePicker();
   final RewardService _rewardService = RewardService();
@@ -120,20 +121,35 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
     _selectedCustomRecurrence =
         activity?.recurrence == ActivityRecurrence.daily ||
-            activity?.recurrence == ActivityRecurrence.weekly ||
-            activity?.recurrence == ActivityRecurrence.monthly
-        ? activity!.recurrence
-        : ActivityRecurrence.daily;
+                activity?.recurrence == ActivityRecurrence.weekly ||
+                activity?.recurrence == ActivityRecurrence.monthly
+            ? activity!.recurrence
+            : ActivityRecurrence.daily;
 
     final initialChecklist = activity?.checklistItems ?? [];
     _checklistControllers = initialChecklist.isNotEmpty
         ? initialChecklist
-              .map((item) => TextEditingController(text: item.title))
-              .toList()
+            .map((item) => TextEditingController(text: item.title))
+            .toList()
         : [];
 
     _revalidateSelectedRewards();
     _loadProfiles();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _emojiController.dispose();
+    _descriptionController.dispose();
+    _recurrenceIntervalController.dispose();
+    _streakTargetController.dispose();
+
+    for (final controller in _checklistControllers) {
+      controller.dispose();
+    }
+
+    super.dispose();
   }
 
   List<String> _uniqueStrings(List<String> values) {
@@ -185,10 +201,21 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       final externalParticipantOptions = <String>[];
 
       if (_isEditing && widget.existingActivity != null) {
-        for (final participant in widget.existingActivity!.participants) {
+        final existingActivity = widget.existingActivity!;
+
+        if (existingActivity.visibility == ActivityVisibility.family) {
+          selectedParticipants.add('Familie');
+        }
+
+        for (final participant in existingActivity.participants) {
           final externalName = participant.externalName?.trim();
 
           if (externalName != null && externalName.isNotEmpty) {
+            if (externalName == 'Familie') {
+              selectedParticipants.add('Familie');
+              continue;
+            }
+
             selectedParticipants.add(externalName);
 
             if (!externalParticipantOptions.contains(externalName)) {
@@ -200,9 +227,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
           if (participant.profileId != null) {
             final matchingProfile = profiles.cast<Profile?>().firstWhere(
-              (profile) => profile?.id == participant.profileId,
-              orElse: () => null,
-            );
+                  (profile) => profile?.id == participant.profileId,
+                  orElse: () => null,
+                );
 
             if (matchingProfile != null) {
               selectedParticipants.add(matchingProfile.name);
@@ -256,21 +283,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         _profilesError = 'Kunne ikke hente profiler: $e';
       });
     }
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _emojiController.dispose();
-    _descriptionController.dispose();
-    _recurrenceIntervalController.dispose();
-    _streakTargetController.dispose();
-
-    for (final controller in _checklistControllers) {
-      controller.dispose();
-    }
-
-    super.dispose();
   }
 
   DateTime _roundToNextQuarter(DateTime dateTime) {
@@ -386,22 +398,30 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     return _currentParentProfile?.id;
   }
 
+  ActivityVisibility _resolveVisibility() {
+    if (_selectedParticipants.contains('Familie')) {
+      return ActivityVisibility.family;
+    }
+
+    return ActivityVisibility.participants;
+  }
+
   List<ActivityParticipant> _buildParticipants() {
     final participants = <ActivityParticipant>[];
 
     for (final selected in _selectedParticipants) {
       final cleanSelected = selected.trim();
+
       if (cleanSelected.isEmpty) continue;
 
       if (cleanSelected == 'Familie') {
-        participants.add(const ActivityParticipant(externalName: 'Familie'));
         continue;
       }
 
       final matchingProfile = _availableProfiles.cast<Profile?>().firstWhere(
-        (profile) => profile?.name == cleanSelected,
-        orElse: () => null,
-      );
+            (profile) => profile?.name == cleanSelected,
+            orElse: () => null,
+          );
 
       if (matchingProfile != null) {
         participants.add(ActivityParticipant(profileId: matchingProfile.id));
@@ -427,13 +447,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     return List<ActivityChecklistItem>.generate(
       rawItems.length,
       (index) => ActivityChecklistItem(
-        id: index < previousChecklist.length
-            ? previousChecklist[index].id
-            : null,
+        id: index < previousChecklist.length ? previousChecklist[index].id : null,
         title: rawItems[index],
-        isChecked: index < previousChecklist.length
-            ? previousChecklist[index].isChecked
-            : false,
+        isChecked:
+            index < previousChecklist.length ? previousChecklist[index].isChecked : false,
         position: index,
       ),
     );
@@ -522,9 +539,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Kunne ikke vælge billede: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kunne ikke vælge billede: $e')),
+      );
     }
   }
 
@@ -611,7 +628,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       },
     );
 
-    //controller.dispose();
+    controller.dispose();
 
     if (!mounted || value == null || value.trim().isEmpty) return;
 
@@ -644,7 +661,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
   void _removeChecklistItem(int index) {
     setState(() {
-      _checklistControllers.removeAt(index);
+      final controller = _checklistControllers.removeAt(index);
+      controller.dispose();
 
       if (_checklistControllers.isEmpty) {
         _showChecklist = false;
@@ -655,6 +673,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   void _toggleChecklist() {
     setState(() {
       if (_showChecklist) {
+        for (final controller in _checklistControllers) {
+          controller.dispose();
+        }
+
         _checklistControllers = [];
         _showChecklist = false;
       } else {
@@ -765,15 +787,16 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     }
 
     if (_selectedParticipants.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Vælg mindst én deltager.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vælg mindst én deltager.')),
+      );
       return;
     }
 
+    final visibility = _resolveVisibility();
     final participants = _buildParticipants();
 
-    if (participants.isEmpty) {
+    if (participants.isEmpty && visibility != ActivityVisibility.family) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vælg mindst én gyldig deltager.')),
       );
@@ -815,8 +838,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       description: _descriptionController.text.trim(),
       startTime: startDateTime,
       endTime: endDateTime,
-      createdBy: _currentParentProfile!.authUserId,
-      ownerProfileId: _resolveOwnerProfileId(),
+      createdBy:
+          widget.existingActivity?.createdBy ?? _currentParentProfile!.authUserId,
+      ownerProfileId:
+          widget.existingActivity?.ownerProfileId ?? _resolveOwnerProfileId(),
+      visibility: visibility,
       isCompleted: widget.existingActivity?.isCompleted ?? false,
       isImportant: widget.existingActivity?.isImportant ?? false,
       isFavorite: _isFavorite,
@@ -829,12 +855,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       recurrence: _selectedRecurrence == ActivityRecurrence.custom
           ? _selectedCustomRecurrence
           : _selectedRecurrence,
-      recurrenceInterval: _selectedRecurrence == ActivityRecurrence.none
-          ? 1
-          : parsedInterval,
-      recurrenceEndDate: _selectedRecurrence == ActivityRecurrence.none
-          ? null
-          : _recurrenceEndDate,
+      recurrenceInterval:
+          _selectedRecurrence == ActivityRecurrence.none ? 1 : parsedInterval,
+      recurrenceEndDate:
+          _selectedRecurrence == ActivityRecurrence.none ? null : _recurrenceEndDate,
       createdAt: widget.existingActivity?.createdAt,
       updatedAt: widget.existingActivity?.updatedAt,
       participants: participants,
@@ -1014,12 +1038,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                           },
                           children: [
                             Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                12,
-                                12,
-                                12,
-                                12,
-                              ),
+                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -1029,16 +1048,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       labelText: 'Gentag aktivitet',
                                       border: OutlineInputBorder(),
                                     ),
-                                    items: ActivityRecurrence.values.map((
-                                      recurrence,
-                                    ) {
-                                      return DropdownMenuItem<
-                                        ActivityRecurrence
-                                      >(
+                                    items:
+                                        ActivityRecurrence.values.map((recurrence) {
+                                      return DropdownMenuItem<ActivityRecurrence>(
                                         value: recurrence,
-                                        child: Text(
-                                          _recurrenceLabel(recurrence),
-                                        ),
+                                        child: Text(_recurrenceLabel(recurrence)),
                                       );
                                     }).toList(),
                                     onChanged: (value) {
@@ -1054,9 +1068,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                     const SizedBox(height: 12),
                                     if (_selectedRecurrence ==
                                         ActivityRecurrence.custom) ...[
-                                      DropdownButtonFormField<
-                                        ActivityRecurrence
-                                      >(
+                                      DropdownButtonFormField<ActivityRecurrence>(
                                         initialValue: _selectedCustomRecurrence,
                                         decoration: const InputDecoration(
                                           labelText: 'Gentag hver',
@@ -1090,8 +1102,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       controller: _recurrenceIntervalController,
                                       keyboardType: TextInputType.number,
                                       decoration: InputDecoration(
-                                        labelText:
-                                            _selectedRecurrence ==
+                                        labelText: _selectedRecurrence ==
                                                 ActivityRecurrence.custom
                                             ? 'Hver X ${_intervalSuffix(_selectedCustomRecurrence)}'
                                             : 'Hver X ${_intervalSuffix(_selectedRecurrence)}',
@@ -1115,7 +1126,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                         return null;
                                       },
                                     ),
-
                                     const SizedBox(height: 12),
                                     _PickerTile(
                                       label: 'Gentag indtil',
@@ -1143,16 +1153,14 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       labelText: 'Tilføj deltagere',
                                       border: OutlineInputBorder(),
                                     ),
-                                    items: availableParticipantOptions.map((
-                                      participant,
-                                    ) {
+                                    items: availableParticipantOptions
+                                        .map((participant) {
                                       return DropdownMenuItem<String>(
                                         value: participant,
                                         child: Text(participant),
                                       );
                                     }).toList(),
-                                    onChanged:
-                                        availableParticipantOptions.isEmpty
+                                    onChanged: availableParticipantOptions.isEmpty
                                         ? null
                                         : (value) {
                                             if (value == null) return;
@@ -1160,9 +1168,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                             setState(() {
                                               _selectedParticipants =
                                                   _uniqueStrings([
-                                                    ..._selectedParticipants,
-                                                    value,
-                                                  ]);
+                                                ..._selectedParticipants,
+                                                value,
+                                              ]);
                                               _participantDropdownResetKey++;
                                               _revalidateSelectedRewards();
                                             });
@@ -1172,12 +1180,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                   Align(
                                     alignment: Alignment.centerLeft,
                                     child: TextButton.icon(
-                                      onPressed:
-                                          _showAddExternalParticipantDialog,
+                                      onPressed: _showAddExternalParticipantDialog,
                                       icon: const Icon(Icons.person_add_alt_1),
-                                      label: const Text(
-                                        'Tilføj andre deltagere',
-                                      ),
+                                      label: const Text('Tilføj andre deltagere'),
                                     ),
                                   ),
                                   const SizedBox(height: 10),
@@ -1193,22 +1198,21 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                     Wrap(
                                       spacing: 8,
                                       runSpacing: 8,
-                                      children: _selectedParticipants.map((
-                                        participant,
-                                      ) {
-                                        return Chip(
-                                          label: Text(participant),
-                                          onDeleted: () {
-                                            setState(() {
-                                              _selectedParticipants.remove(
-                                                participant,
-                                              );
-                                              _participantDropdownResetKey++;
-                                              _revalidateSelectedRewards();
-                                            });
-                                          },
-                                        );
-                                      }).toList(),
+                                      children: _selectedParticipants.map(
+                                        (participant) {
+                                          return Chip(
+                                            label: Text(participant),
+                                            onDeleted: () {
+                                              setState(() {
+                                                _selectedParticipants
+                                                    .remove(participant);
+                                                _participantDropdownResetKey++;
+                                                _revalidateSelectedRewards();
+                                              });
+                                            },
+                                          );
+                                        },
+                                      ).toList(),
                                     ),
                                   const SizedBox(height: 12),
                                   Container(
@@ -1244,14 +1248,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                                   maxLines: null,
                                                   decoration:
                                                       const InputDecoration(
-                                                        labelText:
-                                                            'Beskrivelse',
-                                                        alignLabelWithHint:
-                                                            true,
-                                                        border:
-                                                            InputBorder.none,
-                                                        isCollapsed: true,
-                                                      ),
+                                                    labelText: 'Beskrivelse',
+                                                    alignLabelWithHint: true,
+                                                    border: InputBorder.none,
+                                                    isCollapsed: true,
+                                                  ),
                                                 ),
                                                 if (_imagePath
                                                     .trim()
@@ -1320,7 +1321,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                                   _showRewardFields
                                                       ? Icons.card_giftcard
                                                       : Icons
-                                                            .card_giftcard_outlined,
+                                                          .card_giftcard_outlined,
                                                   color: _showRewardFields
                                                       ? Colors.deepPurple
                                                       : Colors.black87,
@@ -1333,8 +1334,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                                 icon: Icon(
                                                   _showChecklist
                                                       ? Icons.checklist_rtl
-                                                      : Icons
-                                                            .checklist_outlined,
+                                                      : Icons.checklist_outlined,
                                                   color: Colors.black87,
                                                 ),
                                               ),
@@ -1355,43 +1355,42 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                   ),
                                   if (_showChecklist) ...[
                                     const SizedBox(height: 12),
-                                    ...List.generate(_checklistControllers.length, (
-                                      index,
-                                    ) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 8,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.check_box_outline_blank,
-                                              size: 22,
-                                              color: Colors.black54,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: TextField(
-                                                controller:
-                                                    _checklistControllers[index],
-                                                decoration: InputDecoration(
-                                                  hintText:
-                                                      'Punkt ${index + 1}',
-                                                  border:
-                                                      const OutlineInputBorder(),
+                                    ...List.generate(
+                                      _checklistControllers.length,
+                                      (index) {
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 8),
+                                          child: Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.check_box_outline_blank,
+                                                size: 22,
+                                                color: Colors.black54,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: TextField(
+                                                  controller:
+                                                      _checklistControllers[index],
+                                                  decoration: InputDecoration(
+                                                    hintText: 'Punkt ${index + 1}',
+                                                    border:
+                                                        const OutlineInputBorder(),
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            IconButton(
-                                              onPressed: () =>
-                                                  _removeChecklistItem(index),
-                                              icon: const Icon(Icons.close),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }),
+                                              const SizedBox(width: 8),
+                                              IconButton(
+                                                onPressed: () =>
+                                                    _removeChecklistItem(index),
+                                                icon: const Icon(Icons.close),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
                                     Align(
                                       alignment: Alignment.centerLeft,
                                       child: TextButton.icon(
@@ -1410,8 +1409,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       tileColor: const Color(0xFFF8F8F8),
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                          ),
+                                        horizontal: 12,
+                                      ),
                                       title: const Text('Direkte belønning'),
                                       subtitle: const Text(
                                         'Belønning efter én aktivitet.',
@@ -1429,31 +1428,23 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                     if (_enableDirectReward) ...[
                                       const SizedBox(height: 10),
                                       DropdownButtonFormField<String>(
-                                        initialValue:
-                                            directRewards.any(
-                                              (r) =>
-                                                  r.id ==
-                                                  _selectedDirectRewardId,
-                                            )
+                                        initialValue: directRewards.any(
+                                          (r) => r.id == _selectedDirectRewardId,
+                                        )
                                             ? _selectedDirectRewardId
                                             : null,
                                         decoration: const InputDecoration(
                                           labelText: 'Vælg direkte belønning',
                                           border: OutlineInputBorder(),
                                         ),
-                                        items: directRewards
-                                            .map(
-                                              (reward) =>
-                                                  DropdownMenuItem<String>(
-                                                    value: reward.id,
-                                                    child: Text(
-                                                      _rewardDropdownLabel(
-                                                        reward,
-                                                      ),
-                                                    ),
-                                                  ),
-                                            )
-                                            .toList(),
+                                        items: directRewards.map((reward) {
+                                          return DropdownMenuItem<String>(
+                                            value: reward.id,
+                                            child: Text(
+                                              _rewardDropdownLabel(reward),
+                                            ),
+                                          );
+                                        }).toList(),
                                         onChanged: (value) {
                                           setState(() {
                                             _selectedDirectRewardId = value;
@@ -1462,9 +1453,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       ),
                                       if (directRewards.isEmpty)
                                         Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 8,
-                                          ),
+                                          padding:
+                                              const EdgeInsets.only(top: 8),
                                           child: TextButton.icon(
                                             onPressed: _openRewardsScreen,
                                             icon: const Icon(Icons.add),
@@ -1482,8 +1472,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       tileColor: const Color(0xFFF8F8F8),
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                          ),
+                                        horizontal: 12,
+                                      ),
                                       title: const Text('Langsigtet belønning'),
                                       subtitle: const Text(
                                         'Belønning efter flere gennemførelser.',
@@ -1502,12 +1492,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                     if (_enableStreakReward) ...[
                                       const SizedBox(height: 10),
                                       DropdownButtonFormField<String>(
-                                        initialValue:
-                                            streakRewards.any(
-                                              (r) =>
-                                                  r.id ==
-                                                  _selectedStreakRewardId,
-                                            )
+                                        initialValue: streakRewards.any(
+                                          (r) => r.id == _selectedStreakRewardId,
+                                        )
                                             ? _selectedStreakRewardId
                                             : null,
                                         decoration: const InputDecoration(
@@ -1515,19 +1502,14 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                               'Vælg langsigtet belønning',
                                           border: OutlineInputBorder(),
                                         ),
-                                        items: streakRewards
-                                            .map(
-                                              (reward) =>
-                                                  DropdownMenuItem<String>(
-                                                    value: reward.id,
-                                                    child: Text(
-                                                      _rewardDropdownLabel(
-                                                        reward,
-                                                      ),
-                                                    ),
-                                                  ),
-                                            )
-                                            .toList(),
+                                        items: streakRewards.map((reward) {
+                                          return DropdownMenuItem<String>(
+                                            value: reward.id,
+                                            child: Text(
+                                              _rewardDropdownLabel(reward),
+                                            ),
+                                          );
+                                        }).toList(),
                                         onChanged: (value) {
                                           setState(() {
                                             _selectedStreakRewardId = value;
@@ -1559,9 +1541,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       ),
                                       if (streakRewards.isEmpty)
                                         Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 8,
-                                          ),
+                                          padding:
+                                              const EdgeInsets.only(top: 8),
                                           child: TextButton.icon(
                                             onPressed: _openRewardsScreen,
                                             icon: const Icon(Icons.add),
@@ -1601,9 +1582,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               child: Text(
-                                _isEditing
-                                    ? 'Gem ændringer'
-                                    : 'Opret aktivitet',
+                                _isEditing ? 'Gem ændringer' : 'Opret aktivitet',
                               ),
                             ),
                           ),
@@ -1625,7 +1604,10 @@ class _TopBar extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
 
-  const _TopBar({required this.title, required this.onBack});
+  const _TopBar({
+    required this.title,
+    required this.onBack,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1635,7 +1617,11 @@ class _TopBar extends StatelessWidget {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: onBack,
-          icon: const Icon(Icons.arrow_back, size: 30, color: Colors.black),
+          icon: const Icon(
+            Icons.arrow_back,
+            size: 30,
+            color: Colors.black,
+          ),
         ),
         const Spacer(),
         Text(

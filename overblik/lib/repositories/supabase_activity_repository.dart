@@ -16,6 +16,7 @@ class SupabaseActivityRepository implements ActivityRepository {
   final String? childFamilyId;
   final String? childProfileId;
   final String? childRole;
+  final String? childLoginCode;
 
   static const String _cachedFamilyIdKey = 'cached_current_family_id_v1';
 
@@ -24,15 +25,15 @@ class SupabaseActivityRepository implements ActivityRepository {
     this.childFamilyId,
     this.childProfileId,
     this.childRole,
+    this.childLoginCode,
   });
 
   bool get _isChildSession {
     return childFamilyId != null &&
         childProfileId != null &&
-        childRole != null;
+        childRole != null &&
+        childLoginCode != null;
   }
-
-
 
   bool _isNetworkException(Object error) {
     if (error is SocketException) return true;
@@ -61,7 +62,8 @@ class SupabaseActivityRepository implements ActivityRepository {
   Future<String?> _getCurrentFamilyId() async {
     if (_isChildSession) {
       debugPrint(
-        'SupabaseActivityRepository: using child session familyId=$childFamilyId profileId=$childProfileId role=$childRole',
+        'SupabaseActivityRepository: using child session '
+        'familyId=$childFamilyId profileId=$childProfileId role=$childRole',
       );
 
       if (childFamilyId != null && childFamilyId!.trim().isNotEmpty) {
@@ -122,6 +124,28 @@ class SupabaseActivityRepository implements ActivityRepository {
     }
   }
 
+  bool _activityVisibleToCurrentChild(Activity activity) {
+    if (!_isChildSession || childProfileId == null) {
+      return true;
+    }
+
+    if (activity.familyId != childFamilyId) {
+      return false;
+    }
+
+    if (activity.visibility == ActivityVisibility.family) {
+      return true;
+    }
+
+    if (activity.ownerProfileId == childProfileId) {
+      return true;
+    }
+
+    return activity.participants.any(
+      (participant) => participant.profileId == childProfileId,
+    );
+  }
+
   @override
   Future<List<Activity>> getActivitiesForDate(DateTime date) async {
     final familyId = await _getCurrentFamilyId();
@@ -137,7 +161,8 @@ class SupabaseActivityRepository implements ActivityRepository {
     final end = start.add(const Duration(days: 1));
 
     debugPrint(
-      'SupabaseActivityRepository: loading date activities familyId=$familyId start=$start end=$end',
+      'SupabaseActivityRepository: loading date activities '
+      'familyId=$familyId start=$start end=$end',
     );
 
     try {
@@ -152,7 +177,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       await _localCache.upsertCachedActivities(activities);
 
       debugPrint(
-        'SupabaseActivityRepository: returning ${activities.length} expanded activities for date',
+        'SupabaseActivityRepository: returning ${activities.length} '
+        'expanded activities for date',
       );
 
       return activities;
@@ -173,7 +199,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       );
 
       debugPrint(
-        'SupabaseActivityRepository: returning ${localActivities.length} local activities for date',
+        'SupabaseActivityRepository: returning ${localActivities.length} '
+        'local activities for date',
       );
 
       return localActivities;
@@ -200,7 +227,8 @@ class SupabaseActivityRepository implements ActivityRepository {
     final endOfWeek = startOfWeek.add(const Duration(days: 7));
 
     debugPrint(
-      'SupabaseActivityRepository: loading week activities familyId=$familyId start=$startOfWeek end=$endOfWeek',
+      'SupabaseActivityRepository: loading week activities '
+      'familyId=$familyId start=$startOfWeek end=$endOfWeek',
     );
 
     try {
@@ -215,7 +243,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       await _localCache.upsertCachedActivities(activities);
 
       debugPrint(
-        'SupabaseActivityRepository: returning ${activities.length} expanded activities for week',
+        'SupabaseActivityRepository: returning ${activities.length} '
+        'expanded activities for week',
       );
 
       return activities;
@@ -236,7 +265,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       );
 
       debugPrint(
-        'SupabaseActivityRepository: returning ${localActivities.length} local activities for week',
+        'SupabaseActivityRepository: returning ${localActivities.length} '
+        'local activities for week',
       );
 
       return localActivities;
@@ -268,7 +298,8 @@ class SupabaseActivityRepository implements ActivityRepository {
         .order('start_time');
 
     debugPrint(
-      'SupabaseActivityRepository: loaded ${activityRows.length} base activity rows for range',
+      'SupabaseActivityRepository: loaded ${activityRows.length} '
+      'base activity rows for range',
     );
 
     final baseActivities = await _buildActivitiesFromRows(
@@ -291,9 +322,10 @@ class SupabaseActivityRepository implements ActivityRepository {
     required DateTime rangeStart,
     required DateTime rangeEnd,
   }) async {
-    if (childProfileId == null) {
+    if (!_isChildSession || childProfileId == null || childLoginCode == null) {
       debugPrint(
-        'SupabaseActivityRepository: childProfileId missing, cannot load child activities',
+        'SupabaseActivityRepository: incomplete child session, '
+        'cannot load child activities',
       );
       return [];
     }
@@ -302,13 +334,16 @@ class SupabaseActivityRepository implements ActivityRepository {
     final rangeEndIso = rangeEnd.toIso8601String();
 
     debugPrint(
-      'SupabaseActivityRepository: child loading activities profileId=$childProfileId familyId=$familyId start=$rangeStartIso end=$rangeEndIso',
+      'SupabaseActivityRepository: child loading activities '
+      'profileId=$childProfileId familyId=$familyId '
+      'start=$rangeStartIso end=$rangeEndIso',
     );
 
     final result = await _client.rpc(
-      'child_get_activities_for_range',
+      'child_get_activities_for_range_v2',
       params: {
         'input_profile_id': childProfileId,
+        'input_child_code': childLoginCode,
         'input_range_start': rangeStartIso,
         'input_range_end': rangeEndIso,
       },
@@ -317,7 +352,8 @@ class SupabaseActivityRepository implements ActivityRepository {
     final rows = List<Map<String, dynamic>>.from(result as List);
 
     debugPrint(
-      'SupabaseActivityRepository: child RPC returned ${rows.length} activity rows',
+      'SupabaseActivityRepository: child v2 RPC returned '
+      '${rows.length} activity rows',
     );
 
     final baseActivities = _buildActivitiesFromRpcRows(rows);
@@ -326,7 +362,7 @@ class SupabaseActivityRepository implements ActivityRepository {
       activities: baseActivities,
       rangeStart: rangeStart,
       rangeEnd: rangeEnd,
-    );
+    ).where(_activityVisibleToCurrentChild).toList();
 
     expandedActivities.sort((a, b) => a.startTime.compareTo(b.startTime));
 
@@ -353,6 +389,7 @@ class SupabaseActivityRepository implements ActivityRepository {
 
     final familyActivities = mergedById.values
         .where((activity) => activity.familyId == familyId)
+        .where(_activityVisibleToCurrentChild)
         .toList();
 
     final expandedActivities = _expandRecurringActivitiesForRange(
@@ -637,18 +674,19 @@ class SupabaseActivityRepository implements ActivityRepository {
       await _trySyncPendingActivities();
 
       if (_isChildSession) {
-        final localActivities = await _localCache.getAllLocalActivities();
-
-        for (final activity in localActivities) {
-          if (activity.id == id) {
-            return activity;
-          }
+        if (localActivity != null &&
+            _activityVisibleToCurrentChild(localActivity)) {
+          return localActivity;
         }
 
-        return localActivity;
+        return null;
       }
 
-      final rows = await _client.from('activities').select().eq('id', id).limit(1);
+      final rows = await _client
+          .from('activities')
+          .select()
+          .eq('id', id)
+          .limit(1);
 
       if (rows.isEmpty) {
         debugPrint(
@@ -684,17 +722,19 @@ class SupabaseActivityRepository implements ActivityRepository {
       debugPrintStack(stackTrace: st);
 
       if (_isNetworkException(e)) {
-        if (localActivity != null) {
+        if (localActivity != null &&
+            (!_isChildSession || _activityVisibleToCurrentChild(localActivity))) {
           debugPrint(
             'SupabaseActivityRepository: returning local activity id=$id',
           );
-        } else {
-          debugPrint(
-            'SupabaseActivityRepository: no local fallback found id=$id',
-          );
+          return localActivity;
         }
 
-        return localActivity;
+        debugPrint(
+          'SupabaseActivityRepository: no safe local fallback found id=$id',
+        );
+
+        return null;
       }
 
       rethrow;
@@ -731,6 +771,9 @@ class SupabaseActivityRepository implements ActivityRepository {
       'SupabaseActivityRepository: ownerProfileId=${activity.ownerProfileId}',
     );
     debugPrint(
+      'SupabaseActivityRepository: visibility=${activityVisibilityToDatabase(activity.visibility)}',
+    );
+    debugPrint(
       'SupabaseActivityRepository: participants=${activity.participants.length}',
     );
     debugPrint(
@@ -739,7 +782,8 @@ class SupabaseActivityRepository implements ActivityRepository {
 
     if (_isChildSession) {
       throw Exception(
-        'Child activity creation is not implemented in the repository yet. Next step is child_create_activity RPC.',
+        'Child activity creation is not implemented yet. '
+        'Next step is child_create_activity RPC.',
       );
     }
 
@@ -785,8 +829,11 @@ class SupabaseActivityRepository implements ActivityRepository {
       'SupabaseActivityRepository: activity row = $activityRow',
     );
 
-    final insertedActivity =
-        await _client.from('activities').insert(activityRow).select('id').single();
+    final insertedActivity = await _client
+        .from('activities')
+        .insert(activityRow)
+        .select('id')
+        .single();
 
     debugPrint(
       'SupabaseActivityRepository: activity inserted id=${insertedActivity['id']}',
@@ -844,7 +891,8 @@ class SupabaseActivityRepository implements ActivityRepository {
     }
 
     debugPrint(
-      'SupabaseActivityRepository: trying to sync ${pendingActivities.length} pending activities',
+      'SupabaseActivityRepository: trying to sync '
+      '${pendingActivities.length} pending activities',
     );
 
     for (final activity in pendingActivities) {
@@ -862,7 +910,8 @@ class SupabaseActivityRepository implements ActivityRepository {
           await _localCache.upsertCachedActivities([activity]);
 
           debugPrint(
-            'SupabaseActivityRepository: pending activity already exists online id=${activity.id}',
+            'SupabaseActivityRepository: pending activity already exists online '
+            'id=${activity.id}',
           );
 
           continue;
@@ -886,7 +935,8 @@ class SupabaseActivityRepository implements ActivityRepository {
   Future<void> updateActivity(Activity activity) async {
     if (_isChildSession) {
       throw Exception(
-        'Child activity update is not implemented yet. This needs a controlled RPC.',
+        'Child activity update is not implemented yet. '
+        'This needs a controlled RPC.',
       );
     }
 
@@ -1033,11 +1083,13 @@ class SupabaseActivityRepository implements ActivityRepository {
         .order('position');
 
     debugPrint(
-      'SupabaseActivityRepository: loaded ${participantRows.length} participant rows',
+      'SupabaseActivityRepository: loaded '
+      '${participantRows.length} participant rows',
     );
 
     debugPrint(
-      'SupabaseActivityRepository: loaded ${checklistRows.length} checklist rows',
+      'SupabaseActivityRepository: loaded '
+      '${checklistRows.length} checklist rows',
     );
 
     final participantsByActivity = <String, List<ActivityParticipant>>{};

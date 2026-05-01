@@ -37,6 +37,35 @@ String activityRecurrenceToDatabase(ActivityRecurrence recurrence) {
   }
 }
 
+enum ActivityVisibility {
+  family,
+  participants,
+  private,
+}
+
+ActivityVisibility activityVisibilityFromString(String value) {
+  switch (value) {
+    case 'family':
+      return ActivityVisibility.family;
+    case 'private':
+      return ActivityVisibility.private;
+    case 'participants':
+    default:
+      return ActivityVisibility.participants;
+  }
+}
+
+String activityVisibilityToDatabase(ActivityVisibility visibility) {
+  switch (visibility) {
+    case ActivityVisibility.family:
+      return 'family';
+    case ActivityVisibility.participants:
+      return 'participants';
+    case ActivityVisibility.private:
+      return 'private';
+  }
+}
+
 class ActivityParticipant {
   final String? profileId;
   final String? externalName;
@@ -51,6 +80,7 @@ class ActivityParticipant {
         );
 
   bool get isProfileParticipant => profileId != null;
+
   bool get isExternalParticipant => externalName != null;
 
   String get displayValue => externalName ?? profileId ?? '';
@@ -118,6 +148,8 @@ class Activity {
   final String? createdBy;
   final String? ownerProfileId;
 
+  final ActivityVisibility visibility;
+
   final bool isCompleted;
   final bool isImportant;
   final bool isFavorite;
@@ -148,6 +180,7 @@ class Activity {
     required this.endTime,
     required this.createdBy,
     required this.ownerProfileId,
+    required this.visibility,
     required this.isCompleted,
     required this.isImportant,
     required this.isFavorite,
@@ -165,6 +198,13 @@ class Activity {
   });
 
   Duration get duration => endTime.difference(startTime);
+
+  bool get isFamilyActivity => visibility == ActivityVisibility.family;
+
+  bool get isParticipantActivity =>
+      visibility == ActivityVisibility.participants;
+
+  bool get isPrivateActivity => visibility == ActivityVisibility.private;
 
   List<String> get participantLabels {
     return participants
@@ -184,6 +224,7 @@ class Activity {
       'end_time': endTime.toIso8601String(),
       'created_by': createdBy,
       'owner_profile_id': ownerProfileId,
+      'visibility': activityVisibilityToDatabase(visibility),
       'is_completed': isCompleted,
       'is_important': isImportant,
       'is_favorite': isFavorite,
@@ -212,6 +253,9 @@ class Activity {
       endTime: DateTime.parse(activityRow['end_time'] as String),
       createdBy: activityRow['created_by'] as String?,
       ownerProfileId: activityRow['owner_profile_id'] as String?,
+      visibility: activityVisibilityFromString(
+        activityRow['visibility'] as String? ?? 'participants',
+      ),
       isCompleted: activityRow['is_completed'] as bool? ?? false,
       isImportant: activityRow['is_important'] as bool? ?? false,
       isFavorite: activityRow['is_favorite'] as bool? ?? false,
@@ -247,6 +291,7 @@ class Activity {
     DateTime? endTime,
     String? createdBy,
     String? ownerProfileId,
+    ActivityVisibility? visibility,
     bool? isCompleted,
     bool? isImportant,
     bool? isFavorite,
@@ -272,6 +317,7 @@ class Activity {
       endTime: endTime ?? this.endTime,
       createdBy: createdBy ?? this.createdBy,
       ownerProfileId: ownerProfileId ?? this.ownerProfileId,
+      visibility: visibility ?? this.visibility,
       isCompleted: isCompleted ?? this.isCompleted,
       isImportant: isImportant ?? this.isImportant,
       isFavorite: isFavorite ?? this.isFavorite,
