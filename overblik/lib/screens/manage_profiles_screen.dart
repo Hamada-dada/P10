@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/profile.dart';
 import '../services/parent_join_service.dart';
 import '../services/profile_service.dart';
 import '../widgets/app_top_header.dart';
+
+enum _ProfileRemovalAction {
+  deactivate,
+  delete,
+}
 
 class ManageProfilesScreen extends StatefulWidget {
   const ManageProfilesScreen({super.key});
@@ -20,6 +26,8 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   List<Profile> _profiles = [];
   List<ParentJoinRequest> _joinRequests = [];
 
+  String? _familyCode;
+
   bool _isLoading = true;
   String? _errorMessage;
   String? _processingRequestId;
@@ -35,6 +43,48 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   void initState() {
     super.initState();
     _loadProfiles();
+  }
+
+  Future<String?> _loadFamilyCode(String familyId) async {
+    try {
+      debugPrint(
+        'ManageProfilesScreen: loading family code for familyId=$familyId',
+      );
+
+      final row = await Supabase.instance.client
+          .from('families')
+          .select('id, family_name, family_code, created_by')
+          .eq('id', familyId)
+          .maybeSingle();
+
+      debugPrint('ManageProfilesScreen: family row = $row');
+
+      if (row == null) {
+        debugPrint(
+          'ManageProfilesScreen: no family row returned. '
+          'Likely causes: RLS blocks SELECT on families, or family_id does not exist.',
+        );
+        return null;
+      }
+
+      final familyCode = row['family_code'];
+
+      debugPrint('ManageProfilesScreen: raw family_code = $familyCode');
+
+      if (familyCode is String && familyCode.trim().isNotEmpty) {
+        return familyCode.trim();
+      }
+
+      debugPrint(
+        'ManageProfilesScreen: family_code is missing or empty for familyId=$familyId',
+      );
+
+      return null;
+    } catch (e, st) {
+      debugPrint('ManageProfilesScreen: failed to load family code: $e');
+      debugPrintStack(stackTrace: st);
+      return null;
+    }
   }
 
   Future<void> _loadProfiles() async {
@@ -60,6 +110,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       if (parentProfile == null) {
         setState(() {
           _parentProfile = null;
+          _familyCode = null;
           _profiles = [];
           _joinRequests = [];
           _processingRequestId = null;
@@ -69,6 +120,8 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
         });
         return;
       }
+
+      final familyCode = await _loadFamilyCode(parentProfile.familyId);
 
       final profiles =
           await _profileService.getFamilyProfiles(parentProfile.familyId);
@@ -97,6 +150,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       setState(() {
         _parentProfile = parentProfile;
+        _familyCode = familyCode;
         _profiles = profiles;
         _joinRequests = joinRequests;
         _processingRequestId = null;
@@ -567,42 +621,72 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
     }
   }
 
-  Future<void> _deactivateProfile(Profile profile) async {
+  Future<void> _showProfileRemovalOptions(Profile profile) async {
     if (profile.role == ProfileRole.parent) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Forælderprofilen kan ikke deaktiveres her.'),
+          content: Text('Forælderprofilen kan ikke fjernes her.'),
         ),
       );
       return;
     }
 
-    final shouldDeactivate = await showDialog<bool>(
+    final action = await showDialog<_ProfileRemovalAction>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Deaktivér profil?'),
+          title: const Text('Fjern profil?'),
           content: Text(
-            'Vil du deaktivere ${profile.displayName}? Profilen slettes ikke, '
-            'men den skjules/deaktiveres i systemet.',
+            'Hvad vil du gøre med ${profile.displayName}?\n\n'
+            'Deaktivering skjuler profilen, men bevarer data.\n'
+            'Permanent sletning fjerner profilen fra systemet.',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () => Navigator.pop(context),
               child: const Text('Annuller'),
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Deaktivér'),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(context, _ProfileRemovalAction.deactivate);
+              },
+              icon: const Icon(Icons.visibility_off_outlined),
+              label: const Text('Deaktivér'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(context, _ProfileRemovalAction.delete);
+              },
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Slet'),
             ),
           ],
         );
       },
     );
 
-    if (!mounted || shouldDeactivate != true) return;
+    if (!mounted || action == null) return;
 
+    switch (action) {
+      case _ProfileRemovalAction.deactivate:
+        await _deactivateChildProfile(profile);
+        break;
+      case _ProfileRemovalAction.delete:
+        await _deleteChildProfile(profile);
+        break;
+    }
+  }
+
+  Future<void> _deactivateChildProfile(Profile profile) async {
     try {
+      setState(() {
+        _processingProfileId = profile.id;
+      });
+
       await _profileService.updateProfile(
         profileId: profile.id,
         isActive: false,
@@ -620,9 +704,87 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
     } catch (e) {
       if (!mounted) return;
 
+      setState(() {
+        _processingProfileId = null;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Kunne ikke deaktivere profil: $e'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteChildProfile(Profile profile) async {
+    if (!profile.isChild) return;
+
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Slet profil permanent?'),
+          content: Text(
+            'Er du sikker på, at du vil slette ${profile.displayName} permanent?\n\n'
+            'Dette kan ikke fortrydes. Hvis profilen bruges i aktiviteter eller deltagerlister, kan databasen blokere sletningen.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuller'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Slet permanent'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || shouldDelete != true) return;
+
+    try {
+      setState(() {
+        _processingProfileId = profile.id;
+      });
+
+      await Supabase.instance.client.rpc(
+      'delete_child_profile',
+      params: {
+        'input_profile_id': profile.id,
+      },
+    );
+
+      await _loadProfiles();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${profile.displayName} blev slettet.'),
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('ManageProfilesScreen: delete profile failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      setState(() {
+        _processingProfileId = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Kunne ikke slette profil: $e'),
+          duration: const Duration(seconds: 6),
         ),
       );
     }
@@ -737,6 +899,10 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 96),
         children: [
+          _FamilyCodeCard(
+            familyCode: _familyCode,
+          ),
+          const SizedBox(height: 18),
           Row(
             children: [
               const Expanded(
@@ -770,8 +936,9 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
                   isProcessing: _processingProfileId == profile.id,
                   onResetCode:
                       profile.isChild ? () => _resetChildCode(profile) : null,
-                  onDeactivate:
-                      profile.isChild ? () => _deactivateProfile(profile) : null,
+                  onDeactivate: profile.isChild
+                      ? () => _showProfileRemovalOptions(profile)
+                      : null,
                   onRemoveParent: _canRemoveParent(profile)
                       ? () => _removeParentFromFamily(profile)
                       : null,
@@ -1104,6 +1271,93 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
   }
 }
 
+class _FamilyCodeCard extends StatelessWidget {
+  final String? familyCode;
+
+  const _FamilyCodeCard({
+    required this.familyCode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasCode = familyCode != null && familyCode!.trim().isNotEmpty;
+    final displayCode = hasCode ? familyCode!.trim() : 'Ingen kode fundet';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF2E7D32).withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.home_outlined,
+            size: 26,
+            color: Color(0xFF2E7D32),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Familiens kode',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Denne kode bruges sammen med barnets egen login-kode ved børnelogin.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.black87,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: hasCode
+                          ? const Color(0xFF2E7D32).withValues(alpha: 0.35)
+                          : Colors.redAccent.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: SelectableText(
+                    displayCode,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: hasCode ? 24 : 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: hasCode ? 2 : 0,
+                      color: hasCode ? Colors.black : Colors.redAccent,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ParentJoinRequestCard extends StatelessWidget {
   final ParentJoinRequest request;
   final bool isProcessing;
@@ -1227,7 +1481,7 @@ class _ParentJoinRequestCard extends StatelessWidget {
   }
 }
 
-class _ProfileCard extends StatelessWidget {
+class _ProfileCard extends StatefulWidget {
   final Profile profile;
   final String roleLabel;
   final String roleDescription;
@@ -1251,8 +1505,19 @@ class _ProfileCard extends StatelessWidget {
   });
 
   @override
+  State<_ProfileCard> createState() => _ProfileCardState();
+}
+
+class _ProfileCardState extends State<_ProfileCard> {
+  bool _isChildCodeVisible = false;
+
+  @override
   Widget build(BuildContext context) {
+    final profile = widget.profile;
     final isChild = profile.isChild;
+    final childLoginCode = profile.childLoginCode?.trim();
+    final hasChildLoginCode =
+        childLoginCode != null && childLoginCode.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1315,7 +1580,7 @@ class _ProfileCard extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: roleColor.withValues(alpha: 0.35),
+                color: widget.roleColor.withValues(alpha: 0.35),
               ),
             ),
             child: Row(
@@ -1325,7 +1590,7 @@ class _ProfileCard extends StatelessWidget {
                   profile.role == ProfileRole.parent
                       ? Icons.admin_panel_settings_outlined
                       : Icons.child_care_outlined,
-                  color: roleColor,
+                  color: widget.roleColor,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1333,15 +1598,15 @@ class _ProfileCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        roleLabel,
+                        widget.roleLabel,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: roleColor,
+                          color: widget.roleColor,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        roleDescription,
+                        widget.roleDescription,
                         style: const TextStyle(
                           fontSize: 13,
                           color: Colors.black87,
@@ -1354,11 +1619,12 @@ class _ProfileCard extends StatelessWidget {
               ],
             ),
           ),
-          if (profile.role == ProfileRole.parent && onRemoveParent != null) ...[
+          if (profile.role == ProfileRole.parent &&
+              widget.onRemoveParent != null) ...[
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: isProcessing ? null : onRemoveParent,
-              icon: isProcessing
+              onPressed: widget.isProcessing ? null : widget.onRemoveParent,
+              icon: widget.isProcessing
                   ? const SizedBox(
                       width: 18,
                       height: 18,
@@ -1376,23 +1642,65 @@ class _ProfileCard extends StatelessWidget {
           ],
           if (isChild) ...[
             const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.key_outlined, size: 20),
-                const SizedBox(width: 8),
-                const Text(
-                  'Login-kode:',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFE0E0E0),
                 ),
-                const SizedBox(width: 8),
-                SelectableText(
-                  profile.childLoginCode ?? 'Ingen kode',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.key_outlined, size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Barnets login-kode',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  if (_isChildCodeVisible)
+                    Flexible(
+                      child: SelectableText(
+                        hasChildLoginCode ? childLoginCode : 'Ingen kode',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: hasChildLoginCode ? 1.4 : 0,
+                          color: hasChildLoginCode
+                              ? Colors.black
+                              : Colors.redAccent,
+                        ),
+                      ),
+                    )
+                  else
+                    const Text(
+                      '••••••',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.4,
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _isChildCodeVisible = !_isChildCodeVisible;
+                      });
+                    },
+                    icon: Icon(
+                      _isChildCodeVisible
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 18,
+                    ),
+                    label: Text(_isChildCodeVisible ? 'Skjul' : 'Vis'),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<ProfileRole>(
@@ -1411,11 +1719,11 @@ class _ProfileCard extends StatelessWidget {
                   child: Text('Udvidet adgang'),
                 ),
               ],
-              onChanged: onChangeRole == null
+              onChanged: widget.onChangeRole == null
                   ? null
                   : (value) {
                       if (value == null || value == profile.role) return;
-                      onChangeRole!(value);
+                      widget.onChangeRole!(value);
                     },
             ),
             const SizedBox(height: 12),
@@ -1423,7 +1731,8 @@ class _ProfileCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: onResetCode,
+                    onPressed:
+                        widget.isProcessing ? null : widget.onResetCode,
                     icon: const Icon(Icons.refresh),
                     label: const Text('Ny kode'),
                   ),
@@ -1431,9 +1740,16 @@ class _ProfileCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: onDeactivate,
-                    icon: const Icon(Icons.visibility_off_outlined),
-                    label: const Text('Deaktivér'),
+                    onPressed:
+                        widget.isProcessing ? null : widget.onDeactivate,
+                    icon: widget.isProcessing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.manage_accounts_outlined),
+                    label: const Text('Deaktivér / slet'),
                   ),
                 ),
               ],
