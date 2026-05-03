@@ -42,7 +42,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   bool _isLoadingProfiles = true;
   String? _profilesError;
 
-  Profile? _currentParentProfile;
+  Profile? _currentProfile;
   String? _currentFamilyId;
 
   late final TextEditingController _titleController;
@@ -75,6 +75,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   String _imagePath = '';
 
   bool get _isEditing => widget.existingActivity != null;
+
+  String? get _currentAuthUserId {
+    return Supabase.instance.client.auth.currentUser?.id;
+  }
 
   @override
   void initState() {
@@ -174,28 +178,46 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     );
 
     try {
-      final currentParent = await _profileService.getMyParentProfile();
+      final currentProfile =
+          await _profileService.getCurrentAuthenticatedProfile();
 
-      if (currentParent == null) {
+      if (currentProfile == null) {
         if (!mounted) return;
 
         setState(() {
           _availableProfiles = [];
-          _currentParentProfile = null;
+          _currentProfile = null;
           _currentFamilyId = null;
           _participantOptions = [];
           _selectedParticipants = [];
           _isLoadingProfiles = false;
           _profilesError =
-              'Kunne ikke finde din forælderprofil. Din bruger er sandsynligvis ikke koblet til en profil i databasen.';
+              'Kunne ikke finde din profil. Din bruger er sandsynligvis ikke koblet til en profil i databasen.';
         });
 
         return;
       }
 
-      final profiles = await _profileService.getFamilyProfiles(
-        currentParent.familyId,
-      );
+      if (currentProfile.isChildLimited) {
+        if (!mounted) return;
+
+        setState(() {
+          _availableProfiles = [];
+          _currentProfile = currentProfile;
+          _currentFamilyId = currentProfile.familyId;
+          _participantOptions = [];
+          _selectedParticipants = [];
+          _isLoadingProfiles = false;
+          _profilesError =
+              'Denne børneprofil har ikke adgang til at oprette aktiviteter.';
+        });
+
+        return;
+      }
+
+      final profiles = currentProfile.isParent
+          ? await _profileService.getFamilyProfiles(currentProfile.familyId)
+          : await _profileService.getFamilyProfilesForCurrentUser();
 
       final selectedParticipants = <String>[];
       final externalParticipantOptions = <String>[];
@@ -239,7 +261,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       }
 
       if (selectedParticipants.isEmpty) {
-        selectedParticipants.add(currentParent.name);
+        selectedParticipants.add(currentProfile.name);
       }
 
       final participantOptions = _uniqueStrings([
@@ -253,15 +275,15 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
           .toList();
 
       if (uniqueSelectedParticipants.isEmpty) {
-        uniqueSelectedParticipants.add(currentParent.name);
+        uniqueSelectedParticipants.add(currentProfile.name);
       }
 
       if (!mounted) return;
 
       setState(() {
         _availableProfiles = profiles;
-        _currentParentProfile = currentParent;
-        _currentFamilyId = currentParent.familyId;
+        _currentProfile = currentProfile;
+        _currentFamilyId = currentProfile.familyId;
         _participantOptions = participantOptions;
         _selectedParticipants = uniqueSelectedParticipants;
         _isLoadingProfiles = false;
@@ -275,7 +297,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
       setState(() {
         _availableProfiles = [];
-        _currentParentProfile = null;
+        _currentProfile = null;
         _currentFamilyId = null;
         _participantOptions = [];
         _selectedParticipants = [];
@@ -395,7 +417,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   }
 
   String? _resolveOwnerProfileId() {
-    return _currentParentProfile?.id;
+    return _currentProfile?.id;
   }
 
   ActivityVisibility _resolveVisibility() {
@@ -449,8 +471,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       (index) => ActivityChecklistItem(
         id: index < previousChecklist.length ? previousChecklist[index].id : null,
         title: rawItems[index],
-        isChecked:
-            index < previousChecklist.length ? previousChecklist[index].isChecked : false,
+        isChecked: index < previousChecklist.length
+            ? previousChecklist[index].isChecked
+            : false,
         position: index,
       ),
     );
@@ -769,19 +792,39 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       return;
     }
 
+    final authUserId = _currentAuthUserId;
+    final currentProfile = _currentProfile;
+    final currentFamilyId = _currentFamilyId;
+
+    if (authUserId == null || authUserId.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Du er ikke logget ind. Log ind igen.')),
+      );
+      return;
+    }
+
+    if (currentProfile == null || currentFamilyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kunne ikke finde familie eller profil.')),
+      );
+      return;
+    }
+
+    if (currentProfile.isChildLimited) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Denne børneprofil kan ikke oprette aktiviteter.'),
+        ),
+      );
+      return;
+    }
+
     final startDateTime = _combineDateAndTime(_selectedDate, _startTime);
     final endDateTime = _combineDateAndTime(_selectedDate, _endTime);
 
     if (!endDateTime.isAfter(startDateTime)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sluttid skal være efter starttid.')),
-      );
-      return;
-    }
-
-    if (_currentFamilyId == null || _currentParentProfile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kunne ikke finde familie eller profil.')),
       );
       return;
     }
@@ -832,16 +875,15 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
     final activity = Activity(
       id: widget.existingActivity?.id ?? _uuid.v4(),
-      familyId: _currentFamilyId!,
+      familyId: currentFamilyId,
       title: _titleController.text.trim(),
       emoji: _emojiController.text.trim(),
       description: _descriptionController.text.trim(),
       startTime: startDateTime,
       endTime: endDateTime,
-      createdBy:
-          widget.existingActivity?.createdBy ?? _currentParentProfile!.authUserId,
-      ownerProfileId:
-          widget.existingActivity?.ownerProfileId ?? _resolveOwnerProfileId(),
+      createdBy: widget.existingActivity?.createdBy ?? authUserId,
+      ownerProfileId: widget.existingActivity?.ownerProfileId ??
+          _resolveOwnerProfileId(),
       visibility: visibility,
       isCompleted: widget.existingActivity?.isCompleted ?? false,
       isImportant: widget.existingActivity?.isImportant ?? false,
@@ -864,6 +906,18 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       participants: participants,
       checklistItems: checklistItems,
     );
+
+    debugPrint('CreateActivityScreen: activity payload');
+    debugPrint('familyId=${activity.familyId}');
+    debugPrint('createdBy=${activity.createdBy}');
+    debugPrint('ownerProfileId=${activity.ownerProfileId}');
+    debugPrint('visibility=${activityVisibilityToDatabase(activity.visibility)}');
+    debugPrint('currentAuthUser=$authUserId');
+    debugPrint('currentProfile=${currentProfile.id}');
+    debugPrint('currentProfileRole=${currentProfile.role}');
+    debugPrint('currentFamilyId=$currentFamilyId');
+    debugPrint('participants=${activity.participants.length}');
+    debugPrint('checklistItems=${activity.checklistItems.length}');
 
     Navigator.pop(context, activity);
   }

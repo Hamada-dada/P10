@@ -112,33 +112,32 @@ class SupabaseActivityRepository implements ActivityRepository {
 
     try {
       final profile = await _client
-          .from('profiles')
-          .select('family_id')
-          .eq('auth_user_id', user.id)
-          .eq('role', 'parent')
-          .eq('is_active', true)
-          .maybeSingle();
+    .from('profiles')
+    .select('family_id, role')
+    .eq('auth_user_id', user.id)
+    .eq('is_active', true)
+    .maybeSingle();
 
-      debugPrint(
-        'SupabaseActivityRepository: parent profile lookup = $profile',
-      );
+debugPrint(
+  'SupabaseActivityRepository: current profile lookup = $profile',
+);
 
-      if (profile == null) {
-        debugPrint(
-          'SupabaseActivityRepository: authenticated user has no active '
-          'parent profile, clearing cache and returning null family id',
-        );
+if (profile == null) {
+  debugPrint(
+    'SupabaseActivityRepository: authenticated user has no active '
+    'profile, clearing cache and returning null family id',
+  );
 
-        await _clearCachedFamilyIdForUser(user.id);
+  await _clearCachedFamilyIdForUser(user.id);
 
-        return null;
+  return null;
       }
 
       final familyId = profile['family_id'] as String?;
 
       if (familyId == null || familyId.trim().isEmpty) {
         debugPrint(
-          'SupabaseActivityRepository: parent profile has no family id, '
+          'SupabaseActivityRepository: current profile has no family id, '
           'clearing cache and returning null family id',
         );
 

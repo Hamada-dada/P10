@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/profile_service.dart';
 import 'daily_calendar_screen.dart';
 
 class ChildLoginScreen extends StatefulWidget {
@@ -15,6 +16,8 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
 
   final TextEditingController _familyCodeController = TextEditingController();
   final TextEditingController _childCodeController = TextEditingController();
+
+  final ProfileService _profileService = ProfileService();
 
   bool _isLoading = false;
 
@@ -34,68 +37,69 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
       _isLoading = true;
     });
 
-    final client = Supabase.instance.client;
-
     final familyCode = _familyCodeController.text.trim().toUpperCase();
-    final childCode = _childCodeController.text.trim().toUpperCase();
+    final childCode = _childCodeController.text.trim();
 
     try {
       debugPrint(
-        'ChildLoginScreen: checking familyCode=$familyCode childCode=$childCode',
+        'ChildLoginScreen: logging in through Edge Function '
+        'familyCode=$familyCode childCode=$childCode',
       );
 
-      final result = await client.rpc(
-        'child_login',
-        params: {
-          'input_family_code': familyCode,
-          'input_child_code': childCode,
-        },
+      final childSession = await _profileService.loginChildWithCode(
+        familyCode: familyCode,
+        childCode: childCode,
       );
 
-      final rows = result as List;
-
-      if (rows.isEmpty) {
+      if (childSession == null) {
         throw Exception('Familiekoden eller børnekoden er forkert.');
       }
 
-      final childSession = Map<String, dynamic>.from(rows.first as Map);
-
-      final familyId = childSession['family_id'] as String;
-      final profileId = childSession['profile_id'] as String;
-      final displayName = childSession['display_name'] as String;
-      final role = childSession['role'] as String;
+      final currentUser = Supabase.instance.client.auth.currentUser;
 
       debugPrint(
         'ChildLoginScreen: child login success '
-        'familyId=$familyId profileId=$profileId displayName=$displayName role=$role',
+        'authUserId=${currentUser?.id} '
+        'familyId=${childSession.familyId} '
+        'profileId=${childSession.profileId} '
+        'displayName=${childSession.displayName} '
+        'role=${childSession.role}',
       );
+
+      if (currentUser == null) {
+        throw Exception(
+          'Børnelogin lykkedes, men der blev ikke oprettet en aktiv session.',
+        );
+      }
 
       if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => DailyCalendarScreen(
-            childFamilyId: familyId,
-            childProfileId: profileId,
-            childDisplayName: displayName,
-            childRole: role,
-            childLoginCode: childCode,
-          ),
+          builder: (_) => const DailyCalendarScreen(),
         ),
       );
-    } on PostgrestException catch (e) {
-      debugPrint('ChildLoginScreen PostgrestException message: ${e.message}');
-      debugPrint('ChildLoginScreen PostgrestException details: ${e.details}');
-      debugPrint('ChildLoginScreen PostgrestException hint: ${e.hint}');
-      debugPrint('ChildLoginScreen PostgrestException code: ${e.code}');
+    } on AuthException catch (e) {
+      debugPrint('ChildLoginScreen AuthException message: ${e.message}');
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Databasefejl: ${e.message}'),
+          content: Text('Loginfejl: ${e.message}'),
           duration: const Duration(seconds: 5),
+        ),
+      );
+    } on FunctionException catch (e) {
+      debugPrint('ChildLoginScreen FunctionException: ${e.details}');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kunne ikke logge barnet ind. Prøv igen.'),
+          duration: Duration(seconds: 5),
         ),
       );
     } catch (e, st) {
@@ -110,13 +114,13 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
           duration: const Duration(seconds: 5),
         ),
       );
-} finally {
-  if (mounted) {
-    setState(() {
-      _isLoading = false;
-    });
-  }
-}
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   InputDecoration _inputDecoration({

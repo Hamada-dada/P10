@@ -171,6 +171,41 @@ class ProfileService {
     }
   }
 
+  Future<Profile?> getCurrentAuthenticatedProfile() async {
+    final userId = _currentUserId();
+
+    if (userId == null) {
+      debugPrint(
+        'ProfileService: no current user for getCurrentAuthenticatedProfile',
+      );
+      return null;
+    }
+
+    try {
+      final result = await _client
+          .from('profiles')
+          .select(
+            'id, family_id, auth_user_id, name, display_name, emoji, role, child_login_code, is_active, created_at, updated_at',
+          )
+          .eq('auth_user_id', userId)
+          .eq('is_active', true)
+          .maybeSingle();
+
+      if (result == null) {
+        debugPrint('ProfileService: no current authenticated profile found');
+        return null;
+      }
+
+      return Profile.fromMap(
+        _asMap(result, errorContext: 'getCurrentAuthenticatedProfile'),
+      );
+    } catch (e, st) {
+      debugPrint('ProfileService: getCurrentAuthenticatedProfile failed: $e');
+      debugPrintStack(stackTrace: st);
+      return null;
+    }
+  }
+
   Future<Profile?> getMyParentProfile() async {
     final userId = _currentUserId();
 
@@ -234,15 +269,50 @@ class ProfileService {
     }
   }
 
+  Future<List<Profile>> getFamilyProfilesForCurrentUser() async {
+    try {
+      final result = await _client.rpc('get_family_profiles_for_current_user');
+
+      final profiles = (result as List)
+          .map(
+            (row) => Profile.fromMap(
+              _asMap(row, errorContext: 'getFamilyProfilesForCurrentUser'),
+            ),
+          )
+          .toList();
+
+      if (profiles.isNotEmpty) {
+        await _cacheFamilyProfiles(profiles.first.familyId, profiles);
+      }
+
+      return profiles;
+    } catch (e, st) {
+      debugPrint('ProfileService: getFamilyProfilesForCurrentUser failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      final currentProfile = await getCurrentAuthenticatedProfile();
+
+      if (currentProfile == null) {
+        return [];
+      }
+
+      return await _getCachedFamilyProfiles(currentProfile.familyId);
+    }
+  }
+
   Future<List<Profile>> getMyFamilyProfiles() async {
-    final currentProfile = await getMyParentProfile();
+    final currentProfile = await getCurrentAuthenticatedProfile();
 
     if (currentProfile == null) {
-      debugPrint('ProfileService: no parent profile for getMyFamilyProfiles');
+      debugPrint('ProfileService: no profile for getMyFamilyProfiles');
       return [];
     }
 
-    return await getFamilyProfiles(currentProfile.familyId);
+    if (currentProfile.isParent) {
+      return await getFamilyProfiles(currentProfile.familyId);
+    }
+
+    return await getFamilyProfilesForCurrentUser();
   }
 
   Future<List<String>> getMyFamilyMemberNames() async {
@@ -440,7 +510,7 @@ class ProfileService {
     await _cacheFamilyProfiles(profile.familyId, updatedProfiles);
 
     final userId = _currentUserId();
-    if (userId != null && profile.authUserId == userId) {
+    if (userId != null && profile.authUserId == userId && profile.isParent) {
       await _cacheParentProfile(userId, profile);
     }
 
@@ -478,20 +548,38 @@ class ProfileService {
     required String familyCode,
     required String childCode,
   }) async {
-    final result = await _client.rpc(
-      'get_child_by_family_and_code',
-      params: {
-        'p_family_code': familyCode.trim(),
-        'p_child_code': childCode.trim(),
-      },
-    );
-
-    if (result is List && result.isNotEmpty) {
-      return ChildLoginResult.fromMap(
-        _asMap(result.first, errorContext: 'loginChildWithCode'),
+    try {
+      final response = await _client.functions.invoke(
+        'child-login',
+        body: {
+          'family_code': familyCode.trim(),
+          'child_code': childCode.trim(),
+        },
       );
-    }
 
-    return null;
+      final data = _asMap(
+        response.data,
+        errorContext: 'loginChildWithCode edge function',
+      );
+
+      final refreshToken = data['refresh_token'] as String?;
+
+      if (refreshToken == null || refreshToken.trim().isEmpty) {
+        throw Exception('Child login did not return a refresh token.');
+      }
+
+      await _client.auth.setSession(refreshToken);
+
+      final profileData = _asMap(
+        data['profile'],
+        errorContext: 'loginChildWithCode profile',
+      );
+
+      return ChildLoginResult.fromMap(profileData);
+    } catch (e, st) {
+      debugPrint('ProfileService: child login failed: $e');
+      debugPrintStack(stackTrace: st);
+      return null;
+    }
   }
 }
