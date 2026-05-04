@@ -99,13 +99,6 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     return _activity.ownerProfileId == currentProfile.id;
   }
 
-  bool get _isLegacyOwnChildActivity {
-    if (!_isChildSession) return false;
-    if (widget.childProfileId == null) return false;
-
-    return _activity.ownerProfileId == widget.childProfileId;
-  }
-
   bool get _canEditActivity {
     if (_isAuthenticatedParent) {
       return true;
@@ -366,9 +359,6 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         return 'Familieaktivitet (ingen specifikke deltagere)';
       }
 
-      final participantText =
-          _activity.participants.map(_participantDisplayText).join(', ');
-
       return 'Hele familien';
     }
 
@@ -378,8 +368,6 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
     return _activity.participants.map(_participantDisplayText).join(', ');
   }
-
-
 
   String _buildDescriptionText() {
     if (_activity.description.trim().isEmpty) {
@@ -423,17 +411,28 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       return;
     }
 
+    final previousActivity = _activity;
+
     try {
       final updatedChecklist = List<ActivityChecklistItem>.from(
         _activity.checklistItems,
       );
 
       final currentItem = updatedChecklist[index];
+      final checklistItemId = currentItem.id;
+
+      if (checklistItemId == null || checklistItemId.trim().isEmpty) {
+        throw ArgumentError(
+          'Cannot update checklist item because the checklist item id is missing.',
+        );
+      }
+
+      final newCheckedValue = !currentItem.isChecked;
 
       updatedChecklist[index] = ActivityChecklistItem(
-        id: currentItem.id,
+        id: checklistItemId,
         title: currentItem.title,
-        isChecked: !currentItem.isChecked,
+        isChecked: newCheckedValue,
         position: currentItem.position,
       );
 
@@ -441,38 +440,23 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         checklistItems: updatedChecklist,
       );
 
-      if (_isChildSession && !_hasAuthUser) {
-        // Legacy fake child-session path.
-        // Keep optimistic-only behavior until the old child RPC path is removed.
-        if (!mounted) return;
-
-        setState(() {
-          _activity = updatedActivity;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Tjeklisteændringen blev kun vist lokalt for dette gamle børnelogin.',
-            ),
-          ),
-        );
-
-        return;
-      }
-
-      await _activityService.updateActivity(updatedActivity);
-
-      if (!mounted) return;
-
       setState(() {
         _activity = updatedActivity;
       });
+
+      await _activityService.setChecklistItemChecked(
+        checklistItemId: checklistItemId,
+        isChecked: newCheckedValue,
+      );
     } catch (e, st) {
       debugPrint('ActivityDetailScreen _toggleChecklistItem failed: $e');
       debugPrintStack(stackTrace: st);
 
       if (!mounted) return;
+
+      setState(() {
+        _activity = previousActivity;
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -790,7 +774,6 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               ),
                             ],
                           ),
-                          
                           const SizedBox(height: 20),
                           _InfoSection(
                             icon: Icons.edit_note,
@@ -829,8 +812,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                         _activity.checklistItems[index];
 
                                     return Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.only(bottom: 8),
                                       child: InkWell(
                                         borderRadius: BorderRadius.circular(8),
                                         onTap: () =>
@@ -840,8 +822,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Padding(
-                                              padding:
-                                                  const EdgeInsets.only(top: 2),
+                                              padding: const EdgeInsets.only(
+                                                top: 2,
+                                              ),
                                               child: Icon(
                                                 checklistItem.isChecked
                                                     ? Icons.check_box
@@ -858,8 +841,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                                 style: TextStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w400,
-                                                  color:
-                                                      const Color(0xFF1D1B20),
+                                                  color: const Color(
+                                                    0xFF1D1B20,
+                                                  ),
                                                   height: 1.5,
                                                   letterSpacing: 0.5,
                                                   decoration:

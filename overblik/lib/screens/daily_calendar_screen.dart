@@ -292,8 +292,6 @@ Future<void> _loadFilterProfiles() async {
           return;
         }
 
-        // Legacy child-session default:
-        // Child sees own activities only.
         _selectedFilterProfileIds = {widget.childProfileId!};
         _showFamilyActivities = false;
       });
@@ -305,17 +303,13 @@ Future<void> _loadFilterProfiles() async {
         _currentProfile ?? await _profileService.getCurrentAuthenticatedProfile();
 
     if (currentProfile == null) {
-      debugPrint(
-        'DailyCalendarScreen: no current profile for filter loading',
-      );
+      debugPrint('CalendarScreen: no current profile for filter loading');
       return;
     }
 
-    final profiles = currentProfile.isParent
-        ? await _profileService.getFamilyProfiles(currentProfile.familyId)
-        : currentProfile.isChild
-            ? <Profile>[currentProfile]
-            : await _profileService.getFamilyProfilesForCurrentUser();
+    final profiles = await _profileService.getFamilyProfiles(
+      currentProfile.familyId,
+    );
 
     if (!mounted) return;
 
@@ -332,17 +326,16 @@ Future<void> _loadFilterProfiles() async {
       }
 
       // Required default:
-      // Parent = own profile + family activities.
-      // Child = own profile only.
+      // Parent = own + family/others.
+      // Child = own only.
       _selectedFilterProfileIds = {currentProfile.id};
       _showFamilyActivities = currentProfile.isParent;
     });
   } catch (e, st) {
-    debugPrint('DailyCalendarScreen _loadFilterProfiles failed: $e');
+    debugPrint('CalendarScreen _loadFilterProfiles failed: $e');
     debugPrintStack(stackTrace: st);
   }
 }
-
 
   List<Activity> get _filteredActivities {
     return filterActivities(
@@ -717,8 +710,9 @@ Future<void> _openFilterPanel() async {
                                         });
 
                                         try {
-                                          await _activityService.updateActivity(
-                                            updatedActivity,
+                                          await _activityService.setActivityCompleted(
+                                            activityId: activity.id,
+                                            isCompleted: isCompleted,
                                           );
                                         } catch (e, st) {
                                           debugPrint(

@@ -858,7 +858,168 @@ class SupabaseActivityRepository implements ActivityRepository {
 
     return null;
   }
+    @override
+  Future<void> setActivityCompleted({
+    required String activityId,
+    required bool isCompleted,
+  }) async {
+    final currentFamilyId = await _getCurrentFamilyId();
 
+    if (currentFamilyId == null) {
+      throw Exception(
+        'Cannot update activity completion because no active family was found.',
+      );
+    }
+
+    debugPrint(
+      'SupabaseActivityRepository: setActivityCompleted '
+      'activityId=$activityId isCompleted=$isCompleted',
+    );
+
+    try {
+      await _client.rpc(
+        'set_activity_completed',
+        params: {
+          'input_activity_id': activityId,
+          'input_is_completed': isCompleted,
+        },
+      );
+
+      final localActivity = await _getActivityByIdFromLocal(activityId);
+
+      if (localActivity != null &&
+          _activitySafeForCurrentSession(
+            activity: localActivity,
+            currentFamilyId: currentFamilyId,
+          )) {
+        await _localCache.upsertCachedActivities([
+          localActivity.copyWith(isCompleted: isCompleted),
+        ]);
+      }
+
+      debugPrint(
+        'SupabaseActivityRepository: setActivityCompleted completed',
+      );
+    } on PostgrestException catch (e, st) {
+      debugPrint(
+        'SupabaseActivityRepository setActivityCompleted PostgrestException: '
+        '${e.message}',
+      );
+      debugPrint('SupabaseActivityRepository details: ${e.details}');
+      debugPrint('SupabaseActivityRepository hint: ${e.hint}');
+      debugPrint('SupabaseActivityRepository code: ${e.code}');
+      debugPrintStack(stackTrace: st);
+      rethrow;
+    } catch (e, st) {
+      debugPrint('SupabaseActivityRepository setActivityCompleted failed: $e');
+      debugPrintStack(stackTrace: st);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> setChecklistItemChecked({
+    required String checklistItemId,
+    required bool isChecked,
+  }) async {
+    final currentFamilyId = await _getCurrentFamilyId();
+
+    if (currentFamilyId == null) {
+      throw Exception(
+        'Cannot update checklist item because no active family was found.',
+      );
+    }
+
+    debugPrint(
+      'SupabaseActivityRepository: setChecklistItemChecked '
+      'checklistItemId=$checklistItemId isChecked=$isChecked',
+    );
+
+    try {
+      await _client.rpc(
+        'set_checklist_item_checked',
+        params: {
+          'input_checklist_item_id': checklistItemId,
+          'input_is_checked': isChecked,
+        },
+      );
+
+      final localActivity = await _getActivityContainingChecklistItemFromLocal(
+        checklistItemId,
+      );
+
+      if (localActivity != null &&
+          _activitySafeForCurrentSession(
+            activity: localActivity,
+            currentFamilyId: currentFamilyId,
+          )) {
+        final updatedChecklistItems = localActivity.checklistItems.map((item) {
+          if (item.id != checklistItemId) return item;
+
+          return ActivityChecklistItem(
+            id: item.id,
+            title: item.title,
+            isChecked: isChecked,
+            position: item.position,
+          );
+        }).toList();
+
+        await _localCache.upsertCachedActivities([
+          localActivity.copyWith(checklistItems: updatedChecklistItems),
+        ]);
+      }
+
+      debugPrint(
+        'SupabaseActivityRepository: setChecklistItemChecked completed',
+      );
+    } on PostgrestException catch (e, st) {
+      debugPrint(
+        'SupabaseActivityRepository setChecklistItemChecked PostgrestException: '
+        '${e.message}',
+      );
+      debugPrint('SupabaseActivityRepository details: ${e.details}');
+      debugPrint('SupabaseActivityRepository hint: ${e.hint}');
+      debugPrint('SupabaseActivityRepository code: ${e.code}');
+      debugPrintStack(stackTrace: st);
+      rethrow;
+    } catch (e, st) {
+      debugPrint('SupabaseActivityRepository setChecklistItemChecked failed: $e');
+      debugPrintStack(stackTrace: st);
+      rethrow;
+    }
+  }
+
+  Future<Activity?> _getActivityContainingChecklistItemFromLocal(
+    String checklistItemId,
+  ) async {
+    final localActivities = await _localCache.getAllLocalActivities();
+
+    for (final activity in localActivities) {
+      final containsItem = activity.checklistItems.any(
+        (item) => item.id == checklistItemId,
+      );
+
+      if (containsItem) {
+        return activity;
+      }
+    }
+
+    final pendingActivities = await _localCache.getPendingActivities();
+
+    for (final activity in pendingActivities) {
+      final containsItem = activity.checklistItems.any(
+        (item) => item.id == checklistItemId,
+      );
+
+      if (containsItem) {
+        return activity;
+      }
+    }
+
+    return null;
+  }
+
+  
   @override
   Future<void> addActivity(Activity activity) async {
     debugPrint('SupabaseActivityRepository: creating activity with relations');

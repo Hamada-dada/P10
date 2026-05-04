@@ -259,54 +259,15 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     }
   }
 
-  Future<void> _loadFilterProfiles() async {
-    try {
-      if (_isChildSession) {
-        if (widget.childProfileId == null) return;
-
-        if (!mounted) return;
-
-        setState(() {
-          _filterProfiles = [];
-
-          if (_hasInitialFilterState) {
-            _selectedFilterProfileIds = Set<String>.from(
-              widget.initialSelectedFilterProfileIds ?? const {},
-            );
-            _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
-            return;
-          }
-
-          // Legacy child-session default:
-          // Child sees own activities only.
-          _selectedFilterProfileIds = {widget.childProfileId!};
-          _showFamilyActivities = false;
-        });
-
-        return;
-      }
-
-      final currentProfile =
-          _currentProfile ?? await _profileService.getCurrentAuthenticatedProfile();
-
-      if (currentProfile == null) {
-        debugPrint(
-          'WeeklyCalendarScreen: no current profile for filter loading',
-        );
-        return;
-      }
-
-      final profiles = currentProfile.isParent
-          ? await _profileService.getFamilyProfiles(currentProfile.familyId)
-          : currentProfile.isChild
-              ? <Profile>[currentProfile]
-              : await _profileService.getFamilyProfilesForCurrentUser();
+Future<void> _loadFilterProfiles() async {
+  try {
+    if (_isChildSession) {
+      if (widget.childProfileId == null) return;
 
       if (!mounted) return;
 
       setState(() {
-        _currentProfile = currentProfile;
-        _filterProfiles = profiles;
+        _filterProfiles = [];
 
         if (_hasInitialFilterState) {
           _selectedFilterProfileIds = Set<String>.from(
@@ -316,17 +277,50 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
           return;
         }
 
-        // Required default:
-        // Parent = own profile + family activities.
-        // Child = own profile only.
-        _selectedFilterProfileIds = {currentProfile.id};
-        _showFamilyActivities = currentProfile.isParent;
+        _selectedFilterProfileIds = {widget.childProfileId!};
+        _showFamilyActivities = false;
       });
-    } catch (e, st) {
-      debugPrint('WeeklyCalendarScreen _loadFilterProfiles failed: $e');
-      debugPrintStack(stackTrace: st);
+
+      return;
     }
+
+    final currentProfile =
+        _currentProfile ?? await _profileService.getCurrentAuthenticatedProfile();
+
+    if (currentProfile == null) {
+      debugPrint('CalendarScreen: no current profile for filter loading');
+      return;
+    }
+
+    final profiles = await _profileService.getFamilyProfiles(
+      currentProfile.familyId,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _currentProfile = currentProfile;
+      _filterProfiles = profiles;
+
+      if (_hasInitialFilterState) {
+        _selectedFilterProfileIds = Set<String>.from(
+          widget.initialSelectedFilterProfileIds ?? const {},
+        );
+        _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
+        return;
+      }
+
+      // Required default:
+      // Parent = own + family/others.
+      // Child = own only.
+      _selectedFilterProfileIds = {currentProfile.id};
+      _showFamilyActivities = currentProfile.isParent;
+    });
+  } catch (e, st) {
+    debugPrint('CalendarScreen _loadFilterProfiles failed: $e');
+    debugPrintStack(stackTrace: st);
   }
+}
 
   Future<void> _goToPreviousWeek() async {
     setState(() {

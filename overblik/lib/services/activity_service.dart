@@ -77,6 +77,34 @@ class ActivityService {
     return repository.deleteActivity(activityId);
   }
 
+  Future<void> setActivityCompleted({
+    required String activityId,
+    required bool isCompleted,
+  }) async {
+    if (activityId.trim().isEmpty) {
+      throw ArgumentError('Activity id cannot be empty.');
+    }
+
+    await repository.setActivityCompleted(
+      activityId: activityId,
+      isCompleted: isCompleted,
+    );
+  }
+
+  Future<void> setChecklistItemChecked({
+    required String checklistItemId,
+    required bool isChecked,
+  }) async {
+    if (checklistItemId.trim().isEmpty) {
+      throw ArgumentError('Checklist item id cannot be empty.');
+    }
+
+    await repository.setChecklistItemChecked(
+      checklistItemId: checklistItemId,
+      isChecked: isChecked,
+    );
+  }
+
   Activity _validateActivity(Activity activity) {
     if (activity.title.trim().isEmpty) {
       throw ArgumentError('Activity title cannot be empty.');

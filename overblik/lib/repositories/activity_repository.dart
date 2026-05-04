@@ -12,4 +12,14 @@ abstract class ActivityRepository {
   Future<void> updateActivity(Activity activity);
 
   Future<void> deleteActivity(String activityId);
+
+  Future<void> setActivityCompleted({
+    required String activityId,
+    required bool isCompleted,
+  });
+
+  Future<void> setChecklistItemChecked({
+    required String checklistItemId,
+    required bool isChecked,
+  });
 }
