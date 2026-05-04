@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../core/utils/activity_filter.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
@@ -172,8 +171,8 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     }
 
     if (_hasAuthUser) {
-      final currentProfile = await _profileService
-          .getCurrentAuthenticatedProfile();
+      final currentProfile =
+          await _profileService.getCurrentAuthenticatedProfile();
 
       if (!mounted) return;
 
@@ -186,8 +185,8 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
       );
     }
 
-    await _loadMonthActivities();
     await _loadFilterProfiles();
+    await _loadMonthActivities();
   }
 
   Future<void> _loadMonthActivities() async {
@@ -232,8 +231,8 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
           cursor,
         );
 
-        // Do NOT deduplicate only by id here.
-        // Recurring activities may share the same database id,
+        // Do not deduplicate only by id here.
+        // Recurring activities share the same database id,
         // but each occurrence has a different start time.
         allActivities.addAll(weekActivities);
 
@@ -309,16 +308,17 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
             return;
           }
 
+          // Legacy child-session default:
+          // Child sees own activities only.
           _selectedFilterProfileIds = {widget.childProfileId!};
-          _showFamilyActivities = true;
+          _showFamilyActivities = false;
         });
 
         return;
       }
 
       final currentProfile =
-          _currentProfile ??
-          await _profileService.getCurrentAuthenticatedProfile();
+          _currentProfile ?? await _profileService.getCurrentAuthenticatedProfile();
 
       if (currentProfile == null) {
         debugPrint(
@@ -330,8 +330,8 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
       final profiles = currentProfile.isParent
           ? await _profileService.getFamilyProfiles(currentProfile.familyId)
           : currentProfile.isChild
-          ? <Profile>[currentProfile]
-          : await _profileService.getFamilyProfilesForCurrentUser();
+              ? <Profile>[currentProfile]
+              : await _profileService.getFamilyProfilesForCurrentUser();
 
       if (!mounted) return;
 
@@ -347,15 +347,11 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
           return;
         }
 
-        if (currentProfile.isParent) {
-          _selectedFilterProfileIds = profiles
-              .map((profile) => profile.id)
-              .toSet();
-          _showFamilyActivities = true;
-        } else {
-          _selectedFilterProfileIds = {currentProfile.id};
-          _showFamilyActivities = true;
-        }
+        // Required default:
+        // Parent = own profile + family activities.
+        // Child = own profile only.
+        _selectedFilterProfileIds = {currentProfile.id};
+        _showFamilyActivities = currentProfile.isParent;
       });
     } catch (e, st) {
       debugPrint('MonthlyCalendarScreen _loadFilterProfiles failed: $e');
@@ -412,21 +408,33 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   Future<void> _openFilterPanel() async {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
+      isScrollControlled: true,
       builder: (sheetContext) {
-        return FilterPanel(
-          profiles: _filterProfiles,
-          selectedProfileIds: _selectedFilterProfileIds,
-          showFamilyActivities: _showFamilyActivities,
-          isChildView: _isChildSession || _currentProfile?.isChild == true,
+        return FractionallySizedBox(
+          heightFactor: 0.85,
+          child: SingleChildScrollView(
+            child: FilterPanel(
+              profiles: _filterProfiles,
+              selectedProfileIds: _selectedFilterProfileIds,
+              showFamilyActivities: _showFamilyActivities,
+              isChildView: _isChildSession || _currentProfile?.isChild == true,
+              currentProfileId: _currentProfile?.id,
+            ),
+          ),
         );
       },
     );
 
     if (result == null || !mounted) return;
 
+    final rawProfileIds = result['profileIds'];
+
     setState(() {
-      _selectedFilterProfileIds = result['profileIds'] as Set<String>;
-      _showFamilyActivities = result['showFamily'] as bool;
+      _selectedFilterProfileIds = rawProfileIds is Iterable
+          ? Set<String>.from(rawProfileIds)
+          : <String>{};
+
+      _showFamilyActivities = result['showFamily'] == true;
     });
   }
 
@@ -591,11 +599,27 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   }
 
   List<Activity> _filterActivities(List<Activity> activities) {
-    return filterActivities(
-      activities: activities,
-      selectedProfileIds: _selectedFilterProfileIds,
-      showFamilyActivities: _showFamilyActivities,
-    );
+    if (_selectedFilterProfileIds.isEmpty && !_showFamilyActivities) {
+      return [];
+    }
+
+    return activities.where((activity) {
+      final matchesParticipant = activity.participants.any((participant) {
+        return participant.profileId != null &&
+            _selectedFilterProfileIds.contains(participant.profileId);
+      });
+
+      final matchesOwner = activity.ownerProfileId != null &&
+          _selectedFilterProfileIds.contains(activity.ownerProfileId);
+
+      final matchesFamily = _showFamilyActivities &&
+          (activity.visibility == ActivityVisibility.family ||
+              activity.participants.any(
+                (participant) => participant.externalName == 'Familie',
+              ));
+
+      return matchesParticipant || matchesOwner || matchesFamily;
+    }).toList();
   }
 
   List<Activity> _getActivitiesForDate(DateTime date) {
@@ -629,10 +653,10 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
     final cellHeight = isLandscape
         ? 58.0
         : screenHeight < 700
-        ? 70.0
-        : screenHeight < 780
-        ? 76.0
-        : 82.0;
+            ? 70.0
+            : screenHeight < 780
+                ? 76.0
+                : 82.0;
 
     debugPrint(
       'MonthlyCalendarScreen: days=${_activitiesByDate.length}, profiles=${_filterProfiles.length}, selected=$_selectedFilterProfileIds, showFamily=$_showFamilyActivities',
@@ -697,34 +721,37 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
                         child: _isLoading
                             ? const Center(child: CircularProgressIndicator())
                             : !_hasAnyActivities
-                            ? const _EmptyMonthView()
-                            : SingleChildScrollView(
-                                child: Column(
-                                  children: weekRows
-                                      .map(
-                                        (week) => Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 8,
-                                          ),
-                                          child: _MonthWeekRow(
-                                            week: week,
-                                            focusedMonth: _focusedDate.month,
-                                            today: today,
-                                            weekNumber: _getWeekNumber(week[0]),
-                                            weekNumberWidth: weekNumberWidth,
-                                            cellHeight: cellHeight,
-                                            getActivitiesForDate:
-                                                _getActivitiesForDate,
-                                            activityColorBuilder:
-                                                _activityColor,
-                                            isSameDate: _isSameDate,
-                                            onTapDay: _openDay,
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                              ),
+                                ? const _EmptyMonthView()
+                                : SingleChildScrollView(
+                                    child: Column(
+                                      children: weekRows
+                                          .map(
+                                            (week) => Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 8,
+                                              ),
+                                              child: _MonthWeekRow(
+                                                week: week,
+                                                focusedMonth:
+                                                    _focusedDate.month,
+                                                today: today,
+                                                weekNumber:
+                                                    _getWeekNumber(week[0]),
+                                                weekNumberWidth:
+                                                    weekNumberWidth,
+                                                cellHeight: cellHeight,
+                                                getActivitiesForDate:
+                                                    _getActivitiesForDate,
+                                                activityColorBuilder:
+                                                    _activityColor,
+                                                isSameDate: _isSameDate,
+                                                onTapDay: _openDay,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ),
                       ),
                     ],
                   ),
@@ -742,7 +769,10 @@ class _TopHeader extends StatelessWidget {
   final bool showChildHeaderName;
   final String? displayName;
 
-  const _TopHeader({required this.showChildHeaderName, this.displayName});
+  const _TopHeader({
+    required this.showChildHeaderName,
+    this.displayName,
+  });
 
   @override
   Widget build(BuildContext context) {

@@ -369,7 +369,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       final participantText =
           _activity.participants.map(_participantDisplayText).join(', ');
 
-      return 'Hele familien, deltagerne er${participantText.trim().isNotEmpty ? ' ($participantText)' : ''}';
+      return 'Hele familien';
     }
 
     if (_activity.participants.isEmpty) {

@@ -915,13 +915,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          _InlineInfoBox(
-            icon: Icons.admin_panel_settings_outlined,
-            title: 'Adgangsstyring',
-            text:
-                'Der er ${_profiles.length} profiler i familien. Forældre har fuld adgang. Børn kan enten have begrænset eller udvidet adgang.',
-          ),
+        
           _buildJoinRequestsSection(),
           const SizedBox(height: 16),
           ..._profiles.map(

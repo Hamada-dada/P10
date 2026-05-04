@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../core/utils/activity_filter.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
@@ -169,8 +168,8 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     }
 
     if (_hasAuthUser) {
-      final currentProfile = await _profileService
-          .getCurrentAuthenticatedProfile();
+      final currentProfile =
+          await _profileService.getCurrentAuthenticatedProfile();
 
       if (!mounted) return;
 
@@ -183,8 +182,8 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       );
     }
 
-    await _loadWeekActivities();
     await _loadFilterProfiles();
+    await _loadWeekActivities();
   }
 
   Future<void> _loadWeekActivities() async {
@@ -215,7 +214,19 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       for (final activity in activities) {
         final key = _dateKey(activity.startTime);
         grouped.putIfAbsent(key, () => []);
-        grouped[key]!.add(activity);
+
+        final alreadyAddedForSameTime = grouped[key]!.any((existing) {
+          return existing.id == activity.id &&
+              existing.startTime.year == activity.startTime.year &&
+              existing.startTime.month == activity.startTime.month &&
+              existing.startTime.day == activity.startTime.day &&
+              existing.startTime.hour == activity.startTime.hour &&
+              existing.startTime.minute == activity.startTime.minute;
+        });
+
+        if (!alreadyAddedForSameTime) {
+          grouped[key]!.add(activity);
+        }
       }
 
       for (final entry in grouped.entries) {
@@ -266,16 +277,17 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
             return;
           }
 
+          // Legacy child-session default:
+          // Child sees own activities only.
           _selectedFilterProfileIds = {widget.childProfileId!};
-          _showFamilyActivities = true;
+          _showFamilyActivities = false;
         });
 
         return;
       }
 
       final currentProfile =
-          _currentProfile ??
-          await _profileService.getCurrentAuthenticatedProfile();
+          _currentProfile ?? await _profileService.getCurrentAuthenticatedProfile();
 
       if (currentProfile == null) {
         debugPrint(
@@ -287,8 +299,8 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       final profiles = currentProfile.isParent
           ? await _profileService.getFamilyProfiles(currentProfile.familyId)
           : currentProfile.isChild
-          ? <Profile>[currentProfile]
-          : await _profileService.getFamilyProfilesForCurrentUser();
+              ? <Profile>[currentProfile]
+              : await _profileService.getFamilyProfilesForCurrentUser();
 
       if (!mounted) return;
 
@@ -304,15 +316,11 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
           return;
         }
 
-        if (currentProfile.isParent) {
-          _selectedFilterProfileIds = profiles
-              .map((profile) => profile.id)
-              .toSet();
-          _showFamilyActivities = true;
-        } else {
-          _selectedFilterProfileIds = {currentProfile.id};
-          _showFamilyActivities = true;
-        }
+        // Required default:
+        // Parent = own profile + family activities.
+        // Child = own profile only.
+        _selectedFilterProfileIds = {currentProfile.id};
+        _showFamilyActivities = currentProfile.isParent;
       });
     } catch (e, st) {
       debugPrint('WeeklyCalendarScreen _loadFilterProfiles failed: $e');
@@ -409,21 +417,33 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   Future<void> _openFilterPanel() async {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
+      isScrollControlled: true,
       builder: (sheetContext) {
-        return FilterPanel(
-          profiles: _filterProfiles,
-          selectedProfileIds: _selectedFilterProfileIds,
-          showFamilyActivities: _showFamilyActivities,
-          isChildView: _isChildSession || _currentProfile?.isChild == true,
+        return FractionallySizedBox(
+          heightFactor: 0.85,
+          child: SingleChildScrollView(
+            child: FilterPanel(
+              profiles: _filterProfiles,
+              selectedProfileIds: _selectedFilterProfileIds,
+              showFamilyActivities: _showFamilyActivities,
+              isChildView: _isChildSession || _currentProfile?.isChild == true,
+              currentProfileId: _currentProfile?.id,
+            ),
+          ),
         );
       },
     );
 
     if (result == null || !mounted) return;
 
+    final rawProfileIds = result['profileIds'];
+
     setState(() {
-      _selectedFilterProfileIds = result['profileIds'] as Set<String>;
-      _showFamilyActivities = result['showFamily'] as bool;
+      _selectedFilterProfileIds = rawProfileIds is Iterable
+          ? Set<String>.from(rawProfileIds)
+          : <String>{};
+
+      _showFamilyActivities = result['showFamily'] == true;
     });
   }
 
@@ -467,11 +487,27 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   }
 
   List<Activity> _filterActivities(List<Activity> activities) {
-    return filterActivities(
-      activities: activities,
-      selectedProfileIds: _selectedFilterProfileIds,
-      showFamilyActivities: _showFamilyActivities,
-    );
+    if (_selectedFilterProfileIds.isEmpty && !_showFamilyActivities) {
+      return [];
+    }
+
+    return activities.where((activity) {
+      final matchesParticipant = activity.participants.any((participant) {
+        return participant.profileId != null &&
+            _selectedFilterProfileIds.contains(participant.profileId);
+      });
+
+      final matchesOwner = activity.ownerProfileId != null &&
+          _selectedFilterProfileIds.contains(activity.ownerProfileId);
+
+      final matchesFamily = _showFamilyActivities &&
+          (activity.visibility == ActivityVisibility.family ||
+              activity.participants.any(
+                (participant) => participant.externalName == 'Familie',
+              ));
+
+      return matchesParticipant || matchesOwner || matchesFamily;
+    }).toList();
   }
 
   List<Activity> _activitiesForDate(DateTime date) {
@@ -592,26 +628,26 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
                         child: _isLoading
                             ? const Center(child: CircularProgressIndicator())
                             : !_hasAnyActivities
-                            ? const _EmptyWeekView()
-                            : ListView.separated(
-                                itemCount: weekDays.length,
-                                separatorBuilder: (_, _) =>
-                                    const SizedBox(height: 10),
-                                itemBuilder: (context, index) {
-                                  final day = weekDays[index];
-                                  final activities = _activitiesForDate(day);
-                                  final highlight = _getWeeklyHighlight(
-                                    activities,
-                                  );
+                                ? const _EmptyWeekView()
+                                : ListView.separated(
+                                    itemCount: weekDays.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (context, index) {
+                                      final day = weekDays[index];
+                                      final activities = _activitiesForDate(day);
+                                      final highlight = _getWeeklyHighlight(
+                                        activities,
+                                      );
 
-                                  return _WeekDayCard(
-                                    date: day,
-                                    activities: activities,
-                                    highlightActivity: highlight,
-                                    onTap: () => _openDay(day),
-                                  );
-                                },
-                              ),
+                                      return _WeekDayCard(
+                                        date: day,
+                                        activities: activities,
+                                        highlightActivity: highlight,
+                                        onTap: () => _openDay(day),
+                                      );
+                                    },
+                                  ),
                       ),
                     ],
                   ),
@@ -629,7 +665,10 @@ class _TopHeader extends StatelessWidget {
   final bool showChildHeaderName;
   final String? displayName;
 
-  const _TopHeader({required this.showChildHeaderName, this.displayName});
+  const _TopHeader({
+    required this.showChildHeaderName,
+    this.displayName,
+  });
 
   @override
   Widget build(BuildContext context) {

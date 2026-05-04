@@ -5,26 +5,55 @@ bool activityMatchesFilter({
   required Set<String> selectedProfileIds,
   required bool showFamilyActivities,
 }) {
-  // No active filter = show everything.
+  // Nothing selected = show nothing.
   if (selectedProfileIds.isEmpty && !showFamilyActivities) {
-    return true;
+    return false;
   }
 
-  final matchesParticipant = activity.participants.any((participant) {
-    return participant.profileId != null &&
-        selectedProfileIds.contains(participant.profileId);
-  });
+  final profileParticipantIds = activity.participants
+      .map((participant) => participant.profileId)
+      .whereType<String>()
+      .toSet();
 
-  final matchesOwner = activity.ownerProfileId != null &&
-      selectedProfileIds.contains(activity.ownerProfileId);
+  final externalParticipantNames = activity.participants
+      .map((participant) => participant.externalName?.trim())
+      .whereType<String>()
+      .where((name) => name.isNotEmpty)
+      .toSet();
 
-  final matchesFamily = showFamilyActivities &&
-      (activity.visibility == ActivityVisibility.family ||
-          activity.participants.any(
-            (participant) => participant.externalName == 'Familie',
-          ));
+  final hasFamilyMarker = externalParticipantNames.contains('Familie');
 
-  return matchesParticipant || matchesOwner || matchesFamily;
+  final hasExternalNonFamilyParticipant = externalParticipantNames.any(
+    (name) => name != 'Familie',
+  );
+
+  final isFamilyActivity =
+      activity.visibility == ActivityVisibility.family || hasFamilyMarker;
+
+  final relatedToSelectedProfile =
+      (activity.ownerProfileId != null &&
+          selectedProfileIds.contains(activity.ownerProfileId)) ||
+      profileParticipantIds.any(selectedProfileIds.contains);
+
+  final hasMultipleProfileParticipants = profileParticipantIds.length > 1;
+
+  final isSharedActivity =
+      relatedToSelectedProfile &&
+      (hasMultipleProfileParticipants || hasExternalNonFamilyParticipant);
+
+  final isPersonalActivity =
+      relatedToSelectedProfile &&
+      !isFamilyActivity &&
+      !hasMultipleProfileParticipants &&
+      !hasExternalNonFamilyParticipant;
+
+  final matchesPersonalProfileActivity =
+      selectedProfileIds.isNotEmpty && isPersonalActivity;
+
+  final matchesSharedOrFamilyActivity =
+      showFamilyActivities && (isFamilyActivity || isSharedActivity);
+
+  return matchesPersonalProfileActivity || matchesSharedOrFamilyActivity;
 }
 
 List<Activity> filterActivities({

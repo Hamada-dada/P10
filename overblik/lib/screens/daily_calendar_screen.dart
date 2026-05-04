@@ -216,109 +216,73 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     debugPrint('DailyCalendarScreen: app resumed, reloading activities');
     _loadActivities(showFullLoader: false);
   }
-
   Future<void> _loadActivities({bool showFullLoader = true}) async {
-    if (_isRefreshing) return;
+  if (_isRefreshing) return;
 
-    if (!_canUseScreen) {
-      debugPrint(
-        'DailyCalendarScreen: no auth user or child session, skipping activity load',
-      );
+  if (!_canUseScreen) {
+    debugPrint(
+      'DailyCalendarScreen: no auth user or child session, skipping activity load',
+    );
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      setState(() {
-        _activities = [];
-        _isLoading = false;
-      });
+    setState(() {
+      _activities = [];
+      _isLoading = false;
+    });
 
-      return;
-    }
-
-    try {
-      _isRefreshing = true;
-
-      if (showFullLoader && mounted) {
-        setState(() {
-          _isLoading = true;
-        });
-      }
-
-      final activities = await _activityService.getActivitiesForDate(
-        _focusedDate,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _activities = activities;
-        _isLoading = false;
-      });
-    } catch (e, st) {
-      debugPrint('DailyCalendarScreen _loadActivities failed: $e');
-      debugPrintStack(stackTrace: st);
-
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Kunne ikke hente aktiviteter: $e'),
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    } finally {
-      _isRefreshing = false;
-    }
+    return;
   }
 
-  Future<void> _loadFilterProfiles() async {
-    try {
-      if (_isChildSession) {
-        if (widget.childProfileId == null) return;
+  try {
+    _isRefreshing = true;
 
-        if (!mounted) return;
+    if (showFullLoader && mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
-        setState(() {
-          _filterProfiles = [];
+    final activities = await _activityService.getActivitiesForDate(
+      _focusedDate,
+    );
 
-          if (_hasInitialFilterState) {
-            _selectedFilterProfileIds = Set<String>.from(
-              widget.initialSelectedFilterProfileIds ?? const {},
-            );
-            _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
-            return;
-          }
+    if (!mounted) return;
 
-          _selectedFilterProfileIds = {widget.childProfileId!};
-          _showFamilyActivities = true;
-        });
+    setState(() {
+      _activities = activities;
+      _isLoading = false;
+    });
+  } catch (e, st) {
+    debugPrint('DailyCalendarScreen _loadActivities failed: $e');
+    debugPrintStack(stackTrace: st);
 
-        return;
-      }
+    if (!mounted) return;
 
-      final currentProfile =
-          _currentProfile ??
-          await _profileService.getCurrentAuthenticatedProfile();
+    setState(() {
+      _isLoading = false;
+    });
 
-      if (currentProfile == null) {
-        debugPrint(
-          'DailyCalendarScreen: no current profile for filter loading',
-        );
-        return;
-      }
-      final profiles = currentProfile.isParent
-          ? await _profileService.getFamilyProfiles(currentProfile.familyId)
-          : currentProfile.isChild
-          ? <Profile>[currentProfile]
-          : await _profileService.getFamilyProfilesForCurrentUser();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Kunne ikke hente aktiviteter: $e'),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  } finally {
+    _isRefreshing = false;
+  }
+}
+
+Future<void> _loadFilterProfiles() async {
+  try {
+    if (_isChildSession) {
+      if (widget.childProfileId == null) return;
+
       if (!mounted) return;
 
       setState(() {
-        _filterProfiles = profiles;
+        _filterProfiles = [];
 
         if (_hasInitialFilterState) {
           _selectedFilterProfileIds = Set<String>.from(
@@ -328,23 +292,57 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
           return;
         }
 
-        if (currentProfile.isParent) {
-          // Parent default filter = all children/profiles + family activities.
-          _selectedFilterProfileIds = profiles
-              .map((profile) => profile.id)
-              .toSet();
-          _showFamilyActivities = true;
-        } else {
-          // Child default filter = own profile + family activities.
-          _selectedFilterProfileIds = {currentProfile.id};
-          _showFamilyActivities = true;
-        }
+        // Legacy child-session default:
+        // Child sees own activities only.
+        _selectedFilterProfileIds = {widget.childProfileId!};
+        _showFamilyActivities = false;
       });
-    } catch (e, st) {
-      debugPrint('DailyCalendarScreen _loadFilterProfiles failed: $e');
-      debugPrintStack(stackTrace: st);
+
+      return;
     }
+
+    final currentProfile =
+        _currentProfile ?? await _profileService.getCurrentAuthenticatedProfile();
+
+    if (currentProfile == null) {
+      debugPrint(
+        'DailyCalendarScreen: no current profile for filter loading',
+      );
+      return;
+    }
+
+    final profiles = currentProfile.isParent
+        ? await _profileService.getFamilyProfiles(currentProfile.familyId)
+        : currentProfile.isChild
+            ? <Profile>[currentProfile]
+            : await _profileService.getFamilyProfilesForCurrentUser();
+
+    if (!mounted) return;
+
+    setState(() {
+      _currentProfile = currentProfile;
+      _filterProfiles = profiles;
+
+      if (_hasInitialFilterState) {
+        _selectedFilterProfileIds = Set<String>.from(
+          widget.initialSelectedFilterProfileIds ?? const {},
+        );
+        _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
+        return;
+      }
+
+      // Required default:
+      // Parent = own profile + family activities.
+      // Child = own profile only.
+      _selectedFilterProfileIds = {currentProfile.id};
+      _showFamilyActivities = currentProfile.isParent;
+    });
+  } catch (e, st) {
+    debugPrint('DailyCalendarScreen _loadFilterProfiles failed: $e');
+    debugPrintStack(stackTrace: st);
   }
+}
+
 
   List<Activity> get _filteredActivities {
     return filterActivities(
@@ -378,26 +376,42 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     await _loadActivities();
   }
 
-  Future<void> _openFilterPanel() async {
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      builder: (sheetContext) {
-        return FilterPanel(
-          profiles: _filterProfiles,
-          selectedProfileIds: _selectedFilterProfileIds,
-          showFamilyActivities: _showFamilyActivities,
-          isChildView: _isChildSession || _currentProfile?.isChild == true,
-        );
-      },
-    );
+Future<void> _openFilterPanel() async {
+  final result = await showModalBottomSheet<Map<String, dynamic>>(
+    context: context,
+    isScrollControlled: true,
+    builder: (sheetContext) {
+      return DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.55,
+        minChildSize: 0.35,
+        maxChildSize: 0.85,
+        builder: (context, scrollController) {
+          return FilterPanel(
+            profiles: _filterProfiles,
+            selectedProfileIds: _selectedFilterProfileIds,
+            showFamilyActivities: _showFamilyActivities,
+            isChildView: _isChildSession || _currentProfile?.isChild == true,
+            currentProfileId: _currentProfile?.id,
+            scrollController: scrollController,
+          );
+        },
+      );
+    },
+  );
 
-    if (result == null || !mounted) return;
+  if (result == null || !mounted) return;
 
-    setState(() {
-      _selectedFilterProfileIds = result['profileIds'] as Set<String>;
-      _showFamilyActivities = result['showFamily'] as bool;
-    });
-  }
+  final rawProfileIds = result['profileIds'];
+
+  setState(() {
+    _selectedFilterProfileIds = rawProfileIds is Iterable
+        ? Set<String>.from(rawProfileIds)
+        : <String>{};
+
+    _showFamilyActivities = result['showFamily'] == true;
+  });
+}
 
   Future<void> _openCreateActivityScreen() async {
     if (!_canCreateActivity) {
