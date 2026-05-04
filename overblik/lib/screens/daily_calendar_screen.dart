@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/utils/activity_filter.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
@@ -21,6 +22,9 @@ import 'weekly_calendar_screen.dart';
 class DailyCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
 
+  final Set<String>? initialSelectedFilterProfileIds;
+  final bool? initialShowFamilyActivities;
+
   // Legacy child session fields.
   // Keep these temporarily until the old fake child-session flow is fully removed.
   final String? childFamilyId;
@@ -32,6 +36,8 @@ class DailyCalendarScreen extends StatefulWidget {
   const DailyCalendarScreen({
     super.key,
     this.initialDate,
+    this.initialSelectedFilterProfileIds,
+    this.initialShowFamilyActivities,
     this.childFamilyId,
     this.childProfileId,
     this.childDisplayName,
@@ -88,6 +94,11 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
   bool get _isChildSession => widget.isChildSession;
 
+  bool get _hasInitialFilterState {
+    return widget.initialSelectedFilterProfileIds != null ||
+        widget.initialShowFamilyActivities != null;
+  }
+
   bool get _canUseScreen {
     return _hasAuthUser || _isChildSession;
   }
@@ -140,6 +151,12 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     debugPrint('DailyCalendarScreen: childProfileId=${widget.childProfileId}');
     debugPrint('DailyCalendarScreen: childRole=${widget.childRole}');
     debugPrint('DailyCalendarScreen: childLoginCode=${widget.childLoginCode}');
+    debugPrint(
+      'DailyCalendarScreen: initialSelectedFilterProfileIds=${widget.initialSelectedFilterProfileIds}',
+    );
+    debugPrint(
+      'DailyCalendarScreen: initialShowFamilyActivities=${widget.initialShowFamilyActivities}',
+    );
 
     _initializeScreen();
   }
@@ -160,8 +177,8 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     }
 
     if (_hasAuthUser) {
-      final currentProfile =
-          await _profileService.getCurrentAuthenticatedProfile();
+      final currentProfile = await _profileService
+          .getCurrentAuthenticatedProfile();
 
       if (!mounted) return;
 
@@ -267,31 +284,61 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
         setState(() {
           _filterProfiles = [];
+
+          if (_hasInitialFilterState) {
+            _selectedFilterProfileIds = Set<String>.from(
+              widget.initialSelectedFilterProfileIds ?? const {},
+            );
+            _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
+            return;
+          }
+
           _selectedFilterProfileIds = {widget.childProfileId!};
-          _showFamilyActivities = false;
+          _showFamilyActivities = true;
         });
 
         return;
       }
 
       final currentProfile =
-          _currentProfile ?? await _profileService.getCurrentAuthenticatedProfile();
+          _currentProfile ??
+          await _profileService.getCurrentAuthenticatedProfile();
 
       if (currentProfile == null) {
-        debugPrint('DailyCalendarScreen: no current profile for filter loading');
+        debugPrint(
+          'DailyCalendarScreen: no current profile for filter loading',
+        );
         return;
       }
-
       final profiles = currentProfile.isParent
           ? await _profileService.getFamilyProfiles(currentProfile.familyId)
+          : currentProfile.isChild
+          ? <Profile>[currentProfile]
           : await _profileService.getFamilyProfilesForCurrentUser();
-
       if (!mounted) return;
 
       setState(() {
         _filterProfiles = profiles;
-        _selectedFilterProfileIds = {currentProfile.id};
-        _showFamilyActivities = false;
+
+        if (_hasInitialFilterState) {
+          _selectedFilterProfileIds = Set<String>.from(
+            widget.initialSelectedFilterProfileIds ?? const {},
+          );
+          _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
+          return;
+        }
+
+        if (currentProfile.isParent) {
+          // Parent default filter = all children/profiles + family activities.
+          _selectedFilterProfileIds = profiles
+              .map((profile) => profile.id)
+              .toSet();
+          _showFamilyActivities = true;
+        } else {
+          // Child default filter = own profile + family activities.
+          _selectedFilterProfileIds = {currentProfile.id};
+          _showFamilyActivities = true;
+        }
       });
     } catch (e, st) {
       debugPrint('DailyCalendarScreen _loadFilterProfiles failed: $e');
@@ -300,28 +347,11 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   }
 
   List<Activity> get _filteredActivities {
-    if (_selectedFilterProfileIds.isEmpty && !_showFamilyActivities) {
-      return _activities;
-    }
-
-    return _activities.where((activity) {
-      final matchesProfile = activity.participants.any((participant) {
-        return participant.profileId != null &&
-            _selectedFilterProfileIds.contains(participant.profileId);
-      });
-
-      final matchesFamily =
-          _showFamilyActivities &&
-          activity.participants.any(
-            (participant) => participant.externalName == 'Familie',
-          );
-
-      final matchesOwner =
-          activity.ownerProfileId != null &&
-          _selectedFilterProfileIds.contains(activity.ownerProfileId);
-
-      return matchesProfile || matchesFamily || matchesOwner;
-    }).toList();
+    return filterActivities(
+      activities: _activities,
+      selectedProfileIds: _selectedFilterProfileIds,
+      showFamilyActivities: _showFamilyActivities,
+    );
   }
 
   Future<void> _goToPreviousDay() async {
@@ -356,6 +386,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
           profiles: _filterProfiles,
           selectedProfileIds: _selectedFilterProfileIds,
           showFamilyActivities: _showFamilyActivities,
+          isChildView: _isChildSession || _currentProfile?.isChild == true,
         );
       },
     );
@@ -531,6 +562,10 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
       MaterialPageRoute(
         builder: (_) => WeeklyCalendarScreen(
           initialDate: _focusedDate,
+          initialSelectedFilterProfileIds: Set<String>.from(
+            _selectedFilterProfileIds,
+          ),
+          initialShowFamilyActivities: _showFamilyActivities,
           childFamilyId: widget.childFamilyId,
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
@@ -547,6 +582,10 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
       MaterialPageRoute(
         builder: (_) => MonthlyCalendarScreen(
           initialDate: _focusedDate,
+          initialSelectedFilterProfileIds: Set<String>.from(
+            _selectedFilterProfileIds,
+          ),
+          initialShowFamilyActivities: _showFamilyActivities,
           childFamilyId: widget.childFamilyId,
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
@@ -628,81 +667,77 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
                           child: _isLoading
                               ? const Center(child: CircularProgressIndicator())
                               : activities.isEmpty
-                                  ? _EmptyActivitiesView(
-                                      isChildSession: _isChildSession,
-                                    )
-                                  : ListView.separated(
-                                      physics:
-                                          const AlwaysScrollableScrollPhysics(),
-                                      itemCount: activities.length,
-                                      separatorBuilder: (_, _) =>
-                                          const SizedBox(height: 10),
-                                      itemBuilder: (context, index) {
-                                        final activity = activities[index];
+                              ? _EmptyActivitiesView(
+                                  isChildSession: _isChildSession,
+                                )
+                              : ListView.separated(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  itemCount: activities.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder: (context, index) {
+                                    final activity = activities[index];
 
-                                        return ActivityCard(
-                                          activity: activity,
-                                          profiles: _filterProfiles,
-                                          onTap: () =>
-                                              _openActivityDetail(activity),
-                                          onCompletedChanged:
-                                              (isCompleted) async {
-                                            final scaffoldMessenger =
-                                                ScaffoldMessenger.of(context);
-                                            final updatedActivity =
-                                                activity.copyWith(
-                                              isCompleted: isCompleted,
-                                            );
+                                    return ActivityCard(
+                                      activity: activity,
+                                      profiles: _filterProfiles,
+                                      onTap: () =>
+                                          _openActivityDetail(activity),
+                                      onCompletedChanged: (isCompleted) async {
+                                        final scaffoldMessenger =
+                                            ScaffoldMessenger.of(context);
+                                        final updatedActivity = activity
+                                            .copyWith(isCompleted: isCompleted);
 
-                                            setState(() {
-                                              _activities =
-                                                  _activities.map((existing) {
-                                                if (existing.id !=
-                                                    activity.id) {
-                                                  return existing;
-                                                }
-
-                                                return updatedActivity;
-                                              }).toList();
-                                            });
-
-                                            try {
-                                              await _activityService
-                                                  .updateActivity(
-                                                updatedActivity,
-                                              );
-                                            } catch (e, st) {
-                                              debugPrint(
-                                                'DailyCalendarScreen onCompletedChanged failed: $e',
-                                              );
-                                              debugPrintStack(stackTrace: st);
-
-                                              if (!mounted) return;
-
-                                              setState(() {
-                                                _activities = _activities
-                                                    .map((existing) {
-                                                  if (existing.id !=
-                                                      activity.id) {
-                                                    return existing;
-                                                  }
-
-                                                  return activity;
-                                                }).toList();
-                                              });
-
-                                              scaffoldMessenger.showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'Kunne ikke opdatere aktiviteten.',
-                                                  ),
-                                                ),
-                                              );
+                                        setState(() {
+                                          _activities = _activities.map((
+                                            existing,
+                                          ) {
+                                            if (existing.id != activity.id) {
+                                              return existing;
                                             }
-                                          },
-                                        );
+
+                                            return updatedActivity;
+                                          }).toList();
+                                        });
+
+                                        try {
+                                          await _activityService.updateActivity(
+                                            updatedActivity,
+                                          );
+                                        } catch (e, st) {
+                                          debugPrint(
+                                            'DailyCalendarScreen onCompletedChanged failed: $e',
+                                          );
+                                          debugPrintStack(stackTrace: st);
+
+                                          if (!mounted) return;
+
+                                          setState(() {
+                                            _activities = _activities.map((
+                                              existing,
+                                            ) {
+                                              if (existing.id != activity.id) {
+                                                return existing;
+                                              }
+
+                                              return activity;
+                                            }).toList();
+                                          });
+
+                                          scaffoldMessenger.showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Kunne ikke opdatere aktiviteten.',
+                                              ),
+                                            ),
+                                          );
+                                        }
                                       },
-                                    ),
+                                    );
+                                  },
+                                ),
                         ),
                       ),
                     ],

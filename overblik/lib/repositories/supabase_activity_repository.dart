@@ -89,7 +89,7 @@ class SupabaseActivityRepository implements ActivityRepository {
   Future<String?> _getCurrentFamilyId() async {
     if (_isChildSession) {
       debugPrint(
-        'SupabaseActivityRepository: using child session '
+        'SupabaseActivityRepository: using legacy child session '
         'familyId=$childFamilyId profileId=$childProfileId role=$childRole',
       );
 
@@ -112,25 +112,25 @@ class SupabaseActivityRepository implements ActivityRepository {
 
     try {
       final profile = await _client
-    .from('profiles')
-    .select('family_id, role')
-    .eq('auth_user_id', user.id)
-    .eq('is_active', true)
-    .maybeSingle();
+          .from('profiles')
+          .select('family_id, role')
+          .eq('auth_user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle();
 
-debugPrint(
-  'SupabaseActivityRepository: current profile lookup = $profile',
-);
+      debugPrint(
+        'SupabaseActivityRepository: current profile lookup = $profile',
+      );
 
-if (profile == null) {
-  debugPrint(
-    'SupabaseActivityRepository: authenticated user has no active '
-    'profile, clearing cache and returning null family id',
-  );
+      if (profile == null) {
+        debugPrint(
+          'SupabaseActivityRepository: authenticated user has no active '
+          'profile, clearing cache and returning null family id',
+        );
 
-  await _clearCachedFamilyIdForUser(user.id);
+        await _clearCachedFamilyIdForUser(user.id);
 
-  return null;
+        return null;
       }
 
       final familyId = profile['family_id'] as String?;
@@ -343,7 +343,7 @@ if (profile == null) {
     required DateTime rangeEnd,
   }) async {
     if (_isChildSession) {
-      return _getActivitiesForRangeOnlineAsChild(
+      return _getActivitiesForRangeOnlineAsLegacyChild(
         familyId: familyId,
         rangeStart: rangeStart,
         rangeEnd: rangeEnd,
@@ -381,14 +381,14 @@ if (profile == null) {
     return expandedActivities;
   }
 
-  Future<List<Activity>> _getActivitiesForRangeOnlineAsChild({
+  Future<List<Activity>> _getActivitiesForRangeOnlineAsLegacyChild({
     required String familyId,
     required DateTime rangeStart,
     required DateTime rangeEnd,
   }) async {
     if (!_isChildSession || childProfileId == null || childLoginCode == null) {
       debugPrint(
-        'SupabaseActivityRepository: incomplete child session, '
+        'SupabaseActivityRepository: incomplete legacy child session, '
         'cannot load child activities',
       );
       return [];
@@ -398,7 +398,7 @@ if (profile == null) {
     final rangeEndIso = rangeEnd.toIso8601String();
 
     debugPrint(
-      'SupabaseActivityRepository: child loading activities '
+      'SupabaseActivityRepository: legacy child loading activities '
       'profileId=$childProfileId familyId=$familyId '
       'start=$rangeStartIso end=$rangeEndIso',
     );
@@ -861,7 +861,7 @@ if (profile == null) {
 
   @override
   Future<void> addActivity(Activity activity) async {
-    debugPrint('SupabaseActivityRepository: inserting activity');
+    debugPrint('SupabaseActivityRepository: creating activity with relations');
     debugPrint('SupabaseActivityRepository: id=${activity.id}');
     debugPrint('SupabaseActivityRepository: familyId=${activity.familyId}');
     debugPrint('SupabaseActivityRepository: createdBy=${activity.createdBy}');
@@ -881,8 +881,8 @@ if (profile == null) {
 
     if (_isChildSession) {
       throw Exception(
-        'Child activity creation is not implemented yet. '
-        'Next step is child_create_activity RPC.',
+        'Legacy child activity creation is not implemented. '
+        'Use authenticated child login instead.',
       );
     }
 
@@ -891,7 +891,7 @@ if (profile == null) {
     if (currentFamilyId == null || activity.familyId != currentFamilyId) {
       throw Exception(
         'Cannot add activity because the activity family does not match the '
-        'current active parent family.',
+        'current active profile family.',
       );
     }
 
@@ -901,7 +901,9 @@ if (profile == null) {
       await _localCache.upsertCachedActivities([activity]);
       await _localCache.removePendingActivity(activity.id);
 
-      debugPrint('SupabaseActivityRepository: addActivity completed online');
+      debugPrint(
+        'SupabaseActivityRepository: addActivity completed online via RPC',
+      );
     } on PostgrestException catch (e, st) {
       debugPrint(
         'SupabaseActivityRepository addActivity PostgrestException: '
@@ -934,56 +936,45 @@ if (profile == null) {
   Future<void> _insertActivityOnline(Activity activity) async {
     final activityRow = activity.toActivityRow();
 
-    debugPrint(
-      'SupabaseActivityRepository: activity row = $activityRow',
-    );
+    final participantRows = activity.participants
+        .map((participant) => participant.toDatabaseRow(activity.id))
+        .toList();
 
-    final insertedActivity = await _client
-        .from('activities')
-        .insert(activityRow)
-        .select('id')
-        .single();
-
-    debugPrint(
-      'SupabaseActivityRepository: activity inserted '
-      'id=${insertedActivity['id']}',
-    );
-
-    if (activity.participants.isNotEmpty) {
-      final participantRows = activity.participants
-          .map((participant) => participant.toDatabaseRow(activity.id))
-          .toList();
-
-      debugPrint(
-        'SupabaseActivityRepository: participant rows = $participantRows',
+    final checklistRows = activity.checklistItems.map((item) {
+      final row = Map<String, dynamic>.from(
+        item.toDatabaseRow(activity.id),
       );
 
-      await _client.from('activity_participants').insert(participantRows);
+      if (row['id'] == null) {
+        row.remove('id');
+      }
 
-      debugPrint('SupabaseActivityRepository: participants inserted');
-    }
+      return row;
+    }).toList();
 
-    if (activity.checklistItems.isNotEmpty) {
-      final checklistRows = activity.checklistItems.map((item) {
-        final row = Map<String, dynamic>.from(
-          item.toDatabaseRow(activity.id),
-        );
+    debugPrint(
+      'SupabaseActivityRepository: activity RPC row = $activityRow',
+    );
+    debugPrint(
+      'SupabaseActivityRepository: participant RPC rows = $participantRows',
+    );
+    debugPrint(
+      'SupabaseActivityRepository: checklist RPC rows = $checklistRows',
+    );
 
-        if (row['id'] == null) {
-          row.remove('id');
-        }
+    final createdActivityId = await _client.rpc(
+      'create_activity_with_relations',
+      params: {
+        'p_activity': activityRow,
+        'p_participants': participantRows,
+        'p_checklist_items': checklistRows,
+      },
+    );
 
-        return row;
-      }).toList();
-
-      debugPrint(
-        'SupabaseActivityRepository: checklist rows = $checklistRows',
-      );
-
-      await _client.from('checklist_items').insert(checklistRows);
-
-      debugPrint('SupabaseActivityRepository: checklist inserted');
-    }
+    debugPrint(
+      'SupabaseActivityRepository: create_activity_with_relations completed '
+      'id=$createdActivityId',
+    );
   }
 
   Future<void> _trySyncPendingActivities({
@@ -991,7 +982,7 @@ if (profile == null) {
   }) async {
     if (_isChildSession) {
       debugPrint(
-        'SupabaseActivityRepository: child session, skipping pending '
+        'SupabaseActivityRepository: legacy child session, skipping pending '
         'activity sync',
       );
       return;
@@ -1053,8 +1044,8 @@ if (profile == null) {
   Future<void> updateActivity(Activity activity) async {
     if (_isChildSession) {
       throw Exception(
-        'Child activity update is not implemented yet. '
-        'This needs a controlled RPC.',
+        'Legacy child activity update is not implemented. '
+        'Use authenticated child login instead.',
       );
     }
 
@@ -1063,7 +1054,7 @@ if (profile == null) {
     if (currentFamilyId == null || activity.familyId != currentFamilyId) {
       throw Exception(
         'Cannot update activity because the activity family does not match '
-        'the current active parent family.',
+        'the current active profile family.',
       );
     }
 
@@ -1149,7 +1140,7 @@ if (profile == null) {
   Future<void> deleteActivity(String activityId) async {
     if (_isChildSession) {
       throw Exception(
-        'Child activity deletion is not allowed from child session.',
+        'Legacy child activity deletion is not allowed from child session.',
       );
     }
 
@@ -1157,7 +1148,7 @@ if (profile == null) {
 
     if (currentFamilyId == null) {
       throw Exception(
-        'Cannot delete activity because no active parent family was found.',
+        'Cannot delete activity because no active profile family was found.',
       );
     }
 

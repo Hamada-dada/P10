@@ -12,13 +12,13 @@ class ProfileAvatarButton extends StatelessWidget {
     final profileService = ProfileService();
 
     return FutureBuilder<Profile?>(
-      future: profileService.getMyParentProfile(),
+      future: profileService.getCurrentAuthenticatedProfile(),
       builder: (context, snapshot) {
         final currentProfile = snapshot.data;
 
         return InkWell(
           borderRadius: BorderRadius.circular(999),
-          onTap: currentProfile == null
+          onTap: currentProfile == null || currentProfile.isChild
               ? null
               : () async {
                   final familyProfiles = await profileService.getFamilyProfiles(

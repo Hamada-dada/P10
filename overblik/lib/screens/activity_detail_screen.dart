@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
+import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
 import '../services/profile_service.dart';
@@ -14,6 +15,8 @@ import 'create_activity_screen.dart';
 class ActivityDetailScreen extends StatefulWidget {
   final Activity activity;
 
+  // Legacy fake child-session fields.
+  // Keep temporarily until the old child RPC flow is fully removed.
   final String? childFamilyId;
   final String? childProfileId;
   final String? childDisplayName;
@@ -67,6 +70,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   bool _isLoading = true;
 
+  Profile? _currentProfile;
   Map<String, String> _profileNamesById = {};
 
   bool get _isChildSession => widget.isChildSession;
@@ -75,33 +79,65 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     return Supabase.instance.client.auth.currentUser != null;
   }
 
-  bool get _isParentSession {
-    return _hasAuthUser && !_isChildSession;
+  bool get _isAuthenticatedParent {
+    return _currentProfile?.isParent == true;
   }
 
+  bool get _isAuthenticatedChild {
+    return _currentProfile?.isChild == true;
+  }
+
+  bool get _isAuthenticatedChildExtended {
+    return _currentProfile?.isChildExtended == true;
+  }
+
+  bool get _isOwnActivity {
+    final currentProfile = _currentProfile;
+
+    if (currentProfile == null) return false;
+
+    return _activity.ownerProfileId == currentProfile.id;
+  }
+
+  bool get _isLegacyOwnChildActivity {
+    if (!_isChildSession) return false;
+    if (widget.childProfileId == null) return false;
+
+    return _activity.ownerProfileId == widget.childProfileId;
+  }
 
   bool get _canEditActivity {
-    if (_isParentSession) {
+    if (_isAuthenticatedParent) {
       return true;
     }
 
-    // Child editing needs child_update_own_activity RPC.
-    // Do not enable until the backend mutation layer exists.
+    if (_isAuthenticatedChildExtended && _isOwnActivity) {
+      return true;
+    }
+
+    // Legacy fake child-session path does not have safe authenticated mutation.
     return false;
   }
 
   bool get _canDeleteActivity {
-    if (_isParentSession) {
+    if (_isAuthenticatedParent) {
       return true;
     }
 
-    // Child deletion needs child_delete_own_activity RPC.
-    // Do not enable until the backend mutation layer exists.
+    if (_isAuthenticatedChildExtended && _isOwnActivity) {
+      return true;
+    }
+
+    // Legacy fake child-session path does not have safe authenticated mutation.
     return false;
   }
 
   bool get _canToggleChecklist {
-    if (_isParentSession) {
+    if (_isAuthenticatedParent) {
+      return true;
+    }
+
+    if (_isAuthenticatedChild) {
       return true;
     }
 
@@ -118,6 +154,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     _activity = widget.activity;
 
     debugPrint('ActivityDetailScreen: init');
+    debugPrint('ActivityDetailScreen: hasAuthUser=$_hasAuthUser');
     debugPrint('ActivityDetailScreen: isChildSession=$_isChildSession');
     debugPrint('ActivityDetailScreen: childFamilyId=${widget.childFamilyId}');
     debugPrint('ActivityDetailScreen: childProfileId=${widget.childProfileId}');
@@ -127,22 +164,57 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     _loadActivity();
   }
 
-  Future<Map<String, String>> _loadProfileNamesForSession() async {
-    if (_isChildSession) {
-      return _loadProfileNamesForChild();
+  Future<Profile?> _loadCurrentProfileForSession() async {
+    if (!_hasAuthUser) {
+      return null;
     }
 
-    final familyProfiles = await _profileService.getMyFamilyProfiles();
+    try {
+      final profile = await _profileService.getCurrentAuthenticatedProfile();
+
+      debugPrint(
+        'ActivityDetailScreen: current profile id=${profile?.id} role=${profile?.role}',
+      );
+
+      return profile;
+    } catch (e, st) {
+      debugPrint('ActivityDetailScreen: failed to load current profile: $e');
+      debugPrintStack(stackTrace: st);
+      return null;
+    }
+  }
+
+  Future<Map<String, String>> _loadProfileNamesForSession({
+    Profile? currentProfile,
+  }) async {
+    if (_isChildSession) {
+      return _loadProfileNamesForLegacyChild();
+    }
+
+    final profile = currentProfile ??
+        _currentProfile ??
+        await _profileService.getCurrentAuthenticatedProfile();
+
+    if (profile == null) {
+      debugPrint(
+        'ActivityDetailScreen: no current profile for profile-name loading',
+      );
+      return {};
+    }
+
+    final familyProfiles = profile.isParent
+        ? await _profileService.getFamilyProfiles(profile.familyId)
+        : await _profileService.getFamilyProfilesForCurrentUser();
 
     return {
-      for (final profile in familyProfiles)
-        profile.id: profile.displayName.trim().isNotEmpty
-            ? profile.displayName
-            : profile.name,
+      for (final familyProfile in familyProfiles)
+        familyProfile.id: familyProfile.displayName.trim().isNotEmpty
+            ? familyProfile.displayName
+            : familyProfile.name,
     };
   }
 
-  Future<Map<String, String>> _loadProfileNamesForChild() async {
+  Future<Map<String, String>> _loadProfileNamesForLegacyChild() async {
     final childProfileId = widget.childProfileId;
     final childLoginCode = widget.childLoginCode;
 
@@ -183,28 +255,47 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   Future<void> _loadActivity() async {
     try {
+      final currentProfile = await _loadCurrentProfileForSession();
+
       final freshActivity =
           await _activityService.getActivityById(widget.activity.id);
 
-      final profileNamesById = await _loadProfileNamesForSession();
+      final activityToShow = freshActivity ?? widget.activity;
+
+      final profileNamesById = await _loadProfileNamesForSession(
+        currentProfile: currentProfile,
+      );
 
       if (!mounted) return;
 
       setState(() {
-        _activity = freshActivity ?? widget.activity;
+        _currentProfile = currentProfile;
+        _activity = activityToShow;
         _profileNamesById = profileNamesById;
         _isLoading = false;
       });
+
+      debugPrint(
+        'ActivityDetailScreen: loaded activity id=${activityToShow.id} '
+        'ownerProfileId=${activityToShow.ownerProfileId} '
+        'currentProfileId=${currentProfile?.id} '
+        'canEdit=$_canEditActivity canDelete=$_canDeleteActivity canChecklist=$_canToggleChecklist',
+      );
     } catch (e, st) {
       debugPrint('ActivityDetailScreen _loadActivity failed: $e');
       debugPrintStack(stackTrace: st);
 
       try {
-        final profileNamesById = await _loadProfileNamesForSession();
+        final currentProfile = await _loadCurrentProfileForSession();
+
+        final profileNamesById = await _loadProfileNamesForSession(
+          currentProfile: currentProfile,
+        );
 
         if (!mounted) return;
 
         setState(() {
+          _currentProfile = currentProfile;
           _activity = widget.activity;
           _profileNamesById = profileNamesById;
           _isLoading = false;
@@ -218,6 +309,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         if (!mounted) return;
 
         setState(() {
+          _currentProfile = null;
           _activity = widget.activity;
           _profileNamesById = {};
           _isLoading = false;
@@ -271,32 +363,23 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   String _buildParticipantsText() {
     if (_activity.visibility == ActivityVisibility.family) {
       if (_activity.participants.isEmpty) {
-        return 'Hele familien';
+        return 'Familieaktivitet (ingen specifikke deltagere)';
       }
 
       final participantText =
           _activity.participants.map(_participantDisplayText).join(', ');
 
-      return 'Hele familien${participantText.trim().isNotEmpty ? ' ($participantText)' : ''}';
+      return 'Hele familien, deltagerne er${participantText.trim().isNotEmpty ? ' ($participantText)' : ''}';
     }
 
     if (_activity.participants.isEmpty) {
-      return 'Ingen deltagere';
+      return 'Ingen specifikke deltagere';
     }
 
     return _activity.participants.map(_participantDisplayText).join(', ');
   }
 
-  String _buildVisibilityText() {
-    switch (_activity.visibility) {
-      case ActivityVisibility.family:
-        return 'Synlig for hele familien';
-      case ActivityVisibility.participants:
-        return 'Synlig for valgte deltagere';
-      case ActivityVisibility.private:
-        return 'Privat aktivitet';
-    }
-  }
+
 
   String _buildDescriptionText() {
     if (_activity.description.trim().isEmpty) {
@@ -358,9 +441,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         checklistItems: updatedChecklist,
       );
 
-      if (_isChildSession) {
-        // Optimistic UI only for now.
-        // Permanent child checklist updates need child_set_checklist_item_checked RPC.
+      if (_isChildSession && !_hasAuthUser) {
+        // Legacy fake child-session path.
+        // Keep optimistic-only behavior until the old child RPC path is removed.
         if (!mounted) return;
 
         setState(() {
@@ -370,7 +453,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Tjeklisteændringer for børnelogin kræver næste backend-trin.',
+              'Tjeklisteændringen blev kun vist lokalt for dette gamle børnelogin.',
             ),
           ),
         );
@@ -707,20 +790,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 24),
-                          _InfoSection(
-                            icon: Icons.visibility_outlined,
-                            child: Text(
-                              _buildVisibilityText(),
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.black,
-                                height: 1.5,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
+                          
                           const SizedBox(height: 20),
                           _InfoSection(
                             icon: Icons.edit_note,

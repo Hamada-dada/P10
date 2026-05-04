@@ -6,12 +6,14 @@ class FilterPanel extends StatefulWidget {
   final List<Profile> profiles;
   final Set<String> selectedProfileIds;
   final bool showFamilyActivities;
+  final bool isChildView;
 
   const FilterPanel({
     super.key,
     required this.profiles,
     required this.selectedProfileIds,
     required this.showFamilyActivities,
+    this.isChildView = false,
   });
 
   @override
@@ -29,8 +31,28 @@ class _FilterPanelState extends State<FilterPanel> {
     _tempShowFamilyActivities = widget.showFamilyActivities;
   }
 
+  void _selectAll() {
+    setState(() {
+      _tempSelectedProfileIds = {
+        ...widget.selectedProfileIds,
+        ...widget.profiles.map((profile) => profile.id),
+      };
+      _tempShowFamilyActivities = true;
+    });
+  }
+
+  String _profileLabel(Profile profile) {
+    if (widget.isChildView) {
+      return '${profile.name} (mig)';
+    }
+
+    return profile.name;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final familyLabel = widget.isChildView ? 'Familieaktiviteter' : 'Familie';
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -39,7 +61,7 @@ class _FilterPanelState extends State<FilterPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Deltagere:',
+              'Filter:',
               style: TextStyle(
                 fontFamily: 'Italiana',
                 fontSize: 24,
@@ -51,7 +73,7 @@ class _FilterPanelState extends State<FilterPanel> {
               return CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
-                title: Text(profile.name),
+                title: Text(_profileLabel(profile)),
                 value: _tempSelectedProfileIds.contains(profile.id),
                 onChanged: (checked) {
                   setState(() {
@@ -67,7 +89,7 @@ class _FilterPanelState extends State<FilterPanel> {
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Familie'),
+              title: Text(familyLabel),
               value: _tempShowFamilyActivities,
               onChanged: (checked) {
                 setState(() {
@@ -78,12 +100,7 @@ class _FilterPanelState extends State<FilterPanel> {
             const SizedBox(height: 16),
             Center(
               child: TextButton(
-                onPressed: () {
-                  Navigator.pop(context, {
-                    'profileIds': <String>{},
-                    'showFamily': false,
-                  });
-                },
+                onPressed: _selectAll,
                 child: const Text('Vis alle'),
               ),
             ),

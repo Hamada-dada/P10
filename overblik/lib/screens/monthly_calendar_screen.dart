@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/utils/activity_filter.dart';
 import '../models/activity.dart';
+import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
+import '../services/profile_service.dart';
 import '../widgets/calendar_navigation_bar.dart';
+import '../widgets/filter_panel.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
 import 'daily_calendar_screen.dart';
 import 'weekly_calendar_screen.dart';
-import '../models/profile.dart';
-import '../services/profile_service.dart';
-import '../widgets/filter_panel.dart';
 
 class MonthlyCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
 
+  final Set<String>? initialSelectedFilterProfileIds;
+  final bool? initialShowFamilyActivities;
+
+  // Legacy child session fields.
+  // Keep these temporarily until the old fake child-session flow is removed.
   final String? childFamilyId;
   final String? childProfileId;
   final String? childDisplayName;
@@ -26,6 +32,8 @@ class MonthlyCalendarScreen extends StatefulWidget {
   const MonthlyCalendarScreen({
     super.key,
     this.initialDate,
+    this.initialSelectedFilterProfileIds,
+    this.initialShowFamilyActivities,
     this.childFamilyId,
     this.childProfileId,
     this.childDisplayName,
@@ -54,17 +62,18 @@ class MonthlyCalendarScreen extends StatefulWidget {
 
 class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   late final ActivityService _activityService;
+  final ProfileService _profileService = ProfileService();
 
   late DateTime _focusedDate;
 
+  Profile? _currentProfile;
+
   Map<String, List<Activity>> _activitiesByDate = {};
-bool _isLoading = true;
+  List<Profile> _filterProfiles = [];
+  Set<String> _selectedFilterProfileIds = {};
+  bool _showFamilyActivities = false;
 
-final ProfileService _profileService = ProfileService();
-
-List<Profile> _filterProfiles = [];
-Set<String> _selectedFilterProfileIds = {};
-bool _showFamilyActivities = false;
+  bool _isLoading = true;
 
   bool get _isChildSession => widget.isChildSession;
 
@@ -72,14 +81,42 @@ bool _showFamilyActivities = false;
     return Supabase.instance.client.auth.currentUser != null;
   }
 
+  bool get _hasInitialFilterState {
+    return widget.initialSelectedFilterProfileIds != null ||
+        widget.initialShowFamilyActivities != null;
+  }
+
   bool get _canUseScreen {
     return _hasAuthUser || _isChildSession;
   }
 
   bool get _canCreateActivity {
-    // Parent creation works.
-    // Child creation will be enabled later for child_extended through RPC.
-    return _hasAuthUser && !_isChildSession;
+    if (_isChildSession) {
+      return widget.isChildExtended;
+    }
+
+    if (!_hasAuthUser) return false;
+
+    final profile = _currentProfile;
+    if (profile == null) return false;
+
+    return profile.isParent || profile.isChildExtended;
+  }
+
+  String? get _headerDisplayName {
+    if (_isChildSession) {
+      return widget.childDisplayName;
+    }
+
+    if (_currentProfile?.isChild == true) {
+      return _currentProfile?.displayName;
+    }
+
+    return null;
+  }
+
+  bool get _showChildHeaderName {
+    return _isChildSession || _currentProfile?.isChild == true;
   }
 
   @override
@@ -102,21 +139,55 @@ bool _showFamilyActivities = false;
     debugPrint('MonthlyCalendarScreen: hasAuthUser=$_hasAuthUser');
     debugPrint('MonthlyCalendarScreen: isChildSession=$_isChildSession');
     debugPrint('MonthlyCalendarScreen: childFamilyId=${widget.childFamilyId}');
-    debugPrint('MonthlyCalendarScreen: childProfileId=${widget.childProfileId}');
+    debugPrint(
+      'MonthlyCalendarScreen: childProfileId=${widget.childProfileId}',
+    );
     debugPrint('MonthlyCalendarScreen: childRole=${widget.childRole}');
-    debugPrint('MonthlyCalendarScreen: childLoginCode=${widget.childLoginCode}');
+    debugPrint(
+      'MonthlyCalendarScreen: childLoginCode=${widget.childLoginCode}',
+    );
+    debugPrint(
+      'MonthlyCalendarScreen: initialSelectedFilterProfileIds=${widget.initialSelectedFilterProfileIds}',
+    );
+    debugPrint(
+      'MonthlyCalendarScreen: initialShowFamilyActivities=${widget.initialShowFamilyActivities}',
+    );
 
-    if (_canUseScreen) {
-      _loadMonthActivities();
-    } else {
+    _initializeScreen();
+  }
+
+  Future<void> _initializeScreen() async {
+    if (!_canUseScreen) {
       debugPrint(
         'MonthlyCalendarScreen: no auth user and no child session, skipping activity load',
       );
 
-      _isLoading = false;
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      return;
     }
-    _loadMonthActivities();
-    _loadFilterProfiles();
+
+    if (_hasAuthUser) {
+      final currentProfile = await _profileService
+          .getCurrentAuthenticatedProfile();
+
+      if (!mounted) return;
+
+      setState(() {
+        _currentProfile = currentProfile;
+      });
+
+      debugPrint(
+        'MonthlyCalendarScreen: current profile id=${currentProfile?.id} role=${currentProfile?.role}',
+      );
+    }
+
+    await _loadMonthActivities();
+    await _loadFilterProfiles();
   }
 
   Future<void> _loadMonthActivities() async {
@@ -219,39 +290,78 @@ bool _showFamilyActivities = false;
       );
     }
   }
+
   Future<void> _loadFilterProfiles() async {
-  try {
-    if (_isChildSession) {
-      if (widget.childProfileId == null) return;
+    try {
+      if (_isChildSession) {
+        if (widget.childProfileId == null) return;
+
+        if (!mounted) return;
+
+        setState(() {
+          _filterProfiles = [];
+
+          if (_hasInitialFilterState) {
+            _selectedFilterProfileIds = Set<String>.from(
+              widget.initialSelectedFilterProfileIds ?? const {},
+            );
+            _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
+            return;
+          }
+
+          _selectedFilterProfileIds = {widget.childProfileId!};
+          _showFamilyActivities = true;
+        });
+
+        return;
+      }
+
+      final currentProfile =
+          _currentProfile ??
+          await _profileService.getCurrentAuthenticatedProfile();
+
+      if (currentProfile == null) {
+        debugPrint(
+          'MonthlyCalendarScreen: no current profile for filter loading',
+        );
+        return;
+      }
+
+      final profiles = currentProfile.isParent
+          ? await _profileService.getFamilyProfiles(currentProfile.familyId)
+          : currentProfile.isChild
+          ? <Profile>[currentProfile]
+          : await _profileService.getFamilyProfilesForCurrentUser();
+
+      if (!mounted) return;
 
       setState(() {
-        _selectedFilterProfileIds = {widget.childProfileId!};
-        _showFamilyActivities = false;
+        _currentProfile = currentProfile;
+        _filterProfiles = profiles;
+
+        if (_hasInitialFilterState) {
+          _selectedFilterProfileIds = Set<String>.from(
+            widget.initialSelectedFilterProfileIds ?? const {},
+          );
+          _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
+          return;
+        }
+
+        if (currentProfile.isParent) {
+          _selectedFilterProfileIds = profiles
+              .map((profile) => profile.id)
+              .toSet();
+          _showFamilyActivities = true;
+        } else {
+          _selectedFilterProfileIds = {currentProfile.id};
+          _showFamilyActivities = true;
+        }
       });
-
-      return;
+    } catch (e, st) {
+      debugPrint('MonthlyCalendarScreen _loadFilterProfiles failed: $e');
+      debugPrintStack(stackTrace: st);
     }
-
-    final currentParent = await _profileService.getMyParentProfile();
-
-    if (currentParent == null) return;
-
-    final profiles = await _profileService.getFamilyProfiles(
-      currentParent.familyId,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _filterProfiles = profiles;
-      _selectedFilterProfileIds = {currentParent.id};
-      _showFamilyActivities = false;
-    });
-  } catch (e, st) {
-    debugPrint('MonthlyCalendarScreen _loadFilterProfiles failed: $e');
-    debugPrintStack(stackTrace: st);
   }
-}
 
   Future<void> _goToPreviousMonth() async {
     setState(() {
@@ -283,6 +393,10 @@ bool _showFamilyActivities = false;
       MaterialPageRoute(
         builder: (_) => DailyCalendarScreen(
           initialDate: selectedDate,
+          initialSelectedFilterProfileIds: Set<String>.from(
+            _selectedFilterProfileIds,
+          ),
+          initialShowFamilyActivities: _showFamilyActivities,
           childFamilyId: widget.childFamilyId,
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
@@ -294,25 +408,28 @@ bool _showFamilyActivities = false;
 
     await _loadMonthActivities();
   }
+
   Future<void> _openFilterPanel() async {
-  final result = await showModalBottomSheet<Map<String, dynamic>>(
-    context: context,
-    builder: (sheetContext) {
-      return FilterPanel(
-        profiles: _filterProfiles,
-        selectedProfileIds: _selectedFilterProfileIds,
-        showFamilyActivities: _showFamilyActivities,
-      );
-    },
-  );
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      builder: (sheetContext) {
+        return FilterPanel(
+          profiles: _filterProfiles,
+          selectedProfileIds: _selectedFilterProfileIds,
+          showFamilyActivities: _showFamilyActivities,
+          isChildView: _isChildSession || _currentProfile?.isChild == true,
+        );
+      },
+    );
 
-  if (result == null || !mounted) return;
+    if (result == null || !mounted) return;
 
-  setState(() {
-    _selectedFilterProfileIds = result['profileIds'] as Set<String>;
-    _showFamilyActivities = result['showFamily'] as bool;
-  });
-}
+    setState(() {
+      _selectedFilterProfileIds = result['profileIds'] as Set<String>;
+      _showFamilyActivities = result['showFamily'] as bool;
+    });
+  }
+
   Future<void> _openCreateActivityScreen() async {
     if (!_canCreateActivity) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -358,6 +475,10 @@ bool _showFamilyActivities = false;
       MaterialPageRoute(
         builder: (_) => DailyCalendarScreen(
           initialDate: _focusedDate,
+          initialSelectedFilterProfileIds: Set<String>.from(
+            _selectedFilterProfileIds,
+          ),
+          initialShowFamilyActivities: _showFamilyActivities,
           childFamilyId: widget.childFamilyId,
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
@@ -374,6 +495,10 @@ bool _showFamilyActivities = false;
       MaterialPageRoute(
         builder: (_) => WeeklyCalendarScreen(
           initialDate: _focusedDate,
+          initialSelectedFilterProfileIds: Set<String>.from(
+            _selectedFilterProfileIds,
+          ),
+          initialShowFamilyActivities: _showFamilyActivities,
           childFamilyId: widget.childFamilyId,
           childProfileId: widget.childProfileId,
           childDisplayName: widget.childDisplayName,
@@ -423,8 +548,9 @@ bool _showFamilyActivities = false;
   }
 
   int _getWeekNumber(DateTime date) {
-    final thursday =
-        date.add(Duration(days: 4 - (date.weekday == 7 ? 7 : date.weekday)));
+    final thursday = date.add(
+      Duration(days: 4 - (date.weekday == 7 ? 7 : date.weekday)),
+    );
     final firstJanuary = DateTime(thursday.year, 1, 1);
     final days = thursday.difference(firstJanuary).inDays;
 
@@ -465,35 +591,23 @@ bool _showFamilyActivities = false;
   }
 
   List<Activity> _filterActivities(List<Activity> activities) {
-  if (_selectedFilterProfileIds.isEmpty && !_showFamilyActivities) {
-    return activities;
+    return filterActivities(
+      activities: activities,
+      selectedProfileIds: _selectedFilterProfileIds,
+      showFamilyActivities: _showFamilyActivities,
+    );
   }
 
-  return activities.where((activity) {
-    final matchesProfile = activity.participants.any((participant) {
-      return participant.profileId != null &&
-          _selectedFilterProfileIds.contains(participant.profileId);
-    });
-
-    final matchesFamily = _showFamilyActivities &&
-        activity.participants.any(
-          (participant) => participant.externalName == 'Familie',
-        );
-
-    return matchesProfile || matchesFamily;
-  }).toList();
-}
-
-List<Activity> _getActivitiesForDate(DateTime date) {
-  final activities = _activitiesByDate[_dateKey(date)] ?? const [];
-  return _filterActivities(activities);
-}
+  List<Activity> _getActivitiesForDate(DateTime date) {
+    final activities = _activitiesByDate[_dateKey(date)] ?? const [];
+    return _filterActivities(activities);
+  }
 
   bool get _hasAnyActivities {
-  return _activitiesByDate.values.any(
-    (activities) => _filterActivities(activities).isNotEmpty,
-  );
-}
+    return _activitiesByDate.values.any(
+      (activities) => _filterActivities(activities).isNotEmpty,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -515,10 +629,14 @@ List<Activity> _getActivitiesForDate(DateTime date) {
     final cellHeight = isLandscape
         ? 58.0
         : screenHeight < 700
-            ? 70.0
-            : screenHeight < 780
-                ? 76.0
-                : 82.0;
+        ? 70.0
+        : screenHeight < 780
+        ? 76.0
+        : 82.0;
+
+    debugPrint(
+      'MonthlyCalendarScreen: days=${_activitiesByDate.length}, profiles=${_filterProfiles.length}, selected=$_selectedFilterProfileIds, showFamily=$_showFamilyActivities',
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -532,8 +650,8 @@ List<Activity> _getActivitiesForDate(DateTime date) {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _TopHeader(
-                isChildSession: _isChildSession,
-                childDisplayName: widget.childDisplayName,
+                showChildHeaderName: _showChildHeaderName,
+                displayName: _headerDisplayName,
               ),
               SizedBox(height: mediumGap),
               _ScreenTitle(fontSize: titleFontSize),
@@ -577,41 +695,36 @@ List<Activity> _getActivitiesForDate(DateTime date) {
                       const SizedBox(height: 8),
                       Expanded(
                         child: _isLoading
-                            ? const Center(
-                                child: CircularProgressIndicator(),
-                              )
+                            ? const Center(child: CircularProgressIndicator())
                             : !_hasAnyActivities
-                                ? const _EmptyMonthView()
-                                : SingleChildScrollView(
-                                    child: Column(
-                                      children: weekRows
-                                          .map(
-                                            (week) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 8,
-                                              ),
-                                              child: _MonthWeekRow(
-                                                week: week,
-                                                focusedMonth:
-                                                    _focusedDate.month,
-                                                today: today,
-                                                weekNumber:
-                                                    _getWeekNumber(week[0]),
-                                                weekNumberWidth:
-                                                    weekNumberWidth,
-                                                cellHeight: cellHeight,
-                                                getActivitiesForDate:
-                                                    _getActivitiesForDate,
-                                                activityColorBuilder:
-                                                    _activityColor,
-                                                isSameDate: _isSameDate,
-                                                onTapDay: _openDay,
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                    ),
-                                  ),
+                            ? const _EmptyMonthView()
+                            : SingleChildScrollView(
+                                child: Column(
+                                  children: weekRows
+                                      .map(
+                                        (week) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          child: _MonthWeekRow(
+                                            week: week,
+                                            focusedMonth: _focusedDate.month,
+                                            today: today,
+                                            weekNumber: _getWeekNumber(week[0]),
+                                            weekNumberWidth: weekNumberWidth,
+                                            cellHeight: cellHeight,
+                                            getActivitiesForDate:
+                                                _getActivitiesForDate,
+                                            activityColorBuilder:
+                                                _activityColor,
+                                            isSameDate: _isSameDate,
+                                            onTapDay: _openDay,
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              ),
                       ),
                     ],
                   ),
@@ -626,13 +739,10 @@ List<Activity> _getActivitiesForDate(DateTime date) {
 }
 
 class _TopHeader extends StatelessWidget {
-  final bool isChildSession;
-  final String? childDisplayName;
+  final bool showChildHeaderName;
+  final String? displayName;
 
-  const _TopHeader({
-    required this.isChildSession,
-    this.childDisplayName,
-  });
+  const _TopHeader({required this.showChildHeaderName, this.displayName});
 
   @override
   Widget build(BuildContext context) {
@@ -642,16 +752,12 @@ class _TopHeader extends StatelessWidget {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () => Navigator.maybePop(context),
-          icon: const Icon(
-            Icons.arrow_back,
-            size: 30,
-            color: Colors.black,
-          ),
+          icon: const Icon(Icons.arrow_back, size: 30, color: Colors.black),
         ),
         const Spacer(),
-        if (isChildSession)
+        if (showChildHeaderName)
           Text(
-            childDisplayName ?? 'Barn',
+            displayName ?? 'Barn',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -668,9 +774,7 @@ class _TopHeader extends StatelessWidget {
 class _ScreenTitle extends StatelessWidget {
   final double fontSize;
 
-  const _ScreenTitle({
-    required this.fontSize,
-  });
+  const _ScreenTitle({required this.fontSize});
 
   @override
   Widget build(BuildContext context) {
@@ -691,9 +795,7 @@ class _ScreenTitle extends StatelessWidget {
 class _WeekdayHeaderRow extends StatelessWidget {
   final double weekNumberWidth;
 
-  const _WeekdayHeaderRow({
-    required this.weekNumberWidth,
-  });
+  const _WeekdayHeaderRow({required this.weekNumberWidth});
 
   @override
   Widget build(BuildContext context) {
@@ -767,26 +869,24 @@ class _MonthWeekRow extends StatelessWidget {
             ),
           ),
         ),
-        ...week.map(
-          (date) {
-            final activities = getActivitiesForDate(date);
+        ...week.map((date) {
+          final activities = getActivitiesForDate(date);
 
-            return Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: _MonthDayCell(
-                  date: date,
-                  activities: activities,
-                  isCurrentMonth: date.month == focusedMonth,
-                  isToday: isSameDate(date, today),
-                  cellHeight: cellHeight,
-                  activityColorBuilder: activityColorBuilder,
-                  onTap: () => onTapDay(date),
-                ),
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: _MonthDayCell(
+                date: date,
+                activities: activities,
+                isCurrentMonth: date.month == focusedMonth,
+                isToday: isSameDate(date, today),
+                cellHeight: cellHeight,
+                activityColorBuilder: activityColorBuilder,
+                onTap: () => onTapDay(date),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        }),
       ],
     );
   }
@@ -814,8 +914,9 @@ class _MonthDayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textColor = isCurrentMonth ? Colors.black : Colors.black38;
-    final backgroundColor =
-        isCurrentMonth ? const Color(0xFFF8F8F8) : const Color(0xFFF1F1F1);
+    final backgroundColor = isCurrentMonth
+        ? const Color(0xFFF8F8F8)
+        : const Color(0xFFF1F1F1);
     final borderColor = isToday ? Colors.black : const Color(0xFFE0E0E0);
 
     return LayoutBuilder(
@@ -836,10 +937,7 @@ class _MonthDayCell extends StatelessWidget {
             decoration: BoxDecoration(
               color: backgroundColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: borderColor,
-                width: isToday ? 2 : 1,
-              ),
+              border: Border.all(color: borderColor, width: isToday ? 2 : 1),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -930,11 +1028,7 @@ class _EmptyMonthView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.calendar_month_outlined,
-            size: 40,
-            color: Colors.black45,
-          ),
+          Icon(Icons.calendar_month_outlined, size: 40, color: Colors.black45),
           SizedBox(height: 10),
           Text(
             'Ingen aktiviteter i denne måned',
