@@ -5,8 +5,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/activity.dart';
 
 class LocalActivityCache {
-  static const String _cachedActivitiesKey = 'cached_activities_v1';
-  static const String _pendingActivitiesKey = 'pending_activities_v1';
+  final String? _userId;
+
+  LocalActivityCache({String? userId}) : _userId = userId;
+
+  String _key(String base) => _userId != null ? '${base}_$_userId' : base;
+
+  String get _cachedActivitiesKey => _key('cached_activities_v2');
+  String get _pendingActivitiesKey => _key('pending_activities_v2');
+  String get _pendingUpdatesKey => _key('pending_updates_v2');
+  String get _pendingDeletesKey => _key('pending_deletes_v2');
+  String get _pendingCompletionsKey => _key('pending_completions_v2');
+  String get _pendingChecklistChecksKey => _key('pending_checklist_checks_v2');
+
+  static const List<String> _legacyKeys = [
+    'cached_activities_v1',
+    'pending_activities_v1',
+    'pending_updates_v1',
+  ];
 
   Future<List<Activity>> getCachedActivities() async {
     return _readActivityList(_cachedActivitiesKey);
@@ -14,6 +30,10 @@ class LocalActivityCache {
 
   Future<List<Activity>> getPendingActivities() async {
     return _readActivityList(_pendingActivitiesKey);
+  }
+
+  Future<List<Activity>> getPendingUpdateActivities() async {
+    return _readActivityList(_pendingUpdatesKey);
   }
 
   Future<List<Activity>> getAllLocalActivities() async {
@@ -83,6 +103,33 @@ class LocalActivityCache {
     await _writeActivityList(_pendingActivitiesKey, updated);
   }
 
+  Future<void> upsertPendingUpdateActivity(Activity activity) async {
+    final existing = await getPendingUpdateActivities();
+    final byId = <String, Activity>{};
+
+    for (final existingActivity in existing) {
+      byId[existingActivity.id] = existingActivity;
+    }
+
+    byId[activity.id] = activity;
+
+    final updated = byId.values.toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+    await _writeActivityList(_pendingUpdatesKey, updated);
+  }
+
+  Future<void> removePendingUpdateActivity(String activityId) async {
+    final existing = await getPendingUpdateActivities();
+
+    final updated = existing
+        .where((activity) => activity.id != activityId)
+        .toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+    await _writeActivityList(_pendingUpdatesKey, updated);
+  }
+
   Future<void> removeCachedActivity(String activityId) async {
     final existing = await getCachedActivities();
 
@@ -94,10 +141,116 @@ class LocalActivityCache {
     await _writeActivityList(_cachedActivitiesKey, updated);
   }
 
+  // Pending deletes (O-1)
+
+  Future<List<String>> getPendingDeletes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_pendingDeletesKey);
+
+    if (raw == null || raw.trim().isEmpty) return [];
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return [];
+      return decoded.whereType<String>().toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> addPendingDelete(String activityId) async {
+    final existing = await getPendingDeletes();
+    if (existing.contains(activityId)) return;
+    final updated = [...existing, activityId];
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingDeletesKey, jsonEncode(updated));
+  }
+
+  Future<void> removePendingDelete(String activityId) async {
+    final existing = await getPendingDeletes();
+    final updated = existing.where((id) => id != activityId).toList();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingDeletesKey, jsonEncode(updated));
+  }
+
+  // Pending completions (O-2)
+
+  Future<Map<String, bool>> getPendingCompletions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_pendingCompletionsKey);
+
+    if (raw == null || raw.trim().isEmpty) return {};
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return {};
+      return decoded.map((k, v) => MapEntry(k as String, v as bool));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> setPendingCompletion(String activityId, bool isCompleted) async {
+    final existing = await getPendingCompletions();
+    existing[activityId] = isCompleted;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingCompletionsKey, jsonEncode(existing));
+  }
+
+  Future<void> removePendingCompletion(String activityId) async {
+    final existing = await getPendingCompletions();
+    existing.remove(activityId);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingCompletionsKey, jsonEncode(existing));
+  }
+
+  // Pending checklist checks (O-2)
+
+  Future<Map<String, bool>> getPendingChecklistChecks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_pendingChecklistChecksKey);
+
+    if (raw == null || raw.trim().isEmpty) return {};
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return {};
+      return decoded.map((k, v) => MapEntry(k as String, v as bool));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> setPendingChecklistCheck(
+    String checklistItemId,
+    bool isChecked,
+  ) async {
+    final existing = await getPendingChecklistChecks();
+    existing[checklistItemId] = isChecked;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingChecklistChecksKey, jsonEncode(existing));
+  }
+
+  Future<void> removePendingChecklistCheck(String checklistItemId) async {
+    final existing = await getPendingChecklistChecks();
+    existing.remove(checklistItemId);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingChecklistChecksKey, jsonEncode(existing));
+  }
+
   Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
+
     await prefs.remove(_cachedActivitiesKey);
     await prefs.remove(_pendingActivitiesKey);
+    await prefs.remove(_pendingUpdatesKey);
+    await prefs.remove(_pendingDeletesKey);
+    await prefs.remove(_pendingCompletionsKey);
+    await prefs.remove(_pendingChecklistChecksKey);
+
+    for (final key in _legacyKeys) {
+      await prefs.remove(key);
+    }
   }
 
   Future<List<Activity>> _readActivityList(String key) async {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/utils/activity_filter.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
@@ -72,6 +73,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   List<Profile> _filterProfiles = [];
   Set<String> _selectedFilterProfileIds = {};
   bool _showFamilyActivities = false;
+  bool _hasAnyActivitiesCache = false;
 
   bool _isLoading = true;
 
@@ -182,8 +184,8 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       );
     }
 
-    await _loadFilterProfiles();
-    await _loadWeekActivities();
+    // CS-7: load filter profiles and week activities in parallel
+    await Future.wait([_loadFilterProfiles(), _loadWeekActivities()]);
   }
 
   Future<void> _loadWeekActivities() async {
@@ -238,6 +240,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       setState(() {
         _activitiesByDate = grouped;
         _isLoading = false;
+        _hasAnyActivitiesCache = _hasAnyActivities;
       });
     } catch (e, st) {
       debugPrint('WeeklyCalendarScreen _loadWeekActivities failed: $e');
@@ -480,33 +483,13 @@ Future<void> _loadFilterProfiles() async {
     }
   }
 
-  List<Activity> _filterActivities(List<Activity> activities) {
-    if (_selectedFilterProfileIds.isEmpty && !_showFamilyActivities) {
-      return [];
-    }
-
-    return activities.where((activity) {
-      final matchesParticipant = activity.participants.any((participant) {
-        return participant.profileId != null &&
-            _selectedFilterProfileIds.contains(participant.profileId);
-      });
-
-      final matchesOwner = activity.ownerProfileId != null &&
-          _selectedFilterProfileIds.contains(activity.ownerProfileId);
-
-      final matchesFamily = _showFamilyActivities &&
-          (activity.visibility == ActivityVisibility.family ||
-              activity.participants.any(
-                (participant) => participant.externalName == 'Familie',
-              ));
-
-      return matchesParticipant || matchesOwner || matchesFamily;
-    }).toList();
-  }
-
   List<Activity> _activitiesForDate(DateTime date) {
     final activities = _activitiesByDate[_dateKey(date)] ?? const [];
-    return _filterActivities(activities);
+    return filterActivities(
+      activities: activities,
+      selectedProfileIds: _selectedFilterProfileIds,
+      showFamilyActivities: _showFamilyActivities,
+    );
   }
 
   Activity? _getWeeklyHighlight(List<Activity> activities) {
@@ -543,7 +526,11 @@ Future<void> _loadFilterProfiles() async {
 
   bool get _hasAnyActivities {
     return _activitiesByDate.values.any(
-      (activities) => _filterActivities(activities).isNotEmpty,
+      (activities) => filterActivities(
+        activities: activities,
+        selectedProfileIds: _selectedFilterProfileIds,
+        showFamilyActivities: _showFamilyActivities,
+      ).isNotEmpty,
     );
   }
 
@@ -560,10 +547,6 @@ Future<void> _loadFilterProfiles() async {
     final smallGap = isLandscape ? 4.0 : 6.0;
     final mediumGap = isLandscape ? 8.0 : 10.0;
     final largeGap = isLandscape ? 10.0 : 12.0;
-
-    debugPrint(
-      'WeeklyCalendarScreen: days=${_activitiesByDate.length}, profiles=${_filterProfiles.length}, selected=$_selectedFilterProfileIds, showFamily=$_showFamilyActivities',
-    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -621,7 +604,7 @@ Future<void> _loadFilterProfiles() async {
                       Expanded(
                         child: _isLoading
                             ? const Center(child: CircularProgressIndicator())
-                            : !_hasAnyActivities
+                            : !_hasAnyActivitiesCache
                                 ? const _EmptyWeekView()
                                 : ListView.separated(
                                     itemCount: weekDays.length,

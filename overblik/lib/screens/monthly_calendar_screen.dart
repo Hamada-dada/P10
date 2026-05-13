@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/utils/activity_filter.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
@@ -71,6 +72,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   List<Profile> _filterProfiles = [];
   Set<String> _selectedFilterProfileIds = {};
   bool _showFamilyActivities = false;
+  bool _hasAnyActivitiesCache = false;
 
   bool _isLoading = true;
 
@@ -185,8 +187,8 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
       );
     }
 
-    await _loadFilterProfiles();
-    await _loadMonthActivities();
+    // CS-7: load filter profiles and month activities in parallel
+    await Future.wait([_loadFilterProfiles(), _loadMonthActivities()]);
   }
 
   Future<void> _loadMonthActivities() async {
@@ -208,36 +210,10 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
         });
       }
 
-      final gridDates = _buildMonthGrid(_focusedDate);
-
-      if (gridDates.isEmpty) {
-        if (!mounted) return;
-
-        setState(() {
-          _activitiesByDate = {};
-          _isLoading = false;
-        });
-
-        return;
-      }
-
-      final allActivities = <Activity>[];
-
-      DateTime cursor = gridDates.first;
-      final end = gridDates.last;
-
-      while (!cursor.isAfter(end)) {
-        final weekActivities = await _activityService.getActivitiesForWeek(
-          cursor,
-        );
-
-        // Do not deduplicate only by id here.
-        // Recurring activities share the same database id,
-        // but each occurrence has a different start time.
-        allActivities.addAll(weekActivities);
-
-        cursor = cursor.add(const Duration(days: 7));
-      }
+      // CS-1: single range query for the entire month grid
+      final allActivities = await _activityService.getActivitiesForMonth(
+        _focusedDate,
+      );
 
       final grouped = <String, List<Activity>>{};
 
@@ -269,6 +245,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
       setState(() {
         _activitiesByDate = grouped;
         _isLoading = false;
+        _hasAnyActivitiesCache = _hasAnyActivities;
       });
     } catch (e, st) {
       debugPrint('MonthlyCalendarScreen _loadMonthActivities failed: $e');
@@ -443,10 +420,18 @@ Future<void> _loadFilterProfiles() async {
     }
 
     try {
+      // RF-2: use today if the focused month is the current month, otherwise
+      // use the 1st of the focused month so the date is always valid.
+      final now = DateTime.now();
+      final createInitialDate = (_focusedDate.year == now.year &&
+              _focusedDate.month == now.month)
+          ? now
+          : DateTime(_focusedDate.year, _focusedDate.month, 1);
+
       final createdActivity = await Navigator.push<Activity>(
         context,
         MaterialPageRoute(
-          builder: (_) => CreateActivityScreen(initialDate: _focusedDate),
+          builder: (_) => CreateActivityScreen(initialDate: createInitialDate),
         ),
       );
 
@@ -592,38 +577,22 @@ Future<void> _loadFilterProfiles() async {
     return '${normalized.year}-${normalized.month}-${normalized.day}';
   }
 
-  List<Activity> _filterActivities(List<Activity> activities) {
-    if (_selectedFilterProfileIds.isEmpty && !_showFamilyActivities) {
-      return [];
-    }
-
-    return activities.where((activity) {
-      final matchesParticipant = activity.participants.any((participant) {
-        return participant.profileId != null &&
-            _selectedFilterProfileIds.contains(participant.profileId);
-      });
-
-      final matchesOwner = activity.ownerProfileId != null &&
-          _selectedFilterProfileIds.contains(activity.ownerProfileId);
-
-      final matchesFamily = _showFamilyActivities &&
-          (activity.visibility == ActivityVisibility.family ||
-              activity.participants.any(
-                (participant) => participant.externalName == 'Familie',
-              ));
-
-      return matchesParticipant || matchesOwner || matchesFamily;
-    }).toList();
-  }
-
   List<Activity> _getActivitiesForDate(DateTime date) {
     final activities = _activitiesByDate[_dateKey(date)] ?? const [];
-    return _filterActivities(activities);
+    return filterActivities(
+      activities: activities,
+      selectedProfileIds: _selectedFilterProfileIds,
+      showFamilyActivities: _showFamilyActivities,
+    );
   }
 
   bool get _hasAnyActivities {
     return _activitiesByDate.values.any(
-      (activities) => _filterActivities(activities).isNotEmpty,
+      (activities) => filterActivities(
+        activities: activities,
+        selectedProfileIds: _selectedFilterProfileIds,
+        showFamilyActivities: _showFamilyActivities,
+      ).isNotEmpty,
     );
   }
 
@@ -651,10 +620,6 @@ Future<void> _loadFilterProfiles() async {
             : screenHeight < 780
                 ? 76.0
                 : 82.0;
-
-    debugPrint(
-      'MonthlyCalendarScreen: days=${_activitiesByDate.length}, profiles=${_filterProfiles.length}, selected=$_selectedFilterProfileIds, showFamily=$_showFamilyActivities',
-    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -714,7 +679,7 @@ Future<void> _loadFilterProfiles() async {
                       Expanded(
                         child: _isLoading
                             ? const Center(child: CircularProgressIndicator())
-                            : !_hasAnyActivities
+                            : !_hasAnyActivitiesCache
                                 ? const _EmptyMonthView()
                                 : SingleChildScrollView(
                                     child: Column(

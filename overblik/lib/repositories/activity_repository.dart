@@ -5,6 +5,8 @@ abstract class ActivityRepository {
 
   Future<List<Activity>> getActivitiesForWeek(DateTime focusedDate);
 
+  Future<List<Activity>> getActivitiesForMonth(DateTime focusedDate);
+
   Future<Activity?> getActivityById(String id);
 
   Future<void> addActivity(Activity activity);

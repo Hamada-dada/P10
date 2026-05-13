@@ -21,17 +21,11 @@ bool activityMatchesFilter({
     return matchesOwner || matchesParticipant;
   });
 
-  final hasExternalParticipant = activity.participants.any((participant) {
-    final externalName = participant.externalName?.trim();
-    return externalName != null && externalName.isNotEmpty;
-  });
-
-  final matchesFamilyOrExternal =
+  final matchesFamily =
       showFamilyActivities &&
-      (activity.visibility == ActivityVisibility.family ||
-          hasExternalParticipant);
+      activity.visibility == ActivityVisibility.family;
 
-  return matchesSelectedProfile || matchesFamilyOrExternal;
+  return matchesSelectedProfile || matchesFamily;
 }
 
 List<Activity> filterActivities({

@@ -569,7 +569,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   void _openImagePreview(BuildContext context) {
     if (_activity.imagePath.trim().isEmpty) return;
 
-    if (kIsWeb) {
+    final isRemoteUrl = _activity.imagePath.startsWith('http');
+
+    if (kIsWeb && !isRemoteUrl) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -590,10 +592,20 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
               children: [
                 Center(
                   child: InteractiveViewer(
-                    child: Image.file(
-                      File(_activity.imagePath),
-                      fit: BoxFit.contain,
-                    ),
+                    child: isRemoteUrl
+                        ? Image.network(
+                            _activity.imagePath,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Text(
+                              'Kunne ikke vise billedet',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          )
+                        : Image.file(
+                            File(_activity.imagePath),
+                            fit: BoxFit.contain,
+                          ),
                   ),
                 ),
                 Positioned(
@@ -617,8 +629,28 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   }
 
   Widget _buildDetailImagePreview() {
-    if (_activity.imagePath.trim().isEmpty) {
-      return const SizedBox.shrink();
+    if (_activity.imagePath.trim().isEmpty) return const SizedBox.shrink();
+
+    final isRemoteUrl = _activity.imagePath.startsWith('http');
+
+    if (isRemoteUrl) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          _activity.imagePath,
+          height: 160,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              height: 90,
+              alignment: Alignment.center,
+              color: const Color(0xFFF1F1F1),
+              child: const Text('Kunne ikke vise billedet'),
+            );
+          },
+        ),
+      );
     }
 
     if (kIsWeb) {

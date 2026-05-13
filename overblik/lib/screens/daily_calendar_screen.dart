@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/utils/activity_filter.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
+import '../repositories/local_activity_cache.dart';
 import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
 import '../services/profile_service.dart';
@@ -87,6 +88,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   bool _isLoading = true;
   bool _isRefreshing = false;
   bool _isLoggingOut = false;
+  bool _pendingLoad = false;
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -191,8 +193,11 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
       );
     }
 
-    await _loadActivities(showFullLoader: true);
-    await _loadFilterProfiles();
+    // CS-7: load activities and profiles in parallel
+    await Future.wait([
+      _loadActivities(showFullLoader: true),
+      _loadFilterProfiles(),
+    ]);
   }
 
   @override
@@ -217,7 +222,11 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     _loadActivities(showFullLoader: false);
   }
   Future<void> _loadActivities({bool showFullLoader = true}) async {
-  if (_isRefreshing) return;
+  if (_isRefreshing) {
+    // CS-5: another load is in flight — mark that we need a follow-up load
+    _pendingLoad = true;
+    return;
+  }
 
   if (!_canUseScreen) {
     debugPrint(
@@ -271,6 +280,12 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     );
   } finally {
     _isRefreshing = false;
+
+    // CS-5: if navigation arrived while we were loading, trigger a fresh load
+    if (_pendingLoad && mounted) {
+      _pendingLoad = false;
+      _loadActivities(showFullLoader: false);
+    }
   }
 }
 
@@ -535,7 +550,11 @@ Future<void> _openFilterPanel() async {
       });
 
       if (_hasAuthUser) {
+        final userId = _supabase.auth.currentUser?.id;
         await _supabase.auth.signOut();
+        await LocalActivityCache(userId: userId).clearAll();
+      } else {
+        await LocalActivityCache().clearAll();
       }
 
       if (!mounted) return;
@@ -606,10 +625,6 @@ Future<void> _openFilterPanel() async {
   @override
   Widget build(BuildContext context) {
     final activities = _filteredActivities;
-
-    debugPrint(
-      'DailyCalendarScreen: raw=${_activities.length}, filtered=${activities.length}, profiles=${_filterProfiles.length}, selected=$_selectedFilterProfileIds, showFamily=$_showFamilyActivities',
-    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),

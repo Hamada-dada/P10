@@ -70,9 +70,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   late List<String> _selectedParticipants;
   late List<TextEditingController> _checklistControllers;
   late ActivityRecurrence _selectedRecurrence;
-  late ActivityRecurrence _selectedCustomRecurrence;
 
   String _imagePath = '';
+  bool _isUploadingImage = false;
+  String? _pendingLocalImagePath;
 
   bool get _isEditing => widget.existingActivity != null;
 
@@ -122,13 +123,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _selectedParticipants = <String>[];
 
     _selectedRecurrence = activity?.recurrence ?? ActivityRecurrence.none;
-
-    _selectedCustomRecurrence =
-        activity?.recurrence == ActivityRecurrence.daily ||
-                activity?.recurrence == ActivityRecurrence.weekly ||
-                activity?.recurrence == ActivityRecurrence.monthly
-            ? activity!.recurrence
-            : ActivityRecurrence.daily;
 
     final initialChecklist = activity?.checklistItems ?? [];
     _checklistControllers = initialChecklist.isNotEmpty
@@ -367,7 +361,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       case ActivityRecurrence.monthly:
         return 'måned(er)';
       case ActivityRecurrence.custom:
-        return _intervalSuffix(_selectedCustomRecurrence);
+        return '';
     }
   }
 
@@ -557,13 +551,41 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       if (pickedFile == null) return;
 
       setState(() {
-        _imagePath = pickedFile.path;
+        _pendingLocalImagePath = pickedFile.path;
+        _isUploadingImage = true;
+      });
+
+      final familyId = _currentFamilyId;
+      if (familyId == null) throw Exception('Familienøgle mangler');
+
+      final ext = pickedFile.path.split('.').last.toLowerCase();
+      final storagePath = '$familyId/${_uuid.v4()}.$ext';
+      final bytes = await pickedFile.readAsBytes();
+
+      await Supabase.instance.client.storage
+          .from('activity-images')
+          .uploadBinary(storagePath, bytes);
+
+      final publicUrl = Supabase.instance.client.storage
+          .from('activity-images')
+          .getPublicUrl(storagePath);
+
+      setState(() {
+        _imagePath = publicUrl;
+        _pendingLocalImagePath = null;
+        _isUploadingImage = false;
       });
     } catch (e) {
+      setState(() {
+        _imagePath = '';
+        _pendingLocalImagePath = null;
+        _isUploadingImage = false;
+      });
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kunne ikke vælge billede: $e')),
+        SnackBar(content: Text('Kunne ikke uploade billede: $e')),
       );
     }
   }
@@ -571,6 +593,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   void _removeImage() {
     setState(() {
       _imagePath = '';
+      _pendingLocalImagePath = null;
     });
   }
 
@@ -737,19 +760,51 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   }
 
   Widget _buildImagePreview() {
-    if (_imagePath.trim().isEmpty) {
-      return const SizedBox.shrink();
+    final hasImage = _imagePath.trim().isNotEmpty || _pendingLocalImagePath != null;
+    if (!hasImage) return const SizedBox.shrink();
+
+    final containerDecoration = BoxDecoration(
+      color: const Color(0xFFF8F8F8),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xFFE0E0E0)),
+    );
+
+    if (_isUploadingImage) {
+      return Container(
+        width: double.infinity,
+        height: 120,
+        decoration: containerDecoration,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_imagePath.startsWith('http')) {
+      return Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(maxHeight: 140, minHeight: 90),
+        decoration: containerDecoration,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.network(
+            _imagePath,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return const SizedBox(
+                height: 90,
+                child: Center(child: Text('Kunne ikke vise billedet')),
+              );
+            },
+          ),
+        ),
+      );
     }
 
     if (kIsWeb) {
       return Container(
         width: double.infinity,
         constraints: const BoxConstraints(maxHeight: 140, minHeight: 90),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8F8F8),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE0E0E0)),
-        ),
+        decoration: containerDecoration,
         child: const Center(
           child: Padding(
             padding: EdgeInsets.all(12),
@@ -765,11 +820,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     return Container(
       width: double.infinity,
       constraints: const BoxConstraints(maxHeight: 140, minHeight: 90),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F8F8),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
+      decoration: containerDecoration,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: Image.file(
@@ -894,9 +945,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       streakTarget: _enableStreakReward
           ? int.tryParse(_streakTargetController.text.trim()) ?? 5
           : null,
-      recurrence: _selectedRecurrence == ActivityRecurrence.custom
-          ? _selectedCustomRecurrence
-          : _selectedRecurrence,
+      recurrence: _selectedRecurrence,
       recurrenceInterval:
           _selectedRecurrence == ActivityRecurrence.none ? 1 : parsedInterval,
       recurrenceEndDate:
@@ -1102,8 +1151,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       labelText: 'Gentag aktivitet',
                                       border: OutlineInputBorder(),
                                     ),
-                                    items:
-                                        ActivityRecurrence.values.map((recurrence) {
+                                    items: ActivityRecurrence.values
+                                        .where((r) => r != ActivityRecurrence.custom)
+                                        .map((recurrence) {
                                       return DropdownMenuItem<ActivityRecurrence>(
                                         value: recurrence,
                                         child: Text(_recurrenceLabel(recurrence)),
@@ -1120,46 +1170,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                   if (_selectedRecurrence !=
                                       ActivityRecurrence.none) ...[
                                     const SizedBox(height: 12),
-                                    if (_selectedRecurrence ==
-                                        ActivityRecurrence.custom) ...[
-                                      DropdownButtonFormField<ActivityRecurrence>(
-                                        initialValue: _selectedCustomRecurrence,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Gentag hver',
-                                          border: OutlineInputBorder(),
-                                        ),
-                                        items: const [
-                                          DropdownMenuItem(
-                                            value: ActivityRecurrence.daily,
-                                            child: Text('Dag'),
-                                          ),
-                                          DropdownMenuItem(
-                                            value: ActivityRecurrence.weekly,
-                                            child: Text('Uge'),
-                                          ),
-                                          DropdownMenuItem(
-                                            value: ActivityRecurrence.monthly,
-                                            child: Text('Måned'),
-                                          ),
-                                        ],
-                                        onChanged: (value) {
-                                          if (value == null) return;
-
-                                          setState(() {
-                                            _selectedCustomRecurrence = value;
-                                          });
-                                        },
-                                      ),
-                                      const SizedBox(height: 12),
-                                    ],
                                     TextFormField(
                                       controller: _recurrenceIntervalController,
                                       keyboardType: TextInputType.number,
                                       decoration: InputDecoration(
-                                        labelText: _selectedRecurrence ==
-                                                ActivityRecurrence.custom
-                                            ? 'Hver X ${_intervalSuffix(_selectedCustomRecurrence)}'
-                                            : 'Hver X ${_intervalSuffix(_selectedRecurrence)}',
+                                        labelText: 'Hver X ${_intervalSuffix(_selectedRecurrence)}',
                                         border: const OutlineInputBorder(),
                                         hintText: 'f.eks. 2',
                                       ),
@@ -1632,7 +1647,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: _saveActivity,
+                            onPressed: _isUploadingImage ? null : _saveActivity,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               child: Text(
