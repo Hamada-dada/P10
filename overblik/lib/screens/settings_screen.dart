@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../controllers/theme_controller.dart';
 import '../main.dart';
@@ -17,7 +17,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _defaultEnabled = true;
   int _defaultReminderMinutes = 10;
   bool _isCustomDefault = false;
-  late TextEditingController _customDefaultController;
+  late TextEditingController _customAmountController;
+  String _customUnit = 'minutter';
+  String _notificationStyle = 'tydelig';
 
   ThemeMode _selectedThemeMode = themeController.themeMode;
   AppColorOption _selectedColor = themeController.colorOption;
@@ -40,29 +42,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _isCustomDefault =
         !NotificationPreferencesService.isFixedOption(_defaultReminderMinutes);
-    _customDefaultController = TextEditingController(
-      text: _isCustomDefault ? _defaultReminderMinutes.toString() : '',
+    final init = _minutesToAmountUnit(_defaultReminderMinutes);
+    _customAmountController = TextEditingController(
+      text: _isCustomDefault ? init.amount.toString() : '',
     );
+    _customUnit = _isCustomDefault ? init.unit : 'minutter';
     _loadNotificationDefaults();
   }
 
   @override
   void dispose() {
-    _customDefaultController.dispose();
+    _customAmountController.dispose();
     super.dispose();
+  }
+
+  ({int amount, String unit}) _minutesToAmountUnit(int minutes) {
+    if (minutes > 0 && minutes % 10080 == 0) {
+      return (amount: minutes ~/ 10080, unit: 'uger');
+    }
+    if (minutes > 0 && minutes % 1440 == 0) {
+      return (amount: minutes ~/ 1440, unit: 'dage');
+    }
+    if (minutes > 0 && minutes % 60 == 0) {
+      return (amount: minutes ~/ 60, unit: 'timer');
+    }
+    return (amount: minutes, unit: 'minutter');
+  }
+
+  int _amountUnitToMinutes(int amount, String unit) {
+    switch (unit) {
+      case 'uger':
+        return amount * 10080;
+      case 'dage':
+        return amount * 1440;
+      case 'timer':
+        return amount * 60;
+      default:
+        return amount;
+    }
   }
 
   Future<void> _loadNotificationDefaults() async {
     final svc = NotificationPreferencesService();
     final enabled = await svc.loadDefaultEnabled();
     final minutes = await svc.loadDefaultReminderMinutes();
+    final style = await svc.loadDefaultNotificationStyle();
     if (!mounted) return;
     final isCustom = !NotificationPreferencesService.isFixedOption(minutes);
+    final init = _minutesToAmountUnit(minutes);
     setState(() {
       _defaultEnabled = enabled;
       _defaultReminderMinutes = minutes;
       _isCustomDefault = isCustom;
-      if (isCustom) _customDefaultController.text = minutes.toString();
+      _notificationStyle = style;
+      if (isCustom) {
+        _customAmountController.text = init.amount.toString();
+        _customUnit = init.unit;
+      }
     });
   }
 
@@ -145,7 +181,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   .map(
                                     (m) => DropdownMenuItem<int?>(
                                       value: m,
-                                      child: Text('$m minutter før'),
+                                      child: Text(
+                                        NotificationPreferencesService
+                                            .reminderLabel(m),
+                                      ),
                                     ),
                                   ),
                               const DropdownMenuItem<int?>(
@@ -163,10 +202,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       await NotificationPreferencesService()
                                           .saveDefaultReminderMinutes(value);
                                     } else {
+                                      final init = _minutesToAmountUnit(
+                                        _defaultReminderMinutes,
+                                      );
                                       setState(() {
                                         _isCustomDefault = true;
-                                        _customDefaultController.text =
-                                            _defaultReminderMinutes.toString();
+                                        _customAmountController.text =
+                                            init.amount.toString();
+                                        _customUnit = init.unit;
                                       });
                                     }
                                   }
@@ -174,26 +217,115 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           if (_isCustomDefault && _defaultEnabled) ...[
                             const SizedBox(height: 10),
-                            TextFormField(
-                              controller: _customDefaultController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Minutter før (0–10080)',
-                                border: OutlineInputBorder(),
-                              ),
-                              onChanged: (raw) async {
-                                final parsed = int.tryParse(raw.trim());
-                                if (parsed == null ||
-                                    parsed < 0 ||
-                                    parsed > 10080) {
-                                  return;
-                                }
-                                setState(() => _defaultReminderMinutes = parsed);
-                                await NotificationPreferencesService()
-                                    .saveDefaultReminderMinutes(parsed);
-                              },
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 2,
+                                  child: TextField(
+                                    controller: _customAmountController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Antal',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    onChanged: (raw) async {
+                                      final amount =
+                                          int.tryParse(raw.trim());
+                                      if (amount == null || amount < 0) return;
+                                      final total = _amountUnitToMinutes(
+                                        amount,
+                                        _customUnit,
+                                      );
+                                      if (total < 0 || total > 10080) return;
+                                      setState(
+                                        () => _defaultReminderMinutes = total,
+                                      );
+                                      await NotificationPreferencesService()
+                                          .saveDefaultReminderMinutes(total);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  flex: 3,
+                                  child: DropdownButtonFormField<String>(
+                                    key: ValueKey(_customUnit),
+                                    initialValue: _customUnit,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Enhed',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'minutter',
+                                        child: Text('minutter'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'timer',
+                                        child: Text('timer'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'dage',
+                                        child: Text('dage'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'uger',
+                                        child: Text('uger'),
+                                      ),
+                                    ],
+                                    onChanged: (unit) async {
+                                      if (unit == null) return;
+                                      setState(() => _customUnit = unit);
+                                      final amount = int.tryParse(
+                                        _customAmountController.text.trim(),
+                                      );
+                                      if (amount == null || amount < 0) return;
+                                      final total =
+                                          _amountUnitToMinutes(amount, unit);
+                                      if (total < 0 || total > 10080) return;
+                                      setState(
+                                        () => _defaultReminderMinutes = total,
+                                      );
+                                      await NotificationPreferencesService()
+                                          .saveDefaultReminderMinutes(total);
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            key: ValueKey(_notificationStyle),
+                            initialValue: _notificationStyle,
+                            decoration: const InputDecoration(
+                              labelText: 'Standard notifikationsstil',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: NotificationPreferencesService
+                                .notificationStyleOptions
+                                .map(
+                                  (s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(
+                                      NotificationPreferencesService
+                                          .notificationStyleLabel(s),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _defaultEnabled
+                                ? (value) async {
+                                    if (value == null) return;
+                                    setState(
+                                      () => _notificationStyle = value,
+                                    );
+                                    await NotificationPreferencesService()
+                                        .saveDefaultNotificationStyle(value);
+                                  }
+                                : null,
+                          ),
                         ],
                       ),
                     ),
@@ -261,13 +393,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               if (!context.mounted) return;
                               _showSavedSnackBar();
                             },
-                          ),
-                          const SizedBox(height: 14),
-                          const _InlineInfoBox(
-                            icon: Icons.palette_outlined,
-                            title: 'Visuel tilpasning',
-                            text:
-                                'Tema og notifikationsstil kan bruges til at ændre appen efter barnets behov.',
                           ),
                         ],
                       ),
@@ -430,7 +555,7 @@ class _InlineInfoBox extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 20,
-          backgroundColor: colorScheme.primary.withValues(alpha: 
+          backgroundColor: colorScheme.primary.withValues(alpha:
             isDark ? 0.22 : 0.14,
           ),
           child: Icon(

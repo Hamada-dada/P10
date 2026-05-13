@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/utils/activity_filter.dart';
@@ -7,6 +9,7 @@ import '../models/profile.dart';
 import '../repositories/local_activity_cache.dart';
 import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
+import '../services/notification_service.dart';
 import '../services/profile_service.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/activity_indicators.dart';
@@ -87,6 +90,8 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   bool _isRefreshing = false;
   bool _isLoggingOut = false;
 
+  StreamSubscription<String>? _notifTapSub;
+
   SupabaseClient get _supabase => Supabase.instance.client;
 
   bool get _hasAuthUser => _supabase.auth.currentUser != null;
@@ -144,6 +149,23 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     _focusedDate = widget.initialDate ?? DateTime.now();
 
     _initializeScreen();
+
+    // Subscribe to notification taps that occur while the app is running.
+    _notifTapSub = NotificationService().onActivityTapped.listen(
+      _handleNotificationTap,
+    );
+
+    // Handle a tap that launched the app from a terminated state.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pending = NotificationService().consumePendingActivityId();
+      if (pending != null) {
+        debugPrint(
+          'DailyCalendarScreen: consuming pending notification tap '
+          'activityId=$pending',
+        );
+        _handleNotificationTap(pending);
+      }
+    });
   }
 
   Future<void> _initializeScreen() async {
@@ -177,6 +199,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
   @override
   void dispose() {
+    _notifTapSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -391,6 +414,39 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
           content: Text('Kunne ikke gemme aktivitet: $e'),
           duration: const Duration(seconds: 6),
         ),
+      );
+    }
+  }
+
+  Future<void> _handleNotificationTap(String activityId) async {
+    debugPrint(
+      'DailyCalendarScreen: notification tapped, activityId=$activityId',
+    );
+    if (!_canOpenActivityDetail) {
+      debugPrint(
+        'DailyCalendarScreen: cannot open activity detail — not logged in, '
+        'falling back to calendar',
+      );
+      return;
+    }
+    try {
+      final activity = await _activityService.getActivityById(activityId);
+      if (!mounted) return;
+      if (activity == null) {
+        debugPrint(
+          'DailyCalendarScreen: activity not found id=$activityId, '
+          'staying on calendar',
+        );
+        return;
+      }
+      debugPrint(
+        'DailyCalendarScreen: navigating to activity detail id=$activityId',
+      );
+      await _openActivityDetail(activity);
+    } catch (e) {
+      debugPrint(
+        'DailyCalendarScreen: error handling notification tap: $e — '
+        'staying on calendar',
       );
     }
   }

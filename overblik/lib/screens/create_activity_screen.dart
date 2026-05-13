@@ -65,7 +65,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   bool _notificationsEnabled = true;
   int _reminderMinutesBefore = 10;
   bool _isCustomReminder = false;
-  late TextEditingController _customReminderController;
+  late TextEditingController _customAmountController;
+  String _customReminderUnit = 'minutter';
+  String _notificationStyle = 'tydelig';
+
+  bool _recurrenceEnabled = false;
 
   bool _enableDirectReward = false;
   bool _enableStreakReward = false;
@@ -122,9 +126,12 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _isCustomReminder = !NotificationPreferencesService.isFixedOption(
       _reminderMinutesBefore,
     );
-    _customReminderController = TextEditingController(
-      text: _isCustomReminder ? _reminderMinutesBefore.toString() : '',
+    final customInit = _minutesToAmountUnit(_reminderMinutesBefore);
+    _customAmountController = TextEditingController(
+      text: _isCustomReminder ? customInit.amount.toString() : '',
     );
+    _customReminderUnit = _isCustomReminder ? customInit.unit : 'minutter';
+    _notificationStyle = activity?.notificationStyle ?? 'tydelig';
 
     if (!_isEditing) {
       _loadNotificationDefaults();
@@ -141,6 +148,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _selectedParticipants = <String>[];
 
     _selectedRecurrence = activity?.recurrence ?? ActivityRecurrence.none;
+    _recurrenceEnabled = _selectedRecurrence != ActivityRecurrence.none;
 
     final initialChecklist = activity?.checklistItems ?? [];
     _checklistControllers = initialChecklist.isNotEmpty
@@ -160,7 +168,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _descriptionController.dispose();
     _recurrenceIntervalController.dispose();
     _streakTargetController.dispose();
-    _customReminderController.dispose();
+    _customAmountController.dispose();
 
     for (final controller in _checklistControllers) {
       controller.dispose();
@@ -189,21 +197,23 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     final svc = NotificationPreferencesService();
     final enabled = await svc.loadDefaultEnabled();
     final minutes = await svc.loadDefaultReminderMinutes();
+    final style = await svc.loadDefaultNotificationStyle();
     if (!mounted) return;
     final isCustom = !NotificationPreferencesService.isFixedOption(minutes);
     setState(() {
       _notificationsEnabled = enabled;
       _reminderMinutesBefore = minutes;
       _isCustomReminder = isCustom;
-      if (isCustom) _customReminderController.text = minutes.toString();
+      _notificationStyle = style;
+      if (isCustom) {
+        final init = _minutesToAmountUnit(minutes);
+        _customAmountController.text = init.amount.toString();
+        _customReminderUnit = init.unit;
+      }
     });
   }
 
   Future<void> _loadProfiles() async {
-    debugPrint(
-      'CreateActivityScreen current auth user = ${Supabase.instance.client.auth.currentUser?.id}',
-    );
-
     try {
       final currentProfile =
           await _profileService.getCurrentAuthenticatedProfile();
@@ -366,6 +376,28 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return true;
     return trimmed.runes.length <= 8;
+  }
+
+  ({int amount, String unit}) _minutesToAmountUnit(int minutes) {
+    if (minutes > 0 && minutes % 10080 == 0) {
+      return (amount: minutes ~/ 10080, unit: 'uger');
+    }
+    if (minutes > 0 && minutes % 1440 == 0) {
+      return (amount: minutes ~/ 1440, unit: 'dage');
+    }
+    if (minutes > 0 && minutes % 60 == 0) {
+      return (amount: minutes ~/ 60, unit: 'timer');
+    }
+    return (amount: minutes, unit: 'minutter');
+  }
+
+  int _amountUnitToMinutes(int amount, String unit) {
+    switch (unit) {
+      case 'uger': return amount * 10080;
+      case 'dage': return amount * 1440;
+      case 'timer': return amount * 60;
+      default: return amount;
+    }
   }
 
   String _recurrenceLabel(ActivityRecurrence recurrence) {
@@ -933,7 +965,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     final parsedInterval =
         int.tryParse(_recurrenceIntervalController.text.trim()) ?? 1;
 
-    if (_selectedRecurrence != ActivityRecurrence.none && parsedInterval < 1) {
+    if (_recurrenceEnabled && parsedInterval < 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Gentagelsesinterval skal være mindst 1.'),
@@ -978,33 +1010,22 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       streakTarget: _enableStreakReward
           ? int.tryParse(_streakTargetController.text.trim()) ?? 5
           : null,
-      recurrence: _selectedRecurrence,
-      recurrenceInterval:
-          _selectedRecurrence == ActivityRecurrence.none ? 1 : parsedInterval,
-      recurrenceEndDate:
-          _selectedRecurrence == ActivityRecurrence.none ? null : _recurrenceEndDate,
+      recurrence: _recurrenceEnabled ? _selectedRecurrence : ActivityRecurrence.none,
+      recurrenceInterval: _recurrenceEnabled ? parsedInterval : 1,
+      recurrenceEndDate: _recurrenceEnabled ? _recurrenceEndDate : null,
       notificationsEnabled: _notificationsEnabled,
       reminderMinutesBefore: _notificationsEnabled && _isCustomReminder
-          ? (int.tryParse(_customReminderController.text.trim()) ??
-              _reminderMinutesBefore)
+          ? _amountUnitToMinutes(
+              int.tryParse(_customAmountController.text.trim()) ?? 1,
+              _customReminderUnit,
+            )
           : _reminderMinutesBefore,
+      notificationStyle: _notificationStyle,
       createdAt: widget.existingActivity?.createdAt,
       updatedAt: widget.existingActivity?.updatedAt,
       participants: participants,
       checklistItems: checklistItems,
     );
-
-    debugPrint('CreateActivityScreen: activity payload');
-    debugPrint('familyId=${activity.familyId}');
-    debugPrint('createdBy=${activity.createdBy}');
-    debugPrint('ownerProfileId=${activity.ownerProfileId}');
-    debugPrint('visibility=${activityVisibilityToDatabase(activity.visibility)}');
-    debugPrint('currentAuthUser=$authUserId');
-    debugPrint('currentProfile=${currentProfile.id}');
-    debugPrint('currentProfileRole=${currentProfile.role}');
-    debugPrint('currentFamilyId=$currentFamilyId');
-    debugPrint('participants=${activity.participants.length}');
-    debugPrint('checklistItems=${activity.checklistItems.length}');
 
     Navigator.pop(context, activity);
   }
@@ -1224,7 +1245,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                             .map(
                                               (m) => DropdownMenuItem<int?>(
                                                 value: m,
-                                                child: Text('$m minutter før'),
+                                                child: Text(NotificationPreferencesService.reminderLabel(m)),
                                               ),
                                             ),
                                         const DropdownMenuItem<int?>(
@@ -1239,91 +1260,201 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                             _reminderMinutesBefore = value;
                                           } else {
                                             _isCustomReminder = true;
-                                            _customReminderController.text =
-                                                _reminderMinutesBefore
-                                                    .toString();
+                                            final init = _minutesToAmountUnit(
+                                              _reminderMinutesBefore,
+                                            );
+                                            _customAmountController.text =
+                                                init.amount.toString();
+                                            _customReminderUnit = init.unit;
                                           }
                                         });
                                       },
                                     ),
                                     if (_isCustomReminder) ...[
                                       const SizedBox(height: 10),
-                                      TextFormField(
-                                        controller: _customReminderController,
-                                        keyboardType: TextInputType.number,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Minutter før (0–10080)',
-                                          border: OutlineInputBorder(),
-                                        ),
-                                        validator: (value) {
-                                          if (!_notificationsEnabled ||
-                                              !_isCustomReminder) {
-                                            return null;
-                                          }
-                                          final raw = value?.trim() ?? '';
-                                          if (raw.isEmpty) {
-                                            return 'Angiv et gyldigt antal minutter.';
-                                          }
-                                          final parsed = int.tryParse(raw);
-                                          if (parsed == null || parsed < 0) {
-                                            return 'Angiv et gyldigt antal minutter.';
-                                          }
-                                          if (parsed > 10080) {
-                                            return 'Påmindelsen kan højst være 7 dage før aktiviteten.';
-                                          }
-                                          return null;
-                                        },
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            flex: 2,
+                                            child: TextFormField(
+                                              controller: _customAmountController,
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Antal',
+                                                border: OutlineInputBorder(),
+                                              ),
+                                              validator: (value) {
+                                                if (!_notificationsEnabled ||
+                                                    !_isCustomReminder) {
+                                                  return null;
+                                                }
+                                                final raw =
+                                                    value?.trim() ?? '';
+                                                if (raw.isEmpty) {
+                                                  return 'Angiv antal.';
+                                                }
+                                                final amount =
+                                                    int.tryParse(raw);
+                                                if (amount == null ||
+                                                    amount < 0) {
+                                                  return 'Angiv antal.';
+                                                }
+                                                final total =
+                                                    _amountUnitToMinutes(
+                                                  amount,
+                                                  _customReminderUnit,
+                                                );
+                                                if (total > 10080) {
+                                                  return 'Påmindelsen kan højst være 7 dage før aktiviteten.';
+                                                }
+                                                return null;
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            flex: 3,
+                                            child:
+                                                DropdownButtonFormField<String>(
+                                              key: ValueKey(_customReminderUnit),
+                                              initialValue: _customReminderUnit,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Enhed',
+                                                border: OutlineInputBorder(),
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: 'minutter',
+                                                  child: Text('minutter'),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'timer',
+                                                  child: Text('timer'),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'dage',
+                                                  child: Text('dage'),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: 'uger',
+                                                  child: Text('uger'),
+                                                ),
+                                              ],
+                                              onChanged: (unit) {
+                                                if (unit == null) return;
+                                                setState(() {
+                                                  _customReminderUnit = unit;
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
+                                    const SizedBox(height: 10),
+                                    DropdownButtonFormField<String>(
+                                      key: ValueKey(_notificationStyle),
+                                      initialValue: _notificationStyle,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Notifikationsstil',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      items: NotificationPreferencesService
+                                          .notificationStyleOptions
+                                          .map(
+                                            (s) => DropdownMenuItem(
+                                              value: s,
+                                              child: Text(
+                                                NotificationPreferencesService
+                                                    .notificationStyleLabel(s),
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: (value) {
+                                        if (value == null) return;
+                                        setState(() {
+                                          _notificationStyle = value;
+                                        });
+                                      },
+                                    ),
                                   ],
                                   const SizedBox(height: 12),
-                                  DropdownButtonFormField<ActivityRecurrence>(
-                                    initialValue: _selectedRecurrence,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Gentag aktivitet',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    items: ActivityRecurrence.values
-                                        .where((r) => r != ActivityRecurrence.custom)
-                                        .map((recurrence) {
-                                      return DropdownMenuItem<ActivityRecurrence>(
-                                        value: recurrence,
-                                        child: Text(_recurrenceLabel(recurrence)),
-                                      );
-                                    }).toList(),
+                                  SwitchListTile(
+                                    value: _recurrenceEnabled,
                                     onChanged: (value) {
-                                      if (value == null) return;
-
                                       setState(() {
-                                        _selectedRecurrence = value;
+                                        _recurrenceEnabled = value;
+                                        if (value &&
+                                            _selectedRecurrence ==
+                                                ActivityRecurrence.none) {
+                                          _selectedRecurrence =
+                                              ActivityRecurrence.daily;
+                                        }
                                       });
                                     },
+                                    title: const Text('Gentag aktivitet'),
+                                    contentPadding: EdgeInsets.zero,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    tileColor: const Color(0xFFF8F8F8),
                                   ),
-                                  if (_selectedRecurrence !=
-                                      ActivityRecurrence.none) ...[
+                                  if (_recurrenceEnabled) ...[
+                                    const SizedBox(height: 12),
+                                    DropdownButtonFormField<ActivityRecurrence>(
+                                      key: ValueKey(_recurrenceEnabled),
+                                      initialValue: _selectedRecurrence ==
+                                              ActivityRecurrence.none
+                                          ? ActivityRecurrence.daily
+                                          : _selectedRecurrence,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Gentagelse',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      items: ActivityRecurrence.values
+                                          .where(
+                                            (r) =>
+                                                r != ActivityRecurrence.none &&
+                                                r != ActivityRecurrence.custom,
+                                          )
+                                          .map(
+                                            (r) =>
+                                                DropdownMenuItem(
+                                              value: r,
+                                              child:
+                                                  Text(_recurrenceLabel(r)),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: (value) {
+                                        if (value == null) return;
+                                        setState(
+                                          () => _selectedRecurrence = value,
+                                        );
+                                      },
+                                    ),
                                     const SizedBox(height: 12),
                                     TextFormField(
                                       controller: _recurrenceIntervalController,
                                       keyboardType: TextInputType.number,
                                       decoration: InputDecoration(
-                                        labelText: 'Hver X ${_intervalSuffix(_selectedRecurrence)}',
+                                        labelText:
+                                            'Hver X ${_intervalSuffix(_selectedRecurrence)}',
                                         border: const OutlineInputBorder(),
                                         hintText: 'f.eks. 2',
                                       ),
                                       validator: (value) {
-                                        if (_selectedRecurrence ==
-                                            ActivityRecurrence.none) {
-                                          return null;
-                                        }
-
+                                        if (!_recurrenceEnabled) return null;
                                         final number = int.tryParse(
                                           (value ?? '').trim(),
                                         );
-
                                         if (number == null || number < 1) {
                                           return 'Skriv et tal på mindst 1';
                                         }
-
                                         return null;
                                       },
                                     ),

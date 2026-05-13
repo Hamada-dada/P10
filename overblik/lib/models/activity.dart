@@ -172,6 +172,7 @@ class Activity {
 
   final bool notificationsEnabled;
   final int reminderMinutesBefore;
+  final String notificationStyle;
 
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -202,6 +203,7 @@ class Activity {
     required this.recurrenceEndDate,
     required this.notificationsEnabled,
     required this.reminderMinutesBefore,
+    required this.notificationStyle,
     required this.createdAt,
     required this.updatedAt,
     required this.participants,
@@ -225,14 +227,16 @@ class Activity {
   }
 
   Map<String, dynamic> toActivityRow() {
+    final startUtc = startTime.toUtc().toIso8601String();
+    final endUtc = endTime.toUtc().toIso8601String();
     return {
       'id': id,
       'family_id': familyId,
       'title': title,
       'emoji': emoji.isEmpty ? null : emoji,
       'description': description.isEmpty ? null : description,
-      'start_time': startTime.toIso8601String(),
-      'end_time': endTime.toIso8601String(),
+      'start_time': startUtc,
+      'end_time': endUtc,
       'created_by': createdBy,
       'owner_profile_id': ownerProfileId,
       'visibility': activityVisibilityToDatabase(visibility),
@@ -245,9 +249,10 @@ class Activity {
       'streak_target': streakTarget,
       'recurrence': activityRecurrenceToDatabase(recurrence),
       'recurrence_interval': recurrenceInterval,
-      'recurrence_end_date': recurrenceEndDate?.toIso8601String(),
+      'recurrence_end_date': recurrenceEndDate?.toUtc().toIso8601String(),
       'notifications_enabled': notificationsEnabled,
       'reminder_minutes_before': reminderMinutesBefore,
+      'notification_style': notificationStyle,
     };
   }
 
@@ -262,8 +267,8 @@ class Activity {
       title: activityRow['title'] as String? ?? '',
       emoji: activityRow['emoji'] as String? ?? '',
       description: activityRow['description'] as String? ?? '',
-      startTime: DateTime.parse(activityRow['start_time'] as String),
-      endTime: DateTime.parse(activityRow['end_time'] as String),
+      startTime: DateTime.parse(activityRow['start_time'] as String).toLocal(),
+      endTime: DateTime.parse(activityRow['end_time'] as String).toLocal(),
       createdBy: activityRow['created_by'] as String?,
       ownerProfileId: activityRow['owner_profile_id'] as String?,
       visibility: activityVisibilityFromString(
@@ -281,17 +286,19 @@ class Activity {
       ),
       recurrenceInterval: activityRow['recurrence_interval'] as int? ?? 1,
       recurrenceEndDate: activityRow['recurrence_end_date'] != null
-          ? DateTime.tryParse(activityRow['recurrence_end_date'] as String)
+          ? DateTime.tryParse(activityRow['recurrence_end_date'] as String)?.toLocal()
           : null,
       notificationsEnabled:
           activityRow['notifications_enabled'] as bool? ?? true,
       reminderMinutesBefore:
           activityRow['reminder_minutes_before'] as int? ?? 10,
+      notificationStyle:
+          activityRow['notification_style'] as String? ?? 'tydelig',
       createdAt: activityRow['created_at'] != null
-          ? DateTime.tryParse(activityRow['created_at'] as String)
+          ? DateTime.tryParse(activityRow['created_at'] as String)?.toLocal()
           : null,
       updatedAt: activityRow['updated_at'] != null
-          ? DateTime.tryParse(activityRow['updated_at'] as String)
+          ? DateTime.tryParse(activityRow['updated_at'] as String)?.toLocal()
           : null,
       participants: participants,
       checklistItems: checklistItems,
@@ -321,6 +328,7 @@ class Activity {
     DateTime? recurrenceEndDate,
     bool? notificationsEnabled,
     int? reminderMinutesBefore,
+    String? notificationStyle,
     DateTime? createdAt,
     DateTime? updatedAt,
     List<ActivityParticipant>? participants,
@@ -350,6 +358,7 @@ class Activity {
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       reminderMinutesBefore:
           reminderMinutesBefore ?? this.reminderMinutesBefore,
+      notificationStyle: notificationStyle ?? this.notificationStyle,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       participants: participants ?? this.participants,

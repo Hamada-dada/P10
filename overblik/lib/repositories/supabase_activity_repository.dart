@@ -438,8 +438,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       );
     }
 
-    final rangeStartIso = rangeStart.toIso8601String();
-    final rangeEndIso = rangeEnd.toIso8601String();
+    final rangeStartIso = rangeStart.toUtc().toIso8601String();
+    final rangeEndIso = rangeEnd.toUtc().toIso8601String();
 
     final activityRows = await _client
         .from('activities')
@@ -482,8 +482,8 @@ class SupabaseActivityRepository implements ActivityRepository {
       return [];
     }
 
-    final rangeStartIso = rangeStart.toIso8601String();
-    final rangeEndIso = rangeEnd.toIso8601String();
+    final rangeStartIso = rangeStart.toUtc().toIso8601String();
+    final rangeEndIso = rangeEnd.toUtc().toIso8601String();
 
     debugPrint(
       'SupabaseActivityRepository: legacy child loading activities '
@@ -1146,24 +1146,6 @@ class SupabaseActivityRepository implements ActivityRepository {
   
   @override
   Future<void> addActivity(Activity activity) async {
-    debugPrint('SupabaseActivityRepository: creating activity with relations');
-    debugPrint('SupabaseActivityRepository: id=${activity.id}');
-    debugPrint('SupabaseActivityRepository: familyId=${activity.familyId}');
-    debugPrint('SupabaseActivityRepository: createdBy=${activity.createdBy}');
-    debugPrint(
-      'SupabaseActivityRepository: ownerProfileId=${activity.ownerProfileId}',
-    );
-    debugPrint(
-      'SupabaseActivityRepository: visibility='
-      '${activityVisibilityToDatabase(activity.visibility)}',
-    );
-    debugPrint(
-      'SupabaseActivityRepository: participants=${activity.participants.length}',
-    );
-    debugPrint(
-      'SupabaseActivityRepository: checklistItems=${activity.checklistItems.length}',
-    );
-
     if (_isChildSession) {
       throw Exception(
         'Legacy child activity creation is not implemented. '
@@ -1236,16 +1218,6 @@ class SupabaseActivityRepository implements ActivityRepository {
 
       return row;
     }).toList();
-
-    debugPrint(
-      'SupabaseActivityRepository: activity RPC row = $activityRow',
-    );
-    debugPrint(
-      'SupabaseActivityRepository: participant RPC rows = $participantRows',
-    );
-    debugPrint(
-      'SupabaseActivityRepository: checklist RPC rows = $checklistRows',
-    );
 
     final createdActivityId = await _client.rpc(
       'create_activity_with_relations',

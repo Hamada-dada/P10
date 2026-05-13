@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -21,6 +22,21 @@ class NotificationService {
   static const String _idsKeyPrefix = 'notification_ids_';
   static const int _schedulingWindowDays = 30;
 
+  // Broadcast stream for notification taps while app is running.
+  final StreamController<String> _tapController =
+      StreamController<String>.broadcast();
+  Stream<String> get onActivityTapped => _tapController.stream;
+
+  // Stored when app is cold-started by a notification tap.
+  String? _pendingActivityId;
+
+  /// Returns and clears any activity id that launched the app.
+  String? consumePendingActivityId() {
+    final id = _pendingActivityId;
+    _pendingActivityId = null;
+    return id;
+  }
+
   Future<void> initialize() async {
     if (_initialized) return;
 
@@ -42,9 +58,37 @@ class NotificationService {
     const initSettings =
         InitializationSettings(android: androidInit, iOS: iosInit);
 
-    await _plugin.initialize(settings: initSettings);
+    await _plugin.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        final payload = response.payload;
+        debugPrint(
+          'NotificationService: notification tapped, payload=$payload',
+        );
+        if (payload != null && payload.isNotEmpty) {
+          _tapController.add(payload);
+        }
+      },
+    );
     _initialized = true;
     debugPrint('NotificationService: initialized');
+
+    // Check if the app was cold-started by tapping a notification.
+    try {
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      if (launchDetails?.didNotificationLaunchApp == true) {
+        final payload = launchDetails?.notificationResponse?.payload;
+        if (payload != null && payload.isNotEmpty) {
+          _pendingActivityId = payload;
+          debugPrint(
+            'NotificationService: app launched via notification tap, '
+            'activityId=$_pendingActivityId',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('NotificationService: getNotificationAppLaunchDetails failed: $e');
+    }
 
     await requestPermissions();
   }
@@ -155,7 +199,7 @@ class NotificationService {
           title: activity.title,
           body: body,
           scheduledDate: tzTime,
-          notificationDetails: _notificationDetails(),
+          notificationDetails: _notificationDetails(activity.notificationStyle),
           androidScheduleMode: scheduleMode,
           payload: activity.id,
         );
@@ -223,17 +267,46 @@ class NotificationService {
         : AndroidScheduleMode.inexactAllowWhileIdle;
   }
 
-  NotificationDetails _notificationDetails() {
-    return const NotificationDetails(
-      android: AndroidNotificationDetails(
-        'activity_reminders',
-        'Aktivitetspåmindelser',
-        channelDescription: 'Påmindelser om kommende aktiviteter',
-        importance: Importance.high,
-        priority: Priority.high,
-      ),
-      iOS: DarwinNotificationDetails(),
-    );
+  NotificationDetails _notificationDetails(String style) {
+    switch (style) {
+      case 'rolig':
+        return const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'activity_reminders_rolig',
+            'Aktivitetspåmindelser – Rolig',
+            channelDescription: 'Stille påmindelser uden vibration',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+            enableVibration: false,
+          ),
+          iOS: DarwinNotificationDetails(presentSound: true),
+        );
+      case 'diskret':
+        return const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'activity_reminders_diskret',
+            'Aktivitetspåmindelser – Diskret',
+            channelDescription: 'Stille påmindelser uden lyd eller vibration',
+            importance: Importance.low,
+            priority: Priority.low,
+            enableVibration: false,
+            playSound: false,
+          ),
+          iOS: DarwinNotificationDetails(presentSound: false),
+        );
+      case 'tydelig':
+      default:
+        return const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'activity_reminders_tydelig',
+            'Aktivitetspåmindelser – Tydelig',
+            channelDescription: 'Tydelige påmindelser med lyd og vibration',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(presentSound: true),
+        );
+    }
   }
 
   int _notificationId(String activityId, DateTime occurrenceStart) {

@@ -292,8 +292,8 @@ class LocalActivityCache {
     return {
       'activity': {
         ...activity.toActivityRow(),
-        'created_at': activity.createdAt?.toIso8601String(),
-        'updated_at': activity.updatedAt?.toIso8601String(),
+        'created_at': activity.createdAt?.toUtc().toIso8601String(),
+        'updated_at': activity.updatedAt?.toUtc().toIso8601String(),
       },
       'participants': activity.participants.map((participant) {
         return {
