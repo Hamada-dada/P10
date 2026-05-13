@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../core/utils/activity_filter.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
@@ -73,7 +72,6 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   List<Profile> _filterProfiles = [];
   Set<String> _selectedFilterProfileIds = {};
   bool _showFamilyActivities = false;
-  bool _hasAnyActivitiesCache = false;
 
   bool _isLoading = true;
 
@@ -170,8 +168,8 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     }
 
     if (_hasAuthUser) {
-      final currentProfile =
-          await _profileService.getCurrentAuthenticatedProfile();
+      final currentProfile = await _profileService
+          .getCurrentAuthenticatedProfile();
 
       if (!mounted) return;
 
@@ -184,8 +182,8 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       );
     }
 
-    // CS-7: load filter profiles and week activities in parallel
-    await Future.wait([_loadFilterProfiles(), _loadWeekActivities()]);
+    await _loadFilterProfiles();
+    await _loadWeekActivities();
   }
 
   Future<void> _loadWeekActivities() async {
@@ -240,7 +238,6 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       setState(() {
         _activitiesByDate = grouped;
         _isLoading = false;
-        _hasAnyActivitiesCache = _hasAnyActivities;
       });
     } catch (e, st) {
       debugPrint('WeeklyCalendarScreen _loadWeekActivities failed: $e');
@@ -262,15 +259,49 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     }
   }
 
-Future<void> _loadFilterProfiles() async {
-  try {
-    if (_isChildSession) {
-      if (widget.childProfileId == null) return;
+  Future<void> _loadFilterProfiles() async {
+    try {
+      if (_isChildSession) {
+        if (widget.childProfileId == null) return;
+
+        if (!mounted) return;
+
+        setState(() {
+          _filterProfiles = [];
+
+          if (_hasInitialFilterState) {
+            _selectedFilterProfileIds = Set<String>.from(
+              widget.initialSelectedFilterProfileIds ?? const {},
+            );
+            _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
+            return;
+          }
+
+          _selectedFilterProfileIds = {widget.childProfileId!};
+          _showFamilyActivities = false;
+        });
+
+        return;
+      }
+
+      final currentProfile =
+          _currentProfile ??
+          await _profileService.getCurrentAuthenticatedProfile();
+
+      if (currentProfile == null) {
+        debugPrint('CalendarScreen: no current profile for filter loading');
+        return;
+      }
+
+      final profiles = await _profileService.getFamilyProfiles(
+        currentProfile.familyId,
+      );
 
       if (!mounted) return;
 
       setState(() {
-        _filterProfiles = [];
+        _currentProfile = currentProfile;
+        _filterProfiles = profiles;
 
         if (_hasInitialFilterState) {
           _selectedFilterProfileIds = Set<String>.from(
@@ -280,50 +311,17 @@ Future<void> _loadFilterProfiles() async {
           return;
         }
 
-        _selectedFilterProfileIds = {widget.childProfileId!};
-        _showFamilyActivities = false;
+        // Required default:
+        // Parent = own + family/others.
+        // Child = own only.
+        _selectedFilterProfileIds = {currentProfile.id};
+        _showFamilyActivities = currentProfile.isParent;
       });
-
-      return;
+    } catch (e, st) {
+      debugPrint('CalendarScreen _loadFilterProfiles failed: $e');
+      debugPrintStack(stackTrace: st);
     }
-
-    final currentProfile =
-        _currentProfile ?? await _profileService.getCurrentAuthenticatedProfile();
-
-    if (currentProfile == null) {
-      debugPrint('CalendarScreen: no current profile for filter loading');
-      return;
-    }
-
-    final profiles = await _profileService.getFamilyProfiles(
-      currentProfile.familyId,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _currentProfile = currentProfile;
-      _filterProfiles = profiles;
-
-      if (_hasInitialFilterState) {
-        _selectedFilterProfileIds = Set<String>.from(
-          widget.initialSelectedFilterProfileIds ?? const {},
-        );
-        _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
-        return;
-      }
-
-      // Required default:
-      // Parent = own + family/others.
-      // Child = own only.
-      _selectedFilterProfileIds = {currentProfile.id};
-      _showFamilyActivities = currentProfile.isParent;
-    });
-  } catch (e, st) {
-    debugPrint('CalendarScreen _loadFilterProfiles failed: $e');
-    debugPrintStack(stackTrace: st);
   }
-}
 
   Future<void> _goToPreviousWeek() async {
     setState(() {
@@ -416,17 +414,12 @@ Future<void> _loadFilterProfiles() async {
       context: context,
       isScrollControlled: true,
       builder: (sheetContext) {
-        return FractionallySizedBox(
-          heightFactor: 0.85,
-          child: SingleChildScrollView(
-            child: FilterPanel(
-              profiles: _filterProfiles,
-              selectedProfileIds: _selectedFilterProfileIds,
-              showFamilyActivities: _showFamilyActivities,
-              isChildView: _isChildSession || _currentProfile?.isChild == true,
-              currentProfileId: _currentProfile?.id,
-            ),
-          ),
+        return FilterPanel(
+          profiles: _filterProfiles,
+          selectedProfileIds: _selectedFilterProfileIds,
+          showFamilyActivities: _showFamilyActivities,
+          isChildView: _isChildSession || _currentProfile?.isChild == true,
+          currentProfileId: _currentProfile?.id,
         );
       },
     );
@@ -483,13 +476,35 @@ Future<void> _loadFilterProfiles() async {
     }
   }
 
+  List<Activity> _filterActivities(List<Activity> activities) {
+    if (_selectedFilterProfileIds.isEmpty && !_showFamilyActivities) {
+      return [];
+    }
+
+    return activities.where((activity) {
+      final matchesParticipant = activity.participants.any((participant) {
+        return participant.profileId != null &&
+            _selectedFilterProfileIds.contains(participant.profileId);
+      });
+
+      final matchesOwner =
+          activity.ownerProfileId != null &&
+          _selectedFilterProfileIds.contains(activity.ownerProfileId);
+
+      final matchesFamily =
+          _showFamilyActivities &&
+          (activity.visibility == ActivityVisibility.family ||
+              activity.participants.any(
+                (participant) => participant.externalName == 'Familie',
+              ));
+
+      return matchesParticipant || matchesOwner || matchesFamily;
+    }).toList();
+  }
+
   List<Activity> _activitiesForDate(DateTime date) {
     final activities = _activitiesByDate[_dateKey(date)] ?? const [];
-    return filterActivities(
-      activities: activities,
-      selectedProfileIds: _selectedFilterProfileIds,
-      showFamilyActivities: _showFamilyActivities,
-    );
+    return _filterActivities(activities);
   }
 
   Activity? _getWeeklyHighlight(List<Activity> activities) {
@@ -526,17 +541,15 @@ Future<void> _loadFilterProfiles() async {
 
   bool get _hasAnyActivities {
     return _activitiesByDate.values.any(
-      (activities) => filterActivities(
-        activities: activities,
-        selectedProfileIds: _selectedFilterProfileIds,
-        showFamilyActivities: _showFamilyActivities,
-      ).isNotEmpty,
+      (activities) => _filterActivities(activities).isNotEmpty,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final weekDays = _activityService.getWeekDates(_focusedDate);
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
@@ -548,8 +561,14 @@ Future<void> _loadFilterProfiles() async {
     final mediumGap = isLandscape ? 8.0 : 10.0;
     final largeGap = isLandscape ? 10.0 : 12.0;
 
+    debugPrint(
+      'WeeklyCalendarScreen: days=${_activitiesByDate.length}, profiles=${_filterProfiles.length}, selected=$_selectedFilterProfileIds, showFamily=$_showFamilyActivities',
+    );
+
     return Scaffold(
-      backgroundColor: const Color(0xFFA2E5AD),
+      backgroundColor: isDark
+          ? const Color(0xFF050706)
+          : colorScheme.primaryContainer,
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.symmetric(
@@ -585,8 +604,15 @@ Future<void> _loadFilterProfiles() async {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark
+                        ? const Color(0xFF101312)
+                        : colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF2A2D2C)
+                          : Colors.transparent,
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Column(
@@ -604,27 +630,27 @@ Future<void> _loadFilterProfiles() async {
                       Expanded(
                         child: _isLoading
                             ? const Center(child: CircularProgressIndicator())
-                            : !_hasAnyActivitiesCache
-                                ? const _EmptyWeekView()
-                                : ListView.separated(
-                                    itemCount: weekDays.length,
-                                    separatorBuilder: (_, _) =>
-                                        const SizedBox(height: 10),
-                                    itemBuilder: (context, index) {
-                                      final day = weekDays[index];
-                                      final activities = _activitiesForDate(day);
-                                      final highlight = _getWeeklyHighlight(
-                                        activities,
-                                      );
+                            : !_hasAnyActivities
+                            ? const _EmptyWeekView()
+                            : ListView.separated(
+                                itemCount: weekDays.length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(height: 10),
+                                itemBuilder: (context, index) {
+                                  final day = weekDays[index];
+                                  final activities = _activitiesForDate(day);
+                                  final highlight = _getWeeklyHighlight(
+                                    activities,
+                                  );
 
-                                      return _WeekDayCard(
-                                        date: day,
-                                        activities: activities,
-                                        highlightActivity: highlight,
-                                        onTap: () => _openDay(day),
-                                      );
-                                    },
-                                  ),
+                                  return _WeekDayCard(
+                                    date: day,
+                                    activities: activities,
+                                    highlightActivity: highlight,
+                                    onTap: () => _openDay(day),
+                                  );
+                                },
+                              ),
                       ),
                     ],
                   ),
@@ -642,29 +668,28 @@ class _TopHeader extends StatelessWidget {
   final bool showChildHeaderName;
   final String? displayName;
 
-  const _TopHeader({
-    required this.showChildHeaderName,
-    this.displayName,
-  });
+  const _TopHeader({required this.showChildHeaderName, this.displayName});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         IconButton(
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () => Navigator.maybePop(context),
-          icon: const Icon(Icons.arrow_back, size: 30, color: Colors.black),
+          icon: Icon(Icons.arrow_back, size: 30, color: colorScheme.onSurface),
         ),
         const Spacer(),
         if (showChildHeaderName)
           Text(
             displayName ?? 'Barn',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: colorScheme.onSurface.withOpacity(0.85),
             ),
           )
         else
@@ -688,7 +713,7 @@ class _ScreenTitle extends StatelessWidget {
           fontFamily: 'Italiana',
           fontSize: fontSize,
           fontWeight: FontWeight.w400,
-          color: Colors.black,
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
     );
@@ -755,6 +780,8 @@ class _WeekDayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasActivities = activities.isNotEmpty;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -762,9 +789,14 @@ class _WeekDayCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8F8F8),
+          color: isDark
+              ? const Color(0xFF171A19)
+              : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0),
+            width: 1,
+          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -773,11 +805,11 @@ class _WeekDayCard extends StatelessWidget {
               width: 84,
               child: Text(
                 '${_weekdayName(date.weekday)}\n${date.day}/${date.month}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Italiana',
                   fontSize: 19,
                   fontWeight: FontWeight.w400,
-                  color: Colors.black,
+                  color: colorScheme.onSurface,
                   height: 1.15,
                 ),
               ),
@@ -785,11 +817,14 @@ class _WeekDayCard extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: !hasActivities
-                  ? const Padding(
-                      padding: EdgeInsets.only(top: 4),
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 4),
                       child: Text(
                         'Ingen aktiviteter',
-                        style: TextStyle(fontSize: 15, color: Colors.black54),
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: colorScheme.onSurface.withOpacity(0.6),
+                        ),
                       ),
                     )
                   : Column(
@@ -812,9 +847,9 @@ class _WeekDayCard extends StatelessWidget {
                             '${_formatTime(highlightActivity!.startTime)} - ${_formatTime(highlightActivity!.endTime)}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
-                              color: Colors.black54,
+                              color: colorScheme.onSurface.withOpacity(0.6),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -830,7 +865,7 @@ class _WeekDayCard extends StatelessWidget {
                                   : FontWeight.w500,
                               color: highlightActivity!.isImportant
                                   ? Colors.red
-                                  : Colors.black,
+                                  : colorScheme.onSurface,
                               height: 1.2,
                             ),
                           ),
@@ -839,9 +874,9 @@ class _WeekDayCard extends StatelessWidget {
                     ),
             ),
             const SizedBox(width: 6),
-            const Padding(
-              padding: EdgeInsets.only(top: 2),
-              child: Icon(Icons.chevron_right, color: Colors.black),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(Icons.chevron_right, color: colorScheme.onSurface),
             ),
           ],
         ),
@@ -855,19 +890,25 @@ class _EmptyWeekView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.view_week_outlined, size: 40, color: Colors.black45),
-          SizedBox(height: 10),
+          Icon(
+            Icons.view_week_outlined,
+            size: 40,
+            color: colorScheme.onSurface.withOpacity(0.45),
+          ),
+          const SizedBox(height: 10),
           Text(
             'Ingen aktiviteter i denne uge',
             style: TextStyle(
               fontFamily: 'Italiana',
               fontSize: 24,
               fontWeight: FontWeight.w400,
-              color: Colors.black,
+              color: colorScheme.onSurface,
             ),
           ),
         ],

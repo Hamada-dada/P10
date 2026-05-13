@@ -280,9 +280,15 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (_isLoadingProfiles) {
-      return const Scaffold(
-        body: Center(
+      return Scaffold(
+        backgroundColor: isDark
+            ? const Color(0xFF050706)
+            : colorScheme.primaryContainer,
+        body: const Center(
           child: CircularProgressIndicator(),
         ),
       );
@@ -290,15 +296,19 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
     if (_profilesError != null) {
       return Scaffold(
+        backgroundColor: isDark
+            ? const Color(0xFF050706)
+            : colorScheme.primaryContainer,
         body: Center(
           child: Padding(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   _profilesError!,
                   textAlign: TextAlign.center,
+                  style: TextStyle(color: colorScheme.onSurface),
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(
@@ -316,7 +326,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
     final profileFilters = _profileFilterOptions;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFA2E5AD),
+      backgroundColor: isDark
+          ? const Color(0xFF050706)
+          : colorScheme.primaryContainer,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -332,8 +344,15 @@ class _RewardsScreenState extends State<RewardsScreen> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark
+                        ? const Color(0xFF101312)
+                        : colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF2A2D2C)
+                          : Colors.transparent,
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: ListView(
@@ -353,6 +372,25 @@ class _RewardsScreenState extends State<RewardsScreen> {
                               child: ChoiceChip(
                                 label: Text(profileName),
                                 selected: isSelected,
+                                selectedColor: isDark
+                                    ? colorScheme.primary.withOpacity(0.22)
+                                    : colorScheme.primaryContainer,
+                                backgroundColor: isDark
+                                    ? const Color(0xFF101312)
+                                    : colorScheme.surface,
+                                side: BorderSide(
+                                  color: isSelected
+                                      ? colorScheme.primary
+                                      : isDark
+                                      ? const Color(0xFF2A2D2C)
+                                      : const Color(0xFFE0E0E0),
+                                ),
+                                labelStyle: TextStyle(
+                                  color: colorScheme.onSurface,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
                                 onSelected: (_) {
                                   setState(() {
                                     _selectedProfileFilter = profileName;
@@ -377,7 +415,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                         const _EmptyRewardsState()
                       else
                         ...rewards.map(
-                          (reward) => Padding(
+                              (reward) => Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: RewardCard(
                               reward: reward,
@@ -410,26 +448,28 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         IconButton(
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: onBack,
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back,
             size: 30,
-            color: Colors.black,
+            color: colorScheme.onSurface,
           ),
         ),
         const Spacer(),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Italiana',
             fontSize: 26,
             fontWeight: FontWeight.w400,
-            color: Colors.black,
+            color: colorScheme.onSurface,
           ),
         ),
         const Spacer(),
@@ -437,10 +477,10 @@ class _TopBar extends StatelessWidget {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: onAdd,
-          icon: const Icon(
+          icon: Icon(
             Icons.add_circle_outline,
             size: 30,
-            color: Colors.black,
+            color: colorScheme.onSurface,
           ),
         ),
       ],
@@ -459,10 +499,10 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 17,
-        fontWeight: FontWeight.w600,
-        color: Colors.black,
+        fontWeight: FontWeight.w700,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
@@ -479,18 +519,26 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F4),
+        color: isDark ? const Color(0xFF101312) : colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.primary.withOpacity(0.45)
+              : const Color(0xFFE0E0E0),
+        ),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.card_giftcard_outlined,
             size: 28,
-            color: Colors.black87,
+            color: isDark ? colorScheme.primary : colorScheme.onSurface,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -498,10 +546,10 @@ class _SummaryCard extends StatelessWidget {
               selectedProfile == 'Alle'
                   ? 'Du har $totalCount belønninger i alt'
                   : 'Du har $totalCount belønninger til $selectedProfile',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
-                color: Colors.black,
-                fontWeight: FontWeight.w500,
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -516,35 +564,45 @@ class _EmptyRewardsState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F4),
+        color: isDark ? const Color(0xFF101312) : colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.primary.withOpacity(0.45)
+              : const Color(0xFFE0E0E0),
+        ),
       ),
-      child: const Column(
+      child: Column(
         children: [
           Icon(
             Icons.card_giftcard_outlined,
             size: 34,
-            color: Colors.black54,
+            color: isDark
+                ? colorScheme.primary
+                : colorScheme.onSurface.withOpacity(0.55),
           ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           Text(
             'Ingen belønninger endnu',
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.black,
+              fontWeight: FontWeight.w700,
+              color: colorScheme.onSurface,
             ),
           ),
-          SizedBox(height: 6),
+          const SizedBox(height: 6),
           Text(
             'Opret en belønning for at kunne knytte den til en aktivitet.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
-              color: Colors.black87,
+              color: colorScheme.onSurface.withOpacity(0.78),
               height: 1.4,
             ),
           ),

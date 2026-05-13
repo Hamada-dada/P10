@@ -73,95 +73,109 @@ class _FilterPanelState extends State<FilterPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return SafeArea(
-      child: ListView(
+      child: SingleChildScrollView(
         controller: widget.scrollController,
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-        children: [
-          Row(
-            children: [
-              const Text(
-                'Filter',
-                style: TextStyle(
-                  fontFamily: 'Italiana',
-                  fontSize: 26,
-                  color: Colors.black,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Filter',
+                  style: TextStyle(
+                    fontFamily: 'Italiana',
+                    fontSize: 26,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
-              ),
-              const Spacer(),
-              IconButton(
-                tooltip: 'Luk',
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
+                const Spacer(),
+                IconButton(
+                  tooltip: 'Luk',
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(
+                    Icons.close,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
 
-          ...widget.profiles.map((profile) {
-            return CheckboxListTile(
+            ...widget.profiles.map((profile) {
+              return CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(
+                  _profileLabel(profile),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                value: _tempSelectedProfileIds.contains(profile.id),
+                onChanged: (checked) {
+                  setState(() {
+                    if (checked == true) {
+                      _tempSelectedProfileIds.add(profile.id);
+                    } else {
+                      _tempSelectedProfileIds.remove(profile.id);
+                    }
+                  });
+                },
+              );
+            }),
+
+            CheckboxListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               title: Text(
-                _profileLabel(profile),
-                style: const TextStyle(fontSize: 16),
+                'Familie / andre',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: colorScheme.onSurface,
+                ),
               ),
-              value: _tempSelectedProfileIds.contains(profile.id),
+              value: _tempShowFamilyActivities,
               onChanged: (checked) {
                 setState(() {
-                  if (checked == true) {
-                    _tempSelectedProfileIds.add(profile.id);
-                  } else {
-                    _tempSelectedProfileIds.remove(profile.id);
-                  }
+                  _tempShowFamilyActivities = checked ?? false;
                 });
               },
-            );
-          }),
-
-          CheckboxListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: const Text(
-              'Familie / andre',
-              style: TextStyle(fontSize: 16),
             ),
-            value: _tempShowFamilyActivities,
-            onChanged: (checked) {
-              setState(() {
-                _tempShowFamilyActivities = checked ?? false;
-              });
-            },
-          ),
 
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-          Row(
-            children: [
-              TextButton(
-                onPressed: _clearAll,
-                child: const Text('Ryd'),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: _selectAll,
-                child: const Text('Vis alle'),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _apply,
-              child: const Text('Anvend filter'),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: _clearAll,
+                  child: const Text('Ryd'),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: _selectAll,
+                  child: const Text('Vis alle'),
+                ),
+              ],
             ),
-          ),
-        ],
+
+            const SizedBox(height: 8),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _apply,
+                child: const Text('Anvend filter'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

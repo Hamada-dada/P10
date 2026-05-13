@@ -22,16 +22,16 @@ class ProfileScreen extends StatelessWidget {
     this.onBack,
   });
 
-String get _roleLabel {
-  switch (profile.role) {
-    case ProfileRole.parent:
-      return 'Forælder';
-    case ProfileRole.childExtended:
-      return 'Barn · udvidet adgang';
-    case ProfileRole.childLimited:
-      return 'Barn · begrænset adgang';
+  String get _roleLabel {
+    switch (profile.role) {
+      case ProfileRole.parent:
+        return 'Forælder';
+      case ProfileRole.childExtended:
+        return 'Barn · udvidet adgang';
+      case ProfileRole.childLimited:
+        return 'Barn · begrænset adgang';
+    }
   }
-}
 
   bool get _canOpenSettings {
     return profile.role == ProfileRole.parent;
@@ -43,7 +43,7 @@ String get _roleLabel {
 
   void _openSettings(BuildContext context) {
     if (!_canOpenSettings) {
-      _showComingSoon(context, 'Indstillinger er kun tilgængelige for forældre');
+      _showMessage(context, 'Indstillinger er kun tilgængelige for forældre');
       return;
     }
 
@@ -62,7 +62,7 @@ String get _roleLabel {
 
   void _openRewards(BuildContext context) {
     if (!_canOpenRewards) {
-      _showComingSoon(context, 'Belønninger kan kun administreres af forældre');
+      _showMessage(context, 'Belønninger kan kun administreres af forældre');
       return;
     }
 
@@ -79,7 +79,7 @@ String get _roleLabel {
     );
   }
 
-  void _showComingSoon(BuildContext context, String label) {
+  void _showMessage(BuildContext context, String label) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(label),
@@ -89,11 +89,13 @@ String get _roleLabel {
 
   @override
   Widget build(BuildContext context) {
-    final calendarAction =
-        onOpenCalendar ?? () => _showComingSoon(context, 'Kalender kommer snart');
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFA2E5AD),
+      backgroundColor: isDark
+          ? const Color(0xFF050706)
+          : colorScheme.primaryContainer,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -108,8 +110,15 @@ String get _roleLabel {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark
+                        ? const Color(0xFF101312)
+                        : colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF2A2D2C)
+                          : Colors.transparent,
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: SingleChildScrollView(
@@ -122,19 +131,11 @@ String get _roleLabel {
                           roleLabel: _roleLabel,
                           emoji: profile.emoji,
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 22),
                         const _SectionTitle(title: 'Hurtige handlinger'),
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            Expanded(
-                              child: _ActionCard(
-                                icon: Icons.calendar_today_outlined,
-                                label: 'Kalender',
-                                onTap: calendarAction,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
                             Expanded(
                               child: _ActionCard(
                                 icon: Icons.card_giftcard_outlined,
@@ -143,11 +144,7 @@ String get _roleLabel {
                                 onTap: () => _openRewards(context),
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
+                            const SizedBox(width: 12),
                             Expanded(
                               child: _ActionCard(
                                 icon: Icons.settings_outlined,
@@ -156,77 +153,20 @@ String get _roleLabel {
                                 onTap: () => _openSettings(context),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: _InfoCard(
-                                icon: Icons.star_border,
-                                title: 'Favoritter',
-                                subtitle: 'Udvalgte aktiviteter og rutiner',
-                              ),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 22),
-                        const _SectionTitle(title: 'Dagens fokus'),
-                        const SizedBox(height: 10),
-                        const _LargeInfoCard(
-                          icon: Icons.wb_sunny_outlined,
-                          title: 'I dag',
-                          body:
-                              'Her kan du hurtigt få overblik over dagens aktiviteter, tjeklister og belønninger.',
-                        ),
-                        const SizedBox(height: 20),
                         const _SectionTitle(title: 'Familie og deltagere'),
                         const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF4F4F4),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: familyMembers
-                                .map(
-                                  (member) => Chip(
-                                    label: Text(member),
-                                    backgroundColor: Colors.white,
-                                    side: const BorderSide(
-                                      color: Color(0xFFE0E0E0),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
+                        _FamilyMembersCard(familyMembers: familyMembers),
+                        const SizedBox(height: 22),
                         const _SectionTitle(title: 'Profiloplysninger'),
                         const SizedBox(height: 10),
                         _LargeInfoCard(
                           icon: Icons.info_outline,
                           title: 'Om profilen',
                           body:
-                              '${profile.name} vises her med rolle, familieoversigt og hurtig adgang til kalender, belønninger og indstillinger.',
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: calendarAction,
-                            icon: const Icon(Icons.calendar_month_outlined),
-                            label: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 14),
-                              child: Text('Åbn kalender'),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2E7D32),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          ),
+                          '${profile.name} vises her med rolle, familieoversigt og adgang til relevante profilfunktioner.',
                         ),
                       ],
                     ),
@@ -252,26 +192,28 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         IconButton(
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: onBack,
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back,
             size: 30,
-            color: Colors.black,
+            color: colorScheme.onSurface,
           ),
         ),
         const Spacer(),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Italiana',
             fontSize: 26,
             fontWeight: FontWeight.w400,
-            color: Colors.black,
+            color: colorScheme.onSurface,
           ),
         ),
         const Spacer(),
@@ -294,47 +236,62 @@ class _ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F4),
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? const Color(0xFF101312) : colorScheme.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? colorScheme.primary.withOpacity(0.45) : Colors.transparent,
+          width: isDark ? 1.4 : 0,
+        ),
       ),
       child: Column(
         children: [
           CircleAvatar(
-            radius: 38,
-            backgroundColor: Colors.white,
+            radius: 42,
+            backgroundColor: isDark
+                ? colorScheme.primary.withOpacity(0.16)
+                : Colors.white,
             child: Text(
               emoji,
-              style: const TextStyle(fontSize: 34),
+              style: const TextStyle(fontSize: 36),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Text(
             name,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Italiana',
-              fontSize: 28,
+              fontSize: 30,
               fontWeight: FontWeight.w400,
-              color: Colors.black,
+              color: colorScheme.onSurface,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark
+                  ? Colors.transparent
+                  : colorScheme.surface,
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: const Color(0xFFE0E0E0)),
+              border: Border.all(
+                color: isDark
+                    ? colorScheme.primary.withOpacity(0.55)
+                    : const Color(0xFFE0E0E0),
+              ),
             ),
             child: Text(
               roleLabel,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: Colors.black87,
-                fontWeight: FontWeight.w500,
+                color: colorScheme.onSurface.withOpacity(0.9),
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -355,10 +312,10 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(
-        fontSize: 17,
-        fontWeight: FontWeight.w600,
-        color: Colors.black,
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
@@ -379,29 +336,43 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final contentColor = isDisabled ? Colors.black38 : Colors.black87;
-    final textColor = isDisabled ? Colors.black38 : Colors.black;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final activeColor = isDark ? colorScheme.primary : colorScheme.onSurface;
+    final disabledColor = colorScheme.onSurface.withOpacity(0.32);
+
+    final contentColor = isDisabled ? disabledColor : activeColor;
+    final textColor = isDisabled
+        ? colorScheme.onSurface.withOpacity(0.32)
+        : colorScheme.onSurface;
 
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFFF4F4F4),
-          borderRadius: BorderRadius.circular(14),
+          color: isDark ? const Color(0xFF101312) : colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark
+                ? colorScheme.primary.withOpacity(isDisabled ? 0.18 : 0.45)
+                : const Color(0xFFE0E0E0),
+            width: isDark ? 1.3 : 1,
+          ),
         ),
         child: Column(
           children: [
-            Icon(icon, size: 28, color: contentColor),
-            const SizedBox(height: 10),
+            Icon(icon, size: 30, color: contentColor),
+            const SizedBox(height: 12),
             Text(
               label,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 15,
                 color: textColor,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -411,48 +382,54 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
+class _FamilyMembersCard extends StatelessWidget {
+  final List<String> familyMembers;
 
-  const _InfoCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
+  const _FamilyMembersCard({
+    required this.familyMembers,
   });
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F4),
-        borderRadius: BorderRadius.circular(14),
+        color: isDark ? const Color(0xFF101312) : colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.primary.withOpacity(0.45)
+              : const Color(0xFFE0E0E0),
+          width: isDark ? 1.3 : 1,
+        ),
       ),
-      child: Column(
-        children: [
-          Icon(icon, size: 28, color: Colors.black87),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 15,
-              color: Colors.black,
-              fontWeight: FontWeight.w600,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: familyMembers
+            .map(
+              (member) => Chip(
+            label: Text(
+              member,
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            backgroundColor: isDark
+                ? Colors.transparent
+                : colorScheme.surface,
+            side: BorderSide(
+              color: isDark
+                  ? colorScheme.primary.withOpacity(0.55)
+                  : const Color(0xFFE0E0E0),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.black54,
-            ),
-          ),
-        ],
+        )
+            .toList(),
       ),
     );
   }
@@ -471,36 +448,49 @@ class _LargeInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F4),
-        borderRadius: BorderRadius.circular(14),
+        color: isDark ? const Color(0xFF101312) : colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.primary.withOpacity(0.45)
+              : const Color(0xFFE0E0E0),
+          width: isDark ? 1.3 : 1,
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 28, color: Colors.black87),
-          const SizedBox(width: 12),
+          Icon(
+            icon,
+            size: 30,
+            color: isDark ? colorScheme.primary : colorScheme.onSurface,
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   body,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Colors.black87,
-                    height: 1.4,
+                    color: colorScheme.onSurface.withOpacity(0.78),
+                    height: 1.45,
                   ),
                 ),
               ],

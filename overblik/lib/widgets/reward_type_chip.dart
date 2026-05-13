@@ -12,24 +12,44 @@ class RewardTypeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 7,
+      ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark
+            ? colorScheme.primary.withOpacity(0.14)
+            : Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.primary.withOpacity(0.35)
+              : const Color(0xFFE0E0E0),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Colors.black87),
+          Icon(
+            icon,
+            size: 16,
+            color: isDark
+                ? colorScheme.primary
+                : Colors.black87,
+          ),
           const SizedBox(width: 6),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
-              color: Colors.black87,
-              fontWeight: FontWeight.w500,
+              color: isDark
+                  ? colorScheme.onSurface
+                  : Colors.black87,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

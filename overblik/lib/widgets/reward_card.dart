@@ -35,14 +35,22 @@ class RewardCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasDescription = reward.description.trim().isNotEmpty;
 
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF4F4F4),
+          color: isDark ? const Color(0xFF101312) : colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark
+                ? colorScheme.primary.withOpacity(0.45)
+                : const Color(0xFFE0E0E0),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -52,7 +60,9 @@ class RewardCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: Colors.white,
+                  backgroundColor: isDark
+                      ? colorScheme.primary.withOpacity(0.16)
+                      : Colors.white,
                   child: Text(
                     _emojiLabel(),
                     style: const TextStyle(fontSize: 24),
@@ -67,10 +77,10 @@ class RewardCard extends StatelessWidget {
                         reward.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black,
+                          fontWeight: FontWeight.w700,
+                          color: colorScheme.onSurface,
                           height: 1.2,
                         ),
                       ),
@@ -79,9 +89,9 @@ class RewardCard extends StatelessWidget {
                         'Tilhører: ${_profileLabel()}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: Colors.black54,
+                          color: colorScheme.onSurface.withOpacity(0.65),
                         ),
                       ),
                     ],
@@ -91,9 +101,9 @@ class RewardCard extends StatelessWidget {
                   IconButton(
                     tooltip: 'Slet belønning',
                     onPressed: onDelete,
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.delete_outline,
-                      color: Colors.black87,
+                      color: colorScheme.onSurface.withOpacity(0.85),
                     ),
                   ),
               ],
@@ -102,9 +112,9 @@ class RewardCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 reward.description,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: Colors.black87,
+                  color: colorScheme.onSurface.withOpacity(0.78),
                   height: 1.4,
                 ),
               ),

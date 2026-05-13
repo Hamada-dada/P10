@@ -53,12 +53,19 @@ class ViewSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       height: 44,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color.fromRGBO(118, 118, 128, 0.12),
+        color: isDark
+            ? const Color(0xFF101312)
+            : const Color.fromRGBO(118, 118, 128, 0.12),
         borderRadius: BorderRadius.circular(100),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2A2D2C) : Colors.transparent,
+        ),
       ),
       child: Row(
         children: [
@@ -96,6 +103,14 @@ class _Segment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final selectedBackground = isDark ? Colors.white : Colors.white;
+    final selectedTextColor = isDark ? Colors.black : Colors.black;
+    final unselectedTextColor =
+    isDark ? Colors.white : colorScheme.onSurface;
+
     return Expanded(
       child: Material(
         color: Colors.transparent,
@@ -106,17 +121,17 @@ class _Segment extends StatelessWidget {
             height: double.infinity,
             decoration: isSelected
                 ? BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  )
+              color: selectedBackground,
+              borderRadius: BorderRadius.circular(20),
+            )
                 : null,
             alignment: Alignment.center,
             child: Text(
               label,
               style: TextStyle(
-                color: Colors.black,
+                color: isSelected ? selectedTextColor : unselectedTextColor,
                 fontSize: 14,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
               ),
             ),
           ),

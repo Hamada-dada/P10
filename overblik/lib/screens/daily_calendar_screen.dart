@@ -26,8 +26,6 @@ class DailyCalendarScreen extends StatefulWidget {
   final Set<String>? initialSelectedFilterProfileIds;
   final bool? initialShowFamilyActivities;
 
-  // Legacy child session fields.
-  // Keep these temporarily until the old fake child-session flow is fully removed.
   final String? childFamilyId;
   final String? childProfileId;
   final String? childDisplayName;
@@ -146,29 +144,11 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
     _focusedDate = widget.initialDate ?? DateTime.now();
 
-    debugPrint('DailyCalendarScreen: init');
-    debugPrint('DailyCalendarScreen: hasAuthUser=$_hasAuthUser');
-    debugPrint('DailyCalendarScreen: isChildSession=$_isChildSession');
-    debugPrint('DailyCalendarScreen: childFamilyId=${widget.childFamilyId}');
-    debugPrint('DailyCalendarScreen: childProfileId=${widget.childProfileId}');
-    debugPrint('DailyCalendarScreen: childRole=${widget.childRole}');
-    debugPrint('DailyCalendarScreen: childLoginCode=${widget.childLoginCode}');
-    debugPrint(
-      'DailyCalendarScreen: initialSelectedFilterProfileIds=${widget.initialSelectedFilterProfileIds}',
-    );
-    debugPrint(
-      'DailyCalendarScreen: initialShowFamilyActivities=${widget.initialShowFamilyActivities}',
-    );
-
     _initializeScreen();
   }
 
   Future<void> _initializeScreen() async {
     if (!_canUseScreen) {
-      debugPrint(
-        'DailyCalendarScreen: no auth user and no child session, skipping activity load',
-      );
-
       if (!mounted) return;
 
       setState(() {
@@ -179,18 +159,14 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     }
 
     if (_hasAuthUser) {
-      final currentProfile = await _profileService
-          .getCurrentAuthenticatedProfile();
+      final currentProfile =
+      await _profileService.getCurrentAuthenticatedProfile();
 
       if (!mounted) return;
 
       setState(() {
         _currentProfile = currentProfile;
       });
-
-      debugPrint(
-        'DailyCalendarScreen: current profile id=${currentProfile?.id} role=${currentProfile?.role}',
-      );
     }
 
     // CS-7: load activities and profiles in parallel
@@ -210,67 +186,50 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     if (_isLoggingOut) return;
+    if (!_canUseScreen) return;
+
+    _loadActivities(showFullLoader: false);
+  }
+
+  Future<void> _loadActivities({bool showFullLoader = true}) async {
+  if (_isRefreshing) return;
 
     if (!_canUseScreen) {
-      debugPrint(
-        'DailyCalendarScreen: app resumed but no valid session, skipping reload',
-      );
+      if (!mounted) return;
+
+      setState(() {
+        _activities = [];
+        _isLoading = false;
+      });
+
       return;
     }
 
-    debugPrint('DailyCalendarScreen: app resumed, reloading activities');
-    _loadActivities(showFullLoader: false);
-  }
-  Future<void> _loadActivities({bool showFullLoader = true}) async {
-  if (_isRefreshing) {
-    // CS-5: another load is in flight — mark that we need a follow-up load
-    _pendingLoad = true;
-    return;
-  }
+    try {
+      _isRefreshing = true;
 
-  if (!_canUseScreen) {
-    debugPrint(
-      'DailyCalendarScreen: no auth user or child session, skipping activity load',
-    );
+      if (showFullLoader && mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
 
-    if (!mounted) return;
+      final activities = await _activityService.getActivitiesForDate(
+        _focusedDate,
+      );
 
-    setState(() {
-      _activities = [];
-      _isLoading = false;
-    });
+      if (!mounted) return;
 
-    return;
-  }
-
-  try {
-    _isRefreshing = true;
-
-    if (showFullLoader && mounted) {
       setState(() {
-        _isLoading = true;
+        _activities = activities;
+        _isLoading = false;
       });
-    }
+    } catch (e) {
+      if (!mounted) return;
 
-    final activities = await _activityService.getActivitiesForDate(
-      _focusedDate,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _activities = activities;
-      _isLoading = false;
-    });
-  } catch (e, st) {
-    debugPrint('DailyCalendarScreen _loadActivities failed: $e');
-    debugPrintStack(stackTrace: st);
-
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-    });
+      setState(() {
+        _isLoading = false;
+      });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -280,24 +239,48 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     );
   } finally {
     _isRefreshing = false;
-
-    // CS-5: if navigation arrived while we were loading, trigger a fresh load
-    if (_pendingLoad && mounted) {
-      _pendingLoad = false;
-      _loadActivities(showFullLoader: false);
-    }
   }
 }
 
-Future<void> _loadFilterProfiles() async {
-  try {
-    if (_isChildSession) {
-      if (widget.childProfileId == null) return;
+  Future<void> _loadFilterProfiles() async {
+    try {
+      if (_isChildSession) {
+        if (widget.childProfileId == null) return;
+
+        if (!mounted) return;
+
+        setState(() {
+          _filterProfiles = [];
+
+          if (_hasInitialFilterState) {
+            _selectedFilterProfileIds = Set<String>.from(
+              widget.initialSelectedFilterProfileIds ?? const {},
+            );
+            _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
+            return;
+          }
+
+          _selectedFilterProfileIds = {widget.childProfileId!};
+          _showFamilyActivities = false;
+        });
+
+        return;
+      }
+
+      final currentProfile =
+          _currentProfile ?? await _profileService.getCurrentAuthenticatedProfile();
+
+      if (currentProfile == null) return;
+
+      final profiles = await _profileService.getFamilyProfiles(
+        currentProfile.familyId,
+      );
 
       if (!mounted) return;
 
       setState(() {
-        _filterProfiles = [];
+        _currentProfile = currentProfile;
+        _filterProfiles = profiles;
 
         if (_hasInitialFilterState) {
           _selectedFilterProfileIds = Set<String>.from(
@@ -307,50 +290,11 @@ Future<void> _loadFilterProfiles() async {
           return;
         }
 
-        _selectedFilterProfileIds = {widget.childProfileId!};
-        _showFamilyActivities = false;
+        _selectedFilterProfileIds = {currentProfile.id};
+        _showFamilyActivities = currentProfile.isParent;
       });
-
-      return;
-    }
-
-    final currentProfile =
-        _currentProfile ?? await _profileService.getCurrentAuthenticatedProfile();
-
-    if (currentProfile == null) {
-      debugPrint('CalendarScreen: no current profile for filter loading');
-      return;
-    }
-
-    final profiles = await _profileService.getFamilyProfiles(
-      currentProfile.familyId,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _currentProfile = currentProfile;
-      _filterProfiles = profiles;
-
-      if (_hasInitialFilterState) {
-        _selectedFilterProfileIds = Set<String>.from(
-          widget.initialSelectedFilterProfileIds ?? const {},
-        );
-        _showFamilyActivities = widget.initialShowFamilyActivities ?? false;
-        return;
-      }
-
-      // Required default:
-      // Parent = own + family/others.
-      // Child = own only.
-      _selectedFilterProfileIds = {currentProfile.id};
-      _showFamilyActivities = currentProfile.isParent;
-    });
-  } catch (e, st) {
-    debugPrint('CalendarScreen _loadFilterProfiles failed: $e');
-    debugPrintStack(stackTrace: st);
+    } catch (_) {}
   }
-}
 
   List<Activity> get _filteredActivities {
     return filterActivities(
@@ -384,42 +328,33 @@ Future<void> _loadFilterProfiles() async {
     await _loadActivities();
   }
 
-Future<void> _openFilterPanel() async {
-  final result = await showModalBottomSheet<Map<String, dynamic>>(
-    context: context,
-    isScrollControlled: true,
-    builder: (sheetContext) {
-      return DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.55,
-        minChildSize: 0.35,
-        maxChildSize: 0.85,
-        builder: (context, scrollController) {
-          return FilterPanel(
-            profiles: _filterProfiles,
-            selectedProfileIds: _selectedFilterProfileIds,
-            showFamilyActivities: _showFamilyActivities,
-            isChildView: _isChildSession || _currentProfile?.isChild == true,
-            currentProfileId: _currentProfile?.id,
-            scrollController: scrollController,
-          );
-        },
-      );
-    },
-  );
+  Future<void> _openFilterPanel() async {
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return FilterPanel(
+          profiles: _filterProfiles,
+          selectedProfileIds: _selectedFilterProfileIds,
+          showFamilyActivities: _showFamilyActivities,
+          isChildView: _isChildSession || _currentProfile?.isChild == true,
+          currentProfileId: _currentProfile?.id,
+        );
+      },
+    );
 
-  if (result == null || !mounted) return;
+    if (result == null || !mounted) return;
 
-  final rawProfileIds = result['profileIds'];
+    final rawProfileIds = result['profileIds'];
 
-  setState(() {
-    _selectedFilterProfileIds = rawProfileIds is Iterable
-        ? Set<String>.from(rawProfileIds)
-        : <String>{};
+    setState(() {
+      _selectedFilterProfileIds = rawProfileIds is Iterable
+          ? Set<String>.from(rawProfileIds)
+          : <String>{};
 
-    _showFamilyActivities = result['showFamily'] == true;
-  });
-}
+      _showFamilyActivities = result['showFamily'] == true;
+    });
+  }
 
   Future<void> _openCreateActivityScreen() async {
     if (!_canCreateActivity) {
@@ -439,33 +374,9 @@ Future<void> _openFilterPanel() async {
         ),
       );
 
-      if (createdActivity == null) {
-        debugPrint('DailyCalendarScreen: create activity cancelled');
-        return;
-      }
-
-      debugPrint(
-        'DailyCalendarScreen: saving activity id=${createdActivity.id}',
-      );
-      debugPrint('DailyCalendarScreen: familyId=${createdActivity.familyId}');
-      debugPrint('DailyCalendarScreen: createdBy=${createdActivity.createdBy}');
-      debugPrint(
-        'DailyCalendarScreen: ownerProfileId=${createdActivity.ownerProfileId}',
-      );
-      debugPrint(
-        'DailyCalendarScreen: visibility=${activityVisibilityToDatabase(createdActivity.visibility)}',
-      );
-      debugPrint(
-        'DailyCalendarScreen: participants=${createdActivity.participants.length}',
-      );
-      debugPrint(
-        'DailyCalendarScreen: checklistItems=${createdActivity.checklistItems.length}',
-      );
+      if (createdActivity == null) return;
 
       await _activityService.addActivity(createdActivity);
-
-      debugPrint('DailyCalendarScreen: activity saved successfully');
-
       await _loadActivities(showFullLoader: false);
 
       if (!mounted) return;
@@ -473,10 +384,7 @@ Future<void> _openFilterPanel() async {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Aktivitet gemt')));
-    } catch (e, st) {
-      debugPrint('DailyCalendarScreen _openCreateActivityScreen failed: $e');
-      debugPrintStack(stackTrace: st);
-
+    } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -561,12 +469,9 @@ Future<void> _openFilterPanel() async {
 
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
+            (route) => false,
       );
-    } catch (e, st) {
-      debugPrint('DailyCalendarScreen _logout failed: $e');
-      debugPrintStack(stackTrace: st);
-
+    } catch (e) {
       if (!mounted) return;
 
       setState(() {
@@ -623,11 +528,19 @@ Future<void> _openFilterPanel() async {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final activities = _filteredActivities;
+Widget build(BuildContext context) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+
+  final activities = _filteredActivities;
+
+    debugPrint(
+      'DailyCalendarScreen: raw=${_activities.length}, filtered=${activities.length}, profiles=${_filterProfiles.length}, selected=$_selectedFilterProfileIds, showFamily=$_showFamilyActivities',
+    );
 
     return Scaffold(
-      backgroundColor: const Color(0xFFA2E5AD),
+      backgroundColor:
+      isDark ? const Color(0xFF050706) : colorScheme.primaryContainer,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -662,8 +575,11 @@ Future<void> _openFilterPanel() async {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? const Color(0xFF101312) : colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF2A2D2C) : Colors.transparent,
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Column(
@@ -672,9 +588,8 @@ Future<void> _openFilterPanel() async {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: _isLoggingOut
-                                ? null
-                                : _openCreateActivityScreen,
+                            onPressed:
+                            _isLoggingOut ? null : _openCreateActivityScreen,
                             icon: const Icon(Icons.add),
                             label: const Text('Ny aktivitet'),
                           ),
@@ -690,77 +605,78 @@ Future<void> _openFilterPanel() async {
                               ? const Center(child: CircularProgressIndicator())
                               : activities.isEmpty
                               ? _EmptyActivitiesView(
-                                  isChildSession: _isChildSession,
-                                )
+                            isChildSession: _isChildSession,
+                          )
                               : ListView.separated(
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  itemCount: activities.length,
-                                  separatorBuilder: (_, _) =>
-                                      const SizedBox(height: 10),
-                                  itemBuilder: (context, index) {
-                                    final activity = activities[index];
+                            physics:
+                            const AlwaysScrollableScrollPhysics(),
+                            itemCount: activities.length,
+                            separatorBuilder: (_, _) =>
+                            const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final activity = activities[index];
 
-                                    return ActivityCard(
-                                      activity: activity,
-                                      profiles: _filterProfiles,
-                                      onTap: () =>
-                                          _openActivityDetail(activity),
-                                      onCompletedChanged: (isCompleted) async {
-                                        final scaffoldMessenger =
-                                            ScaffoldMessenger.of(context);
-                                        final updatedActivity = activity
-                                            .copyWith(isCompleted: isCompleted);
+                              return ActivityCard(
+                                activity: activity,
+                                profiles: _filterProfiles,
+                                onTap: () =>
+                                    _openActivityDetail(activity),
+                                onCompletedChanged:
+                                    (isCompleted) async {
+                                  final scaffoldMessenger =
+                                  ScaffoldMessenger.of(context);
+                                  final updatedActivity =
+                                  activity.copyWith(
+                                    isCompleted: isCompleted,
+                                  );
 
-                                        setState(() {
-                                          _activities = _activities.map((
-                                            existing,
-                                          ) {
-                                            if (existing.id != activity.id) {
-                                              return existing;
-                                            }
-
-                                            return updatedActivity;
-                                          }).toList();
-                                        });
-
-                                        try {
-                                          await _activityService.setActivityCompleted(
-                                            activityId: activity.id,
-                                            isCompleted: isCompleted,
-                                          );
-                                        } catch (e, st) {
-                                          debugPrint(
-                                            'DailyCalendarScreen onCompletedChanged failed: $e',
-                                          );
-                                          debugPrintStack(stackTrace: st);
-
-                                          if (!mounted) return;
-
-                                          setState(() {
-                                            _activities = _activities.map((
-                                              existing,
-                                            ) {
-                                              if (existing.id != activity.id) {
-                                                return existing;
-                                              }
-
-                                              return activity;
-                                            }).toList();
-                                          });
-
-                                          scaffoldMessenger.showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'Kunne ikke opdatere aktiviteten.',
-                                              ),
-                                            ),
-                                          );
+                                  setState(() {
+                                    _activities = _activities.map(
+                                          (existing) {
+                                        if (existing.id !=
+                                            activity.id) {
+                                          return existing;
                                         }
+
+                                        return updatedActivity;
                                       },
+                                    ).toList();
+                                  });
+
+                                  try {
+                                    await _activityService
+                                        .setActivityCompleted(
+                                      activityId: activity.id,
+                                      isCompleted: isCompleted,
                                     );
-                                  },
-                                ),
+                                  } catch (_) {
+                                    if (!mounted) return;
+
+                                    setState(() {
+                                      _activities = _activities.map(
+                                            (existing) {
+                                          if (existing.id !=
+                                              activity.id) {
+                                            return existing;
+                                          }
+
+                                          return activity;
+                                        },
+                                      ).toList();
+                                    });
+
+                                    scaffoldMessenger.showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Kunne ikke opdatere aktiviteten.',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ],
@@ -790,6 +706,8 @@ class _TopHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         IconButton(
@@ -799,20 +717,20 @@ class _TopHeader extends StatelessWidget {
           onPressed: isLoggingOut ? null : onLogout,
           icon: isLoggingOut
               ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.logout, size: 28, color: Colors.black),
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+              : Icon(Icons.logout, size: 28, color: colorScheme.onSurface),
         ),
         const Spacer(),
         if (showChildHeaderName)
           Text(
             displayName ?? 'Barn',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: colorScheme.onSurface.withOpacity(0.85),
             ),
           )
         else
@@ -827,14 +745,14 @@ class _ScreenTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Text(
         'Daglig kalender',
         style: TextStyle(
           fontFamily: 'Italiana',
           fontSize: 28,
           fontWeight: FontWeight.w400,
-          color: Colors.black,
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
     );
@@ -847,69 +765,63 @@ class _DailySummaryCard extends StatelessWidget {
   const _DailySummaryCard({required this.activities});
 
   Color _activityColor(Activity activity) {
-    if (activity.isCompleted) {
-      return Colors.green;
-    }
-
-    if (activity.isImportant) {
-      return Colors.red;
-    }
-
-    if (activity.isFavorite) {
-      return Colors.amber;
-    }
-
-    if (activity.visibility == ActivityVisibility.family) {
-      return Colors.purple;
-    }
-
-    if (activity.ownerProfileId != null) {
-      return Colors.blue;
-    }
-
+    if (activity.isCompleted) return Colors.green;
+    if (activity.isImportant) return Colors.red;
+    if (activity.isFavorite) return Colors.amber;
+    if (activity.visibility == ActivityVisibility.family) return Colors.purple;
+    if (activity.ownerProfileId != null) return Colors.blue;
     return Colors.grey;
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F8F8),
+        color:
+        isDark ? const Color(0xFF171A19) : colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0),
+        ),
       ),
       child: activities.isEmpty
-          ? const Text(
-              'Ingen aktiviteter planlagt for denne dag',
-              style: TextStyle(fontSize: 14, color: Colors.black54),
-            )
+          ? Text(
+        'Ingen aktiviteter planlagt for denne dag',
+        style: TextStyle(
+          fontSize: 14,
+          color: colorScheme.onSurface.withOpacity(0.6),
+        ),
+      )
           : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Dagens overblik',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ActivityIndicators(
-                  activities: activities,
-                  activityColorBuilder: _activityColor,
-                  maxDots: 5,
-                  maxStars: 3,
-                  dotSize: 8,
-                  starSize: 13,
-                  countFontSize: 11,
-                  itemSpacing: 4,
-                  sectionSpacing: 10,
-                ),
-              ],
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Dagens overblik',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface.withOpacity(0.9),
             ),
+          ),
+          const SizedBox(height: 8),
+          ActivityIndicators(
+            activities: activities,
+            activityColorBuilder: _activityColor,
+            maxDots: 5,
+            maxStars: 3,
+            dotSize: 8,
+            starSize: 13,
+            countFontSize: 11,
+            itemSpacing: 4,
+            sectionSpacing: 10,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -921,21 +833,27 @@ class _EmptyActivitiesView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Center(
       child: SingleChildScrollView(
-        physics: AlwaysScrollableScrollPhysics(),
+        physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.event_note_outlined, size: 38, color: Colors.black45),
-            SizedBox(height: 10),
+            Icon(
+              Icons.event_note_outlined,
+              size: 38,
+              color: colorScheme.onSurface.withOpacity(0.45),
+            ),
+            const SizedBox(height: 10),
             Text(
               'Ingen aktiviteter',
               style: TextStyle(
                 fontFamily: 'Italiana',
                 fontSize: 24,
                 fontWeight: FontWeight.w400,
-                color: Colors.black,
+                color: colorScheme.onSurface,
               ),
             ),
           ],

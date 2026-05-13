@@ -53,9 +53,9 @@ class CalendarNavigationBar extends StatelessWidget {
     ];
 
     switch (viewType) {
-case CalendarViewType.day:
-  final weekday = weekdays[focusedDate.weekday - 1];
-  return '$weekday ${focusedDate.day}/${focusedDate.month}';
+      case CalendarViewType.day:
+        final weekday = weekdays[focusedDate.weekday - 1];
+        return '$weekday ${focusedDate.day}/${focusedDate.month}';
 
       case CalendarViewType.week:
         final weekNumber = _getWeekNumber(focusedDate);
@@ -80,9 +80,14 @@ case CalendarViewType.day:
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
 
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final titleFontSize = isLandscape ? 24.0 : 26.0;
     final iconSize = isLandscape ? 26.0 : 28.0;
     final topSpacing = isLandscape ? 6.0 : 8.0;
+
+    final mainColor = colorScheme.onSurface;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -99,7 +104,7 @@ case CalendarViewType.day:
                   icon: Icon(
                     Icons.arrow_back_ios_new,
                     size: iconSize,
-                    color: Colors.black,
+                    color: mainColor,
                   ),
                 ),
               ),
@@ -115,7 +120,7 @@ case CalendarViewType.day:
                       fontFamily: 'Italiana',
                       fontSize: titleFontSize,
                       fontWeight: FontWeight.w400,
-                      color: Colors.black,
+                      color: mainColor,
                     ),
                   ),
                 ),
@@ -131,7 +136,7 @@ case CalendarViewType.day:
                         icon: Icon(
                           Icons.tune,
                           size: iconSize,
-                          color: Colors.black,
+                          color: mainColor,
                         ),
                       ),
                     IconButton(
@@ -139,7 +144,7 @@ case CalendarViewType.day:
                       icon: Icon(
                         Icons.arrow_forward_ios,
                         size: iconSize,
-                        color: Colors.black,
+                        color: mainColor,
                       ),
                     ),
                   ],
@@ -153,14 +158,19 @@ case CalendarViewType.day:
           child: OutlinedButton(
             onPressed: onToday,
             style: OutlinedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              side: const BorderSide(color: Color(0xFFE0E0E0)),
+              backgroundColor:
+              isDark ? const Color(0xFF171A19) : Colors.white,
+              foregroundColor: mainColor,
+              side: BorderSide(
+                color: isDark
+                    ? const Color(0xFF2A2D2C)
+                    : const Color(0xFFE0E0E0),
+              ),
               shape: const StadiumBorder(),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
               textStyle: const TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
             child: const Text('I dag'),
