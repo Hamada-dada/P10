@@ -48,6 +48,19 @@ class NotificationPreferencesService {
     }
   }
 
+  /// Short description shown below the style dropdown.
+  static String notificationStyleDescription(String style) {
+    switch (style) {
+      case 'rolig':
+        return 'Lyd, ingen vibration – mindre forstyrrende';
+      case 'diskret':
+        return 'Ingen lyd, ingen vibration – stille påmindelser';
+      case 'tydelig':
+      default:
+        return 'Lyd og vibration – let at lægge mærke til';
+    }
+  }
+
   Future<bool> loadDefaultEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_defaultEnabledKey) ?? _fallbackEnabled;
@@ -56,8 +69,12 @@ class NotificationPreferencesService {
   Future<int> loadDefaultReminderMinutes() async {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getInt(_defaultReminderMinutesKey);
-    if (stored != null && stored >= 0 && stored <= 10080) {
+    if (stored != null && fixedReminderOptions.contains(stored)) {
       return stored;
+    }
+    // Stored value is not a valid fixed option — normalize and persist.
+    if (stored != null) {
+      await prefs.setInt(_defaultReminderMinutesKey, _fallbackReminderMinutes);
     }
     return _fallbackReminderMinutes;
   }
@@ -77,11 +94,14 @@ class NotificationPreferencesService {
   }
 
   Future<void> saveDefaultReminderMinutes(int value) async {
+    final normalized =
+        fixedReminderOptions.contains(value) ? value : _fallbackReminderMinutes;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_defaultReminderMinutesKey, value);
+    await prefs.setInt(_defaultReminderMinutesKey, normalized);
   }
 
   Future<void> saveDefaultNotificationStyle(String value) async {
+    if (!notificationStyleOptions.contains(value)) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_defaultNotificationStyleKey, value);
   }
