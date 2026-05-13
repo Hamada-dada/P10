@@ -61,6 +61,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   bool _showChecklist = false;
   bool _showMoreSettings = false;
 
+  bool _notificationsEnabled = true;
+  int _reminderMinutesBefore = 10;
+
   bool _enableDirectReward = false;
   bool _enableStreakReward = false;
 
@@ -111,6 +114,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     );
 
     _isFavorite = activity?.isFavorite ?? false;
+    _notificationsEnabled = activity?.notificationsEnabled ?? true;
+    _reminderMinutesBefore = activity?.reminderMinutesBefore ?? 10;
     _showChecklist = activity?.checklistItems.isNotEmpty ?? false;
 
     _enableDirectReward = activity?.directRewardId != null;
@@ -950,6 +955,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
           _selectedRecurrence == ActivityRecurrence.none ? 1 : parsedInterval,
       recurrenceEndDate:
           _selectedRecurrence == ActivityRecurrence.none ? null : _recurrenceEndDate,
+      notificationsEnabled: _notificationsEnabled,
+      reminderMinutesBefore: _reminderMinutesBefore,
       createdAt: widget.existingActivity?.createdAt,
       updatedAt: widget.existingActivity?.updatedAt,
       participants: participants,
@@ -1145,6 +1152,51 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
+                                  SwitchListTile(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    tileColor: const Color(0xFFF8F8F8),
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                    title: const Text('Notifikationer'),
+                                    subtitle: const Text(
+                                      'Påmind mig om denne aktivitet',
+                                    ),
+                                    value: _notificationsEnabled,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _notificationsEnabled = value;
+                                      });
+                                    },
+                                  ),
+                                  if (_notificationsEnabled) ...[
+                                    const SizedBox(height: 10),
+                                    DropdownButtonFormField<int>(
+                                      initialValue: _reminderMinutesBefore,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Påmind mig',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      items: [10, 30, 60].map((minutes) {
+                                        return DropdownMenuItem<int>(
+                                          value: minutes,
+                                          child: Text(
+                                            '$minutes minutter før',
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: (value) {
+                                        if (value == null) return;
+                                        setState(() {
+                                          _reminderMinutesBefore = value;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                  const SizedBox(height: 12),
                                   DropdownButtonFormField<ActivityRecurrence>(
                                     initialValue: _selectedRecurrence,
                                     decoration: const InputDecoration(

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/supabase_config.dart';
 import 'screens/auth_gate.dart';
+import 'services/notification_service.dart';
 
 Future<void> main() async {
   await runZonedGuarded(
@@ -28,6 +29,8 @@ Future<void> main() async {
         url: SupabaseConfig.url,
         anonKey: SupabaseConfig.anonKey,
       );
+
+      await NotificationService().initialize();
 
       debugPrint(
         'main.dart: current session user id = '

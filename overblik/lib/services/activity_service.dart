@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/activity.dart';
 import '../repositories/activity_repository.dart';
+import 'notification_service.dart';
 
 class ActivityService {
   final ActivityRepository repository;
@@ -72,15 +75,35 @@ class ActivityService {
   }
 
   Future<void> addActivity(Activity activity) async {
-    await repository.addActivity(_validateActivity(activity));
+    final validated = _validateActivity(activity);
+    await repository.addActivity(validated);
+    try {
+      await NotificationService().scheduleActivityReminder(validated);
+    } catch (e, st) {
+      debugPrint('ActivityService: notification scheduling failed: $e');
+      debugPrintStack(stackTrace: st);
+    }
   }
 
   Future<void> updateActivity(Activity updatedActivity) async {
-    await repository.updateActivity(_validateActivity(updatedActivity));
+    final validated = _validateActivity(updatedActivity);
+    await repository.updateActivity(validated);
+    try {
+      await NotificationService().rescheduleActivityReminder(validated);
+    } catch (e, st) {
+      debugPrint('ActivityService: notification rescheduling failed: $e');
+      debugPrintStack(stackTrace: st);
+    }
   }
 
-  Future<void> deleteActivity(String activityId) {
-    return repository.deleteActivity(activityId);
+  Future<void> deleteActivity(String activityId) async {
+    await repository.deleteActivity(activityId);
+    try {
+      await NotificationService().cancelActivityReminders(activityId);
+    } catch (e, st) {
+      debugPrint('ActivityService: notification cancellation failed: $e');
+      debugPrintStack(stackTrace: st);
+    }
   }
 
   Future<void> setActivityCompleted({

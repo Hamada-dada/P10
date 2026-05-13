@@ -170,6 +170,9 @@ class Activity {
   final int recurrenceInterval;
   final DateTime? recurrenceEndDate;
 
+  final bool notificationsEnabled;
+  final int reminderMinutesBefore;
+
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -197,6 +200,8 @@ class Activity {
     required this.recurrence,
     required this.recurrenceInterval,
     required this.recurrenceEndDate,
+    required this.notificationsEnabled,
+    required this.reminderMinutesBefore,
     required this.createdAt,
     required this.updatedAt,
     required this.participants,
@@ -241,6 +246,8 @@ class Activity {
       'recurrence': activityRecurrenceToDatabase(recurrence),
       'recurrence_interval': recurrenceInterval,
       'recurrence_end_date': recurrenceEndDate?.toIso8601String(),
+      'notifications_enabled': notificationsEnabled,
+      'reminder_minutes_before': reminderMinutesBefore,
     };
   }
 
@@ -276,6 +283,10 @@ class Activity {
       recurrenceEndDate: activityRow['recurrence_end_date'] != null
           ? DateTime.tryParse(activityRow['recurrence_end_date'] as String)
           : null,
+      notificationsEnabled:
+          activityRow['notifications_enabled'] as bool? ?? true,
+      reminderMinutesBefore:
+          activityRow['reminder_minutes_before'] as int? ?? 10,
       createdAt: activityRow['created_at'] != null
           ? DateTime.tryParse(activityRow['created_at'] as String)
           : null,
@@ -308,6 +319,8 @@ class Activity {
     ActivityRecurrence? recurrence,
     int? recurrenceInterval,
     DateTime? recurrenceEndDate,
+    bool? notificationsEnabled,
+    int? reminderMinutesBefore,
     DateTime? createdAt,
     DateTime? updatedAt,
     List<ActivityParticipant>? participants,
@@ -334,6 +347,9 @@ class Activity {
       recurrence: recurrence ?? this.recurrence,
       recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval,
       recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      reminderMinutesBefore:
+          reminderMinutesBefore ?? this.reminderMinutesBefore,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       participants: participants ?? this.participants,
