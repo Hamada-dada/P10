@@ -86,7 +86,6 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   bool _isLoading = true;
   bool _isRefreshing = false;
   bool _isLoggingOut = false;
-  bool _pendingLoad = false;
 
   SupabaseClient get _supabase => Supabase.instance.client;
 

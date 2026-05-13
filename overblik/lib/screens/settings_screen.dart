@@ -136,7 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           const Divider(),
                           DropdownButtonFormField<String>(
-                            value: _selectedNotificationStyle,
+                            initialValue: _selectedNotificationStyle,
                             decoration: const InputDecoration(
                               labelText: 'Notifikationsstil',
                               border: OutlineInputBorder(),
@@ -172,7 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<ThemeMode>(
-                            value: _selectedThemeMode,
+                            initialValue: _selectedThemeMode,
                             decoration: const InputDecoration(
                               labelText: 'Tema',
                               border: OutlineInputBorder(),
@@ -200,7 +200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<AppColorOption>(
-                            value: _selectedColor,
+                            initialValue: _selectedColor,
                             decoration: const InputDecoration(
                               labelText: 'Farve',
                               border: OutlineInputBorder(),

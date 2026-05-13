@@ -7,9 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'controllers/theme_controller.dart';
 import 'core/supabase_config.dart';
 import 'screens/auth_gate.dart';
+import 'services/notification_service.dart';
 
 final themeController = ThemeController();
-import 'services/notification_service.dart';
 
 Future<void> main() async {
   await runZonedGuarded(
