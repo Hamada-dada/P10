@@ -404,17 +404,12 @@ Future<void> _loadFilterProfiles() async {
       context: context,
       isScrollControlled: true,
       builder: (sheetContext) {
-        return FractionallySizedBox(
-          heightFactor: 0.85,
-          child: SingleChildScrollView(
-            child: FilterPanel(
-              profiles: _filterProfiles,
-              selectedProfileIds: _selectedFilterProfileIds,
-              showFamilyActivities: _showFamilyActivities,
-              isChildView: _isChildSession || _currentProfile?.isChild == true,
-              currentProfileId: _currentProfile?.id,
-            ),
-          ),
+        return FilterPanel(
+          profiles: _filterProfiles,
+          selectedProfileIds: _selectedFilterProfileIds,
+          showFamilyActivities: _showFamilyActivities,
+          isChildView: _isChildSession || _currentProfile?.isChild == true,
+          currentProfileId: _currentProfile?.id,
         );
       },
     );
@@ -652,12 +647,17 @@ Future<void> _loadFilterProfiles() async {
                 ? 76.0
                 : 82.0;
 
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     debugPrint(
       'MonthlyCalendarScreen: days=${_activitiesByDate.length}, profiles=${_filterProfiles.length}, selected=$_selectedFilterProfileIds, showFamily=$_showFamilyActivities',
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFFA2E5AD),
+      backgroundColor: isDark
+          ? const Color(0xFF050706)
+          : colorScheme.primaryContainer,
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.symmetric(
@@ -694,8 +694,15 @@ Future<void> _loadFilterProfiles() async {
                   clipBehavior: Clip.antiAlias,
                   padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark
+                        ? const Color(0xFF101312)
+                        : colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF2A2D2C)
+                          : Colors.transparent,
+                    ),
                   ),
                   child: Column(
                     children: [
@@ -770,22 +777,28 @@ class _TopHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         IconButton(
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () => Navigator.maybePop(context),
-          icon: const Icon(Icons.arrow_back, size: 30, color: Colors.black),
+          icon: Icon(
+            Icons.arrow_back,
+            size: 30,
+            color: colorScheme.onSurface,
+          ),
         ),
         const Spacer(),
         if (showChildHeaderName)
           Text(
             displayName ?? 'Barn',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: colorScheme.onSurface.withOpacity(0.85),
             ),
           )
         else
@@ -809,7 +822,7 @@ class _ScreenTitle extends StatelessWidget {
           fontFamily: 'Italiana',
           fontSize: fontSize,
           fontWeight: FontWeight.w400,
-          color: Colors.black,
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
     );
@@ -825,20 +838,22 @@ class _WeekdayHeaderRow extends StatelessWidget {
   Widget build(BuildContext context) {
     const labels = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
 
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         SizedBox(width: weekNumberWidth),
         ...labels.map(
-          (label) => Expanded(
+              (label) => Expanded(
             child: Center(
               child: Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.clip,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                  color: colorScheme.onSurface,
                 ),
               ),
             ),
@@ -885,10 +900,10 @@ class _MonthWeekRow extends StatelessWidget {
               '$weekNumber',
               maxLines: 1,
               overflow: TextOverflow.clip,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: Colors.black54,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.65),
               ),
             ),
           ),
@@ -937,11 +952,26 @@ class _MonthDayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor = isCurrentMonth ? Colors.black : Colors.black38;
-    final backgroundColor = isCurrentMonth
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final textColor = isCurrentMonth
+        ? colorScheme.onSurface
+        : colorScheme.onSurface.withOpacity(0.35);
+
+    final backgroundColor = isDark
+        ? (isCurrentMonth
+        ? const Color(0xFF171A19)
+        : const Color(0xFF111313))
+        : (isCurrentMonth
         ? const Color(0xFFF8F8F8)
-        : const Color(0xFFF1F1F1);
-    final borderColor = isToday ? Colors.black : const Color(0xFFE0E0E0);
+        : const Color(0xFFF1F1F1));
+
+    final borderColor = isToday
+        ? colorScheme.onSurface
+        : (isDark
+        ? const Color(0xFF2A2D2C)
+        : const Color(0xFFE0E0E0));
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1034,7 +1064,7 @@ class _CompactMonthActivityIndicator extends StatelessWidget {
               style: TextStyle(
                 fontSize: isVerySmallCell ? 8 : 9,
                 fontWeight: FontWeight.w600,
-                color: Colors.black54,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.65),
               ),
             ),
           ),
@@ -1048,12 +1078,18 @@ class _EmptyMonthView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.calendar_month_outlined, size: 40, color: Colors.black45),
-          SizedBox(height: 10),
+          Icon(
+            Icons.calendar_month_outlined,
+            size: 40,
+            color: colorScheme.onSurface.withOpacity(0.45),
+          ),
+          const SizedBox(height: 10),
           Text(
             'Ingen aktiviteter i denne måned',
             textAlign: TextAlign.center,
@@ -1061,7 +1097,7 @@ class _EmptyMonthView extends StatelessWidget {
               fontFamily: 'Italiana',
               fontSize: 24,
               fontWeight: FontWeight.w400,
-              color: Colors.black,
+              color: colorScheme.onSurface,
             ),
           ),
         ],

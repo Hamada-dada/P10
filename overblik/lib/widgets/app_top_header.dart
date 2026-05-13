@@ -14,26 +14,28 @@ class AppTopHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         IconButton(
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: onBack ?? () => Navigator.maybePop(context),
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back,
             size: 30,
-            color: Colors.black,
+            color: colorScheme.onSurface,
           ),
         ),
         const Spacer(),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Italiana',
             fontSize: 26,
             fontWeight: FontWeight.w400,
-            color: Colors.black,
+            color: colorScheme.onSurface,
           ),
         ),
         const Spacer(),

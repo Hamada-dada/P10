@@ -4,12 +4,15 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'controllers/theme_controller.dart';
 import 'core/supabase_config.dart';
 import 'screens/auth_gate.dart';
 
+final themeController = ThemeController();
+
 Future<void> main() async {
   await runZonedGuarded(
-    () async {
+        () async {
       WidgetsFlutterBinding.ensureInitialized();
 
       FlutterError.onError = (FlutterErrorDetails details) {
@@ -29,14 +32,16 @@ Future<void> main() async {
         anonKey: SupabaseConfig.anonKey,
       );
 
+      await themeController.loadTheme();
+
       debugPrint(
         'main.dart: current session user id = '
-        '${Supabase.instance.client.auth.currentUser?.id}',
+            '${Supabase.instance.client.auth.currentUser?.id}',
       );
 
       runApp(const MyApp());
     },
-    (error, stack) {
+        (error, stack) {
       debugPrint('runZonedGuarded error: $error');
       debugPrintStack(stackTrace: stack);
     },
@@ -48,10 +53,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Familiekalender',
-      home: AuthGate(),
+    return AnimatedBuilder(
+      animation: themeController,
+      builder: (context, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Familiekalender',
+          theme: themeController.lightTheme,
+          darkTheme: themeController.darkTheme,
+          themeMode: themeController.themeMode,
+          home: const AuthGate(),
+        );
+      },
     );
   }
 }
