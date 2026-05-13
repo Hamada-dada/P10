@@ -220,6 +220,7 @@ class ProfileService {
           .select()
           .eq('auth_user_id', userId)
           .eq('role', profileRoleToString(ProfileRole.parent))
+          .eq('is_active', true)
           .maybeSingle();
 
       if (result == null) {
@@ -248,6 +249,7 @@ class ProfileService {
           .from('profiles')
           .select()
           .eq('family_id', familyId)
+          .eq('is_active', true)
           .order('created_at', ascending: true);
 
       final profiles = (result as List)
@@ -290,13 +292,13 @@ class ProfileService {
       debugPrint('ProfileService: getFamilyProfilesForCurrentUser failed: $e');
       debugPrintStack(stackTrace: st);
 
-      final currentProfile = await getCurrentAuthenticatedProfile();
+      final userId = _currentUserId();
+      if (userId == null) return [];
 
-      if (currentProfile == null) {
-        return [];
-      }
+      final cachedProfile = await _getCachedParentProfile(userId);
+      if (cachedProfile == null) return [];
 
-      return await _getCachedFamilyProfiles(currentProfile.familyId);
+      return await _getCachedFamilyProfiles(cachedProfile.familyId);
     }
   }
 
@@ -518,17 +520,9 @@ class ProfileService {
   }
 
   Future<void> deleteProfile(String profileId) async {
-    await _client.from('profiles').delete().eq('id', profileId);
-
-    final profiles = await getMyFamilyProfiles();
-
-    if (profiles.isEmpty) return;
-
-    final familyId = profiles.first.familyId;
-    final updatedProfiles =
-        profiles.where((profile) => profile.id != profileId).toList();
-
-    await _cacheFamilyProfiles(familyId, updatedProfiles);
+    // D-3: soft-delete so the profile is excluded by is_active filters
+    // without permanently removing audit history or foreign key references.
+    await updateProfile(profileId: profileId, isActive: false);
   }
 
   Future<String> resetChildCode(String profileId) async {

@@ -94,9 +94,15 @@ class ActivityParticipant {
   }
 
   factory ActivityParticipant.fromDatabaseRow(Map<String, dynamic> row) {
+    final profileId = row['profile_id'] as String?;
+    final externalName = row['external_name'] as String?;
+
+    // Prefer profileId; fall back to externalName; never produce both-set or both-null.
+    if (profileId != null) {
+      return ActivityParticipant(profileId: profileId);
+    }
     return ActivityParticipant(
-      profileId: row['profile_id'] as String?,
-      externalName: row['external_name'] as String?,
+      externalName: externalName?.isNotEmpty == true ? externalName : '',
     );
   }
 }
@@ -234,7 +240,7 @@ class Activity {
       'streak_target': streakTarget,
       'recurrence': activityRecurrenceToDatabase(recurrence),
       'recurrence_interval': recurrenceInterval,
-      //'recurrence_end_date': recurrenceEndDate?.toIso8601String(),
+      'recurrence_end_date': recurrenceEndDate?.toIso8601String(),
     };
   }
 

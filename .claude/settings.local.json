@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\almee\\\\Documents\\\\GitHub\\\\P10\\\\overblik\\\\lib\" -Recurse | Select-Object FullName, @{Name='Type';Expression={if \\($_.PSIsContainer\\) {'DIR'} else {'FILE'}}} | ConvertTo-Csv -NoTypeInformation | Select-Object -Skip 1 | ForEach-Object { \\($_ -split ','\\)[0] -replace '^\"|\"$' } | Sort-Object)",
+      "Bash(dart analyze *)"
+    ]
+  }
+}

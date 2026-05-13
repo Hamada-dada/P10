@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -13,6 +15,17 @@ class AuthGate extends StatefulWidget {
 
   @override
   State<AuthGate> createState() => _AuthGateState();
+}
+
+bool _isNetworkError(Object error) {
+  if (error is SocketException) return true;
+  final text = error.toString().toLowerCase();
+  return text.contains('socketexception') ||
+      text.contains('failed host lookup') ||
+      text.contains('no address associated with hostname') ||
+      text.contains('network is unreachable') ||
+      text.contains('connection refused') ||
+      text.contains('connection failed');
 }
 
 class _AuthGateState extends State<AuthGate> {
@@ -83,7 +96,11 @@ class _AuthGateState extends State<AuthGate> {
       debugPrint('AuthGate: failed to resolve authenticated state: $e');
       debugPrintStack(stackTrace: st);
 
-      await Supabase.instance.client.auth.signOut();
+      // Only sign out on real auth/permission errors.
+      // A network failure at cold start must not destroy a valid session.
+      if (!_isNetworkError(e)) {
+        await Supabase.instance.client.auth.signOut();
+      }
 
       return const LoginScreen();
     }

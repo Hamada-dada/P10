@@ -18,6 +18,12 @@ class ActivityService {
     return activities;
   }
 
+  Future<List<Activity>> getActivitiesForMonth(DateTime focusedDate) async {
+    final activities = await repository.getActivitiesForMonth(focusedDate);
+    activities.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return activities;
+  }
+
   Future<Activity?> getLongestActivityForDate(DateTime date) async {
     final activities = await getActivitiesForDate(date);
 
