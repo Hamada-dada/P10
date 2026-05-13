@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../models/profile.dart';
 import '../models/reward.dart';
@@ -373,7 +373,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                                 label: Text(profileName),
                                 selected: isSelected,
                                 selectedColor: isDark
-                                    ? colorScheme.primary.withOpacity(0.22)
+                                    ? colorScheme.primary.withValues(alpha: 0.22)
                                     : colorScheme.primaryContainer,
                                 backgroundColor: isDark
                                     ? const Color(0xFF101312)
@@ -529,7 +529,7 @@ class _SummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isDark
-              ? colorScheme.primary.withOpacity(0.45)
+              ? colorScheme.primary.withValues(alpha: 0.45)
               : const Color(0xFFE0E0E0),
         ),
       ),
@@ -574,7 +574,7 @@ class _EmptyRewardsState extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isDark
-              ? colorScheme.primary.withOpacity(0.45)
+              ? colorScheme.primary.withValues(alpha: 0.45)
               : const Color(0xFFE0E0E0),
         ),
       ),
@@ -585,7 +585,7 @@ class _EmptyRewardsState extends StatelessWidget {
             size: 34,
             color: isDark
                 ? colorScheme.primary
-                : colorScheme.onSurface.withOpacity(0.55),
+                : colorScheme.onSurface.withValues(alpha: 0.55),
           ),
           const SizedBox(height: 10),
           Text(
@@ -602,7 +602,7 @@ class _EmptyRewardsState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
-              color: colorScheme.onSurface.withOpacity(0.78),
+              color: colorScheme.onSurface.withValues(alpha: 0.78),
               height: 1.4,
             ),
           ),

@@ -10,6 +10,7 @@ import '../models/activity.dart';
 import '../models/profile.dart';
 import '../models/reward.dart';
 import '../screens/rewards_screen.dart';
+import '../services/notification_preferences.dart';
 import '../services/profile_service.dart';
 import '../services/reward_service.dart';
 
@@ -63,6 +64,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
   bool _notificationsEnabled = true;
   int _reminderMinutesBefore = 10;
+  bool _isCustomReminder = false;
+  late TextEditingController _customReminderController;
 
   bool _enableDirectReward = false;
   bool _enableStreakReward = false;
@@ -116,6 +119,16 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _isFavorite = activity?.isFavorite ?? false;
     _notificationsEnabled = activity?.notificationsEnabled ?? true;
     _reminderMinutesBefore = activity?.reminderMinutesBefore ?? 10;
+    _isCustomReminder = !NotificationPreferencesService.isFixedOption(
+      _reminderMinutesBefore,
+    );
+    _customReminderController = TextEditingController(
+      text: _isCustomReminder ? _reminderMinutesBefore.toString() : '',
+    );
+
+    if (!_isEditing) {
+      _loadNotificationDefaults();
+    }
     _showChecklist = activity?.checklistItems.isNotEmpty ?? false;
 
     _enableDirectReward = activity?.directRewardId != null;
@@ -147,6 +160,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _descriptionController.dispose();
     _recurrenceIntervalController.dispose();
     _streakTargetController.dispose();
+    _customReminderController.dispose();
 
     for (final controller in _checklistControllers) {
       controller.dispose();
@@ -169,6 +183,20 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     }
 
     return result;
+  }
+
+  Future<void> _loadNotificationDefaults() async {
+    final svc = NotificationPreferencesService();
+    final enabled = await svc.loadDefaultEnabled();
+    final minutes = await svc.loadDefaultReminderMinutes();
+    if (!mounted) return;
+    final isCustom = !NotificationPreferencesService.isFixedOption(minutes);
+    setState(() {
+      _notificationsEnabled = enabled;
+      _reminderMinutesBefore = minutes;
+      _isCustomReminder = isCustom;
+      if (isCustom) _customReminderController.text = minutes.toString();
+    });
   }
 
   Future<void> _loadProfiles() async {
@@ -956,7 +984,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       recurrenceEndDate:
           _selectedRecurrence == ActivityRecurrence.none ? null : _recurrenceEndDate,
       notificationsEnabled: _notificationsEnabled,
-      reminderMinutesBefore: _reminderMinutesBefore,
+      reminderMinutesBefore: _notificationsEnabled && _isCustomReminder
+          ? (int.tryParse(_customReminderController.text.trim()) ??
+              _reminderMinutesBefore)
+          : _reminderMinutesBefore,
       createdAt: widget.existingActivity?.createdAt,
       updatedAt: widget.existingActivity?.updatedAt,
       participants: participants,
@@ -1174,27 +1205,76 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                   ),
                                   if (_notificationsEnabled) ...[
                                     const SizedBox(height: 10),
-                                    DropdownButtonFormField<int>(
-                                      initialValue: _reminderMinutesBefore,
+                                    DropdownButtonFormField<int?>(
+                                      key: ValueKey(
+                                        _isCustomReminder
+                                            ? null
+                                            : _reminderMinutesBefore,
+                                      ),
+                                      initialValue: _isCustomReminder
+                                          ? null
+                                          : _reminderMinutesBefore,
                                       decoration: const InputDecoration(
                                         labelText: 'Påmind mig',
                                         border: OutlineInputBorder(),
                                       ),
-                                      items: [10, 30, 60].map((minutes) {
-                                        return DropdownMenuItem<int>(
-                                          value: minutes,
-                                          child: Text(
-                                            '$minutes minutter før',
-                                          ),
-                                        );
-                                      }).toList(),
+                                      items: [
+                                        ...NotificationPreferencesService
+                                            .fixedReminderOptions
+                                            .map(
+                                              (m) => DropdownMenuItem<int?>(
+                                                value: m,
+                                                child: Text('$m minutter før'),
+                                              ),
+                                            ),
+                                        const DropdownMenuItem<int?>(
+                                          value: null,
+                                          child: Text('Tilpasset'),
+                                        ),
+                                      ],
                                       onChanged: (value) {
-                                        if (value == null) return;
                                         setState(() {
-                                          _reminderMinutesBefore = value;
+                                          if (value != null) {
+                                            _isCustomReminder = false;
+                                            _reminderMinutesBefore = value;
+                                          } else {
+                                            _isCustomReminder = true;
+                                            _customReminderController.text =
+                                                _reminderMinutesBefore
+                                                    .toString();
+                                          }
                                         });
                                       },
                                     ),
+                                    if (_isCustomReminder) ...[
+                                      const SizedBox(height: 10),
+                                      TextFormField(
+                                        controller: _customReminderController,
+                                        keyboardType: TextInputType.number,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Minutter før (0–10080)',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        validator: (value) {
+                                          if (!_notificationsEnabled ||
+                                              !_isCustomReminder) {
+                                            return null;
+                                          }
+                                          final raw = value?.trim() ?? '';
+                                          if (raw.isEmpty) {
+                                            return 'Angiv et gyldigt antal minutter.';
+                                          }
+                                          final parsed = int.tryParse(raw);
+                                          if (parsed == null || parsed < 0) {
+                                            return 'Angiv et gyldigt antal minutter.';
+                                          }
+                                          if (parsed > 10080) {
+                                            return 'Påmindelsen kan højst være 7 dage før aktiviteten.';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                    ],
                                   ],
                                   const SizedBox(height: 12),
                                   DropdownButtonFormField<ActivityRecurrence>(

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../models/reward.dart';
 import 'reward_type_chip.dart';
@@ -48,7 +48,7 @@ class RewardCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isDark
-                ? colorScheme.primary.withOpacity(0.45)
+                ? colorScheme.primary.withValues(alpha: 0.45)
                 : const Color(0xFFE0E0E0),
           ),
         ),
@@ -61,7 +61,7 @@ class RewardCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 24,
                   backgroundColor: isDark
-                      ? colorScheme.primary.withOpacity(0.16)
+                      ? colorScheme.primary.withValues(alpha: 0.16)
                       : Colors.white,
                   child: Text(
                     _emojiLabel(),
@@ -91,7 +91,7 @@ class RewardCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13,
-                          color: colorScheme.onSurface.withOpacity(0.65),
+                          color: colorScheme.onSurface.withValues(alpha: 0.65),
                         ),
                       ),
                     ],
@@ -103,7 +103,7 @@ class RewardCard extends StatelessWidget {
                     onPressed: onDelete,
                     icon: Icon(
                       Icons.delete_outline,
-                      color: colorScheme.onSurface.withOpacity(0.85),
+                      color: colorScheme.onSurface.withValues(alpha: 0.85),
                     ),
                   ),
               ],
@@ -114,7 +114,7 @@ class RewardCard extends StatelessWidget {
                 reward.description,
                 style: TextStyle(
                   fontSize: 14,
-                  color: colorScheme.onSurface.withOpacity(0.78),
+                  color: colorScheme.onSurface.withValues(alpha: 0.78),
                   height: 1.4,
                 ),
               ),

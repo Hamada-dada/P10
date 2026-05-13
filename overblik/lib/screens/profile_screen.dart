@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../models/profile.dart';
 import 'rewards_screen.dart';
@@ -245,7 +245,7 @@ class _ProfileHeader extends StatelessWidget {
         color: isDark ? const Color(0xFF101312) : colorScheme.surface,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: isDark ? colorScheme.primary.withOpacity(0.45) : Colors.transparent,
+          color: isDark ? colorScheme.primary.withValues(alpha: 0.45) : Colors.transparent,
           width: isDark ? 1.4 : 0,
         ),
       ),
@@ -254,7 +254,7 @@ class _ProfileHeader extends StatelessWidget {
           CircleAvatar(
             radius: 42,
             backgroundColor: isDark
-                ? colorScheme.primary.withOpacity(0.16)
+                ? colorScheme.primary.withValues(alpha: 0.16)
                 : Colors.white,
             child: Text(
               emoji,
@@ -282,7 +282,7 @@ class _ProfileHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
                 color: isDark
-                    ? colorScheme.primary.withOpacity(0.55)
+                    ? colorScheme.primary.withValues(alpha: 0.55)
                     : const Color(0xFFE0E0E0),
               ),
             ),
@@ -290,7 +290,7 @@ class _ProfileHeader extends StatelessWidget {
               roleLabel,
               style: TextStyle(
                 fontSize: 14,
-                color: colorScheme.onSurface.withOpacity(0.9),
+                color: colorScheme.onSurface.withValues(alpha: 0.9),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -340,11 +340,11 @@ class _ActionCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final activeColor = isDark ? colorScheme.primary : colorScheme.onSurface;
-    final disabledColor = colorScheme.onSurface.withOpacity(0.32);
+    final disabledColor = colorScheme.onSurface.withValues(alpha: 0.32);
 
     final contentColor = isDisabled ? disabledColor : activeColor;
     final textColor = isDisabled
-        ? colorScheme.onSurface.withOpacity(0.32)
+        ? colorScheme.onSurface.withValues(alpha: 0.32)
         : colorScheme.onSurface;
 
     return InkWell(
@@ -357,7 +357,7 @@ class _ActionCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isDark
-                ? colorScheme.primary.withOpacity(isDisabled ? 0.18 : 0.45)
+                ? colorScheme.primary.withValues(alpha: isDisabled ? 0.18 : 0.45)
                 : const Color(0xFFE0E0E0),
             width: isDark ? 1.3 : 1,
           ),
@@ -401,7 +401,7 @@ class _FamilyMembersCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark
-              ? colorScheme.primary.withOpacity(0.45)
+              ? colorScheme.primary.withValues(alpha: 0.45)
               : const Color(0xFFE0E0E0),
           width: isDark ? 1.3 : 1,
         ),
@@ -424,7 +424,7 @@ class _FamilyMembersCard extends StatelessWidget {
                 : colorScheme.surface,
             side: BorderSide(
               color: isDark
-                  ? colorScheme.primary.withOpacity(0.55)
+                  ? colorScheme.primary.withValues(alpha: 0.55)
                   : const Color(0xFFE0E0E0),
             ),
           ),
@@ -458,7 +458,7 @@ class _LargeInfoCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark
-              ? colorScheme.primary.withOpacity(0.45)
+              ? colorScheme.primary.withValues(alpha: 0.45)
               : const Color(0xFFE0E0E0),
           width: isDark ? 1.3 : 1,
         ),
@@ -489,7 +489,7 @@ class _LargeInfoCard extends StatelessWidget {
                   body,
                   style: TextStyle(
                     fontSize: 14,
-                    color: colorScheme.onSurface.withOpacity(0.78),
+                    color: colorScheme.onSurface.withValues(alpha: 0.78),
                     height: 1.45,
                   ),
                 ),

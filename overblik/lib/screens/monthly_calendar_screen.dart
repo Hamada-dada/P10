@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
@@ -798,7 +798,7 @@ class _TopHeader extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: colorScheme.onSurface.withOpacity(0.85),
+              color: colorScheme.onSurface.withValues(alpha: 0.85),
             ),
           )
         else
@@ -903,7 +903,7 @@ class _MonthWeekRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.65),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
               ),
             ),
           ),
@@ -957,7 +957,7 @@ class _MonthDayCell extends StatelessWidget {
 
     final textColor = isCurrentMonth
         ? colorScheme.onSurface
-        : colorScheme.onSurface.withOpacity(0.35);
+        : colorScheme.onSurface.withValues(alpha: 0.35);
 
     final backgroundColor = isDark
         ? (isCurrentMonth
@@ -1064,7 +1064,7 @@ class _CompactMonthActivityIndicator extends StatelessWidget {
               style: TextStyle(
                 fontSize: isVerySmallCell ? 8 : 9,
                 fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.65),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
               ),
             ),
           ),
@@ -1087,7 +1087,7 @@ class _EmptyMonthView extends StatelessWidget {
           Icon(
             Icons.calendar_month_outlined,
             size: 40,
-            color: colorScheme.onSurface.withOpacity(0.45),
+            color: colorScheme.onSurface.withValues(alpha: 0.45),
           ),
           const SizedBox(height: 10),
           Text(

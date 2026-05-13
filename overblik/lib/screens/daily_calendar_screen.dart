@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/utils/activity_filter.dart';
@@ -729,7 +729,7 @@ class _TopHeader extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: colorScheme.onSurface.withOpacity(0.85),
+              color: colorScheme.onSurface.withValues(alpha: 0.85),
             ),
           )
         else
@@ -793,7 +793,7 @@ class _DailySummaryCard extends StatelessWidget {
         'Ingen aktiviteter planlagt for denne dag',
         style: TextStyle(
           fontSize: 14,
-          color: colorScheme.onSurface.withOpacity(0.6),
+          color: colorScheme.onSurface.withValues(alpha: 0.6),
         ),
       )
           : Column(
@@ -804,7 +804,7 @@ class _DailySummaryCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: colorScheme.onSurface.withOpacity(0.9),
+              color: colorScheme.onSurface.withValues(alpha: 0.9),
             ),
           ),
           const SizedBox(height: 8),
@@ -843,7 +843,7 @@ class _EmptyActivitiesView extends StatelessWidget {
             Icon(
               Icons.event_note_outlined,
               size: 38,
-              color: colorScheme.onSurface.withOpacity(0.45),
+              color: colorScheme.onSurface.withValues(alpha: 0.45),
             ),
             const SizedBox(height: 10),
             Text(

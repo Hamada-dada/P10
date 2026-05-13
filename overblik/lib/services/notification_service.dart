@@ -56,7 +56,25 @@ class NotificationService {
               AndroidFlutterLocalNotificationsPlugin>();
       final granted =
           await androidImpl?.requestNotificationsPermission() ?? false;
-      debugPrint('NotificationService: Android permission granted=$granted');
+      if (!granted) {
+        debugPrint(
+          'NotificationService: Android notification permission DENIED — '
+          'notifications will not fire',
+        );
+      } else {
+        debugPrint('NotificationService: Android notification permission granted');
+      }
+
+      // Android 12+ requires explicit exact-alarm permission (SCHEDULE_EXACT_ALARM).
+      // requestExactAlarmsPermission() opens the system "Alarms & reminders" settings
+      // page so the user can grant it. Without this, zonedSchedule() silently fails.
+      final canExact =
+          await androidImpl?.canScheduleExactNotifications() ?? false;
+      debugPrint('NotificationService: canScheduleExactNotifications=$canExact');
+      if (!canExact) {
+        await androidImpl?.requestExactAlarmsPermission();
+      }
+
       return granted;
     }
 
@@ -97,7 +115,20 @@ class NotificationService {
     final now = DateTime.now();
     final windowEnd = now.add(Duration(days: _schedulingWindowDays));
     final occurrences = _occurrencesInWindow(activity, now, windowEnd);
+
+    if (occurrences.isEmpty) {
+      debugPrint(
+        'NotificationService: no occurrences in $_schedulingWindowDays-day '
+        'window for ${activity.id} — no reminders scheduled',
+      );
+      await _saveScheduledIds(activity.id, []);
+      return;
+    }
+
     final scheduledIds = <int>[];
+
+    // Resolve schedule mode once for all occurrences.
+    final scheduleMode = await _resolveAndroidScheduleMode();
 
     for (final occurrenceStart in occurrences) {
       final reminderTime = occurrenceStart.subtract(
@@ -125,13 +156,13 @@ class NotificationService {
           body: body,
           scheduledDate: tzTime,
           notificationDetails: _notificationDetails(),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          androidScheduleMode: scheduleMode,
           payload: activity.id,
         );
         scheduledIds.add(id);
         debugPrint(
           'NotificationService: scheduled id=$id for activity=${activity.id} '
-          'at $reminderTime',
+          'at $reminderTime (mode=$scheduleMode)',
         );
       } catch (e) {
         debugPrint('NotificationService: failed to schedule id=$id: $e');
@@ -139,10 +170,18 @@ class NotificationService {
     }
 
     await _saveScheduledIds(activity.id, scheduledIds);
-    debugPrint(
-      'NotificationService: scheduled ${scheduledIds.length} reminders '
-      'for ${activity.id}',
-    );
+
+    if (scheduledIds.isEmpty) {
+      debugPrint(
+        'NotificationService: 0 reminders scheduled for ${activity.id} — '
+        'all ${occurrences.length} reminder times were already in the past',
+      );
+    } else {
+      debugPrint(
+        'NotificationService: scheduled ${scheduledIds.length} reminders '
+        'for ${activity.id}',
+      );
+    }
   }
 
   Future<void> cancelActivityReminders(String activityId) async {
@@ -170,6 +209,19 @@ class NotificationService {
   }
 
   // ── private ──────────────────────────────────────────────────────────────
+
+  Future<AndroidScheduleMode> _resolveAndroidScheduleMode() async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return AndroidScheduleMode.exactAllowWhileIdle;
+    }
+    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    final canExact =
+        await androidImpl?.canScheduleExactNotifications() ?? false;
+    return canExact
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
+  }
 
   NotificationDetails _notificationDetails() {
     return const NotificationDetails(

@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../controllers/theme_controller.dart';
 import '../main.dart';
+import '../services/notification_preferences.dart';
 import '../widgets/app_top_header.dart';
 import 'manage_profiles_screen.dart';
 
@@ -13,14 +14,13 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notificationsEnabled = true;
-  bool _soundEnabled = true;
-  bool _vibrationEnabled = true;
+  bool _defaultEnabled = true;
+  int _defaultReminderMinutes = 10;
+  bool _isCustomDefault = false;
+  late TextEditingController _customDefaultController;
 
   ThemeMode _selectedThemeMode = themeController.themeMode;
   AppColorOption _selectedColor = themeController.colorOption;
-
-  String _selectedNotificationStyle = 'Rolig';
 
   final Map<ThemeMode, String> _themeModeOptions = {
     ThemeMode.light: 'Lys tilstand',
@@ -35,11 +35,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
     AppColorOption.pink: 'Rosa',
   };
 
-  final List<String> _notificationStyles = [
-    'Rolig',
-    'Tydelig',
-    'Diskret',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _isCustomDefault =
+        !NotificationPreferencesService.isFixedOption(_defaultReminderMinutes);
+    _customDefaultController = TextEditingController(
+      text: _isCustomDefault ? _defaultReminderMinutes.toString() : '',
+    );
+    _loadNotificationDefaults();
+  }
+
+  @override
+  void dispose() {
+    _customDefaultController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadNotificationDefaults() async {
+    final svc = NotificationPreferencesService();
+    final enabled = await svc.loadDefaultEnabled();
+    final minutes = await svc.loadDefaultReminderMinutes();
+    if (!mounted) return;
+    final isCustom = !NotificationPreferencesService.isFixedOption(minutes);
+    setState(() {
+      _defaultEnabled = enabled;
+      _defaultReminderMinutes = minutes;
+      _isCustomDefault = isCustom;
+      if (isCustom) _customDefaultController.text = minutes.toString();
+    });
+  }
 
   void _openManageProfiles() {
     Navigator.push(
@@ -90,74 +115,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           const SizedBox(height: 12),
                           SwitchListTile(
-                            value: _notificationsEnabled,
-                            onChanged: (value) {
-                              setState(() {
-                                _notificationsEnabled = value;
-                              });
+                            value: _defaultEnabled,
+                            onChanged: (value) async {
+                              setState(() => _defaultEnabled = value);
+                              await NotificationPreferencesService()
+                                  .saveDefaultEnabled(value);
                             },
-                            title: const Text('Aktivér notifikationer'),
+                            title: const Text('Notifikationer til nye aktiviteter'),
                             subtitle: const Text(
-                              'Vis påmindelser og ændringer i aktiviteter.',
+                              'Standardindstilling for nye aktiviteter. '
+                              'Kan ændres per aktivitet.',
                             ),
                             contentPadding: EdgeInsets.zero,
                           ),
                           const Divider(),
-                          SwitchListTile(
-                            value: _soundEnabled,
-                            onChanged: _notificationsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      _soundEnabled = value;
-                                    });
-                                  }
-                                : null,
-                            title: const Text('Lyd'),
-                            subtitle: const Text(
-                              'Afspil lyd ved vigtige påmindelser.',
+                          DropdownButtonFormField<int?>(
+                            key: ValueKey(
+                              _isCustomDefault ? null : _defaultReminderMinutes,
                             ),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          const Divider(),
-                          SwitchListTile(
-                            value: _vibrationEnabled,
-                            onChanged: _notificationsEnabled
-                                ? (value) {
-                                    setState(() {
-                                      _vibrationEnabled = value;
-                                    });
-                                  }
-                                : null,
-                            title: const Text('Vibration'),
-                            subtitle: const Text(
-                              'Brug vibration som støtte ved påmindelser.',
-                            ),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          const Divider(),
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedNotificationStyle,
+                            initialValue:
+                                _isCustomDefault ? null : _defaultReminderMinutes,
                             decoration: const InputDecoration(
-                              labelText: 'Notifikationsstil',
+                              labelText: 'Standard påmindelsestid',
                               border: OutlineInputBorder(),
                             ),
-                            items: _notificationStyles
-                                .map(
-                                  (style) => DropdownMenuItem(
-                                    value: style,
-                                    child: Text(style),
+                            items: [
+                              ...NotificationPreferencesService
+                                  .fixedReminderOptions
+                                  .map(
+                                    (m) => DropdownMenuItem<int?>(
+                                      value: m,
+                                      child: Text('$m minutter før'),
+                                    ),
                                   ),
-                                )
-                                .toList(),
-                            onChanged: _notificationsEnabled
-                                ? (value) {
-                                    if (value == null) return;
-                                    setState(() {
-                                      _selectedNotificationStyle = value;
-                                    });
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('Tilpasset'),
+                              ),
+                            ],
+                            onChanged: _defaultEnabled
+                                ? (value) async {
+                                    if (value != null) {
+                                      setState(() {
+                                        _isCustomDefault = false;
+                                        _defaultReminderMinutes = value;
+                                      });
+                                      await NotificationPreferencesService()
+                                          .saveDefaultReminderMinutes(value);
+                                    } else {
+                                      setState(() {
+                                        _isCustomDefault = true;
+                                        _customDefaultController.text =
+                                            _defaultReminderMinutes.toString();
+                                      });
+                                    }
                                   }
                                 : null,
                           ),
+                          if (_isCustomDefault && _defaultEnabled) ...[
+                            const SizedBox(height: 10),
+                            TextFormField(
+                              controller: _customDefaultController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Minutter før (0–10080)',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (raw) async {
+                                final parsed = int.tryParse(raw.trim());
+                                if (parsed == null ||
+                                    parsed < 0 ||
+                                    parsed > 10080) {
+                                  return;
+                                }
+                                setState(() => _defaultReminderMinutes = parsed);
+                                await NotificationPreferencesService()
+                                    .saveDefaultReminderMinutes(parsed);
+                              },
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -326,7 +362,7 @@ class _SectionTitle extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 18,
-          backgroundColor: colorScheme.primary.withOpacity(0.18),
+          backgroundColor: colorScheme.primary.withValues(alpha: 0.18),
           child: Icon(
             icon,
             size: 20,
@@ -394,7 +430,7 @@ class _InlineInfoBox extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 20,
-          backgroundColor: colorScheme.primary.withOpacity(
+          backgroundColor: colorScheme.primary.withValues(alpha: 
             isDark ? 0.22 : 0.14,
           ),
           child: Icon(
@@ -421,7 +457,7 @@ class _InlineInfoBox extends StatelessWidget {
                 text,
                 style: TextStyle(
                   fontSize: 14,
-                  color: colorScheme.onSurface.withOpacity(0.78),
+                  color: colorScheme.onSurface.withValues(alpha: 0.78),
                   height: 1.4,
                 ),
               ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 class RewardTypeChip extends StatelessWidget {
   final IconData icon;
@@ -22,12 +22,12 @@ class RewardTypeChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: isDark
-            ? colorScheme.primary.withOpacity(0.14)
+            ? colorScheme.primary.withValues(alpha: 0.14)
             : Colors.white,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
           color: isDark
-              ? colorScheme.primary.withOpacity(0.35)
+              ? colorScheme.primary.withValues(alpha: 0.35)
               : const Color(0xFFE0E0E0),
         ),
       ),

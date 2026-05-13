@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
@@ -689,7 +689,7 @@ class _TopHeader extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: colorScheme.onSurface.withOpacity(0.85),
+              color: colorScheme.onSurface.withValues(alpha: 0.85),
             ),
           )
         else
@@ -823,7 +823,7 @@ class _WeekDayCard extends StatelessWidget {
                         'Ingen aktiviteter',
                         style: TextStyle(
                           fontSize: 15,
-                          color: colorScheme.onSurface.withOpacity(0.6),
+                          color: colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
                     )
@@ -849,7 +849,7 @@ class _WeekDayCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 13,
-                              color: colorScheme.onSurface.withOpacity(0.6),
+                              color: colorScheme.onSurface.withValues(alpha: 0.6),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -899,7 +899,7 @@ class _EmptyWeekView extends StatelessWidget {
           Icon(
             Icons.view_week_outlined,
             size: 40,
-            color: colorScheme.onSurface.withOpacity(0.45),
+            color: colorScheme.onSurface.withValues(alpha: 0.45),
           ),
           const SizedBox(height: 10),
           Text(
