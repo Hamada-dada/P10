@@ -184,7 +184,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       return _loadProfileNamesForLegacyChild();
     }
 
-    final profile = currentProfile ??
+    final profile =
+        currentProfile ??
         _currentProfile ??
         await _profileService.getCurrentAuthenticatedProfile();
 
@@ -250,8 +251,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     try {
       final currentProfile = await _loadCurrentProfileForSession();
 
-      final freshActivity =
-          await _activityService.getActivityById(widget.activity.id);
+      final freshActivity = await _activityService.getActivityById(
+        widget.activity.id,
+      );
 
       final activityToShow = freshActivity ?? widget.activity;
 
@@ -459,9 +461,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kunne ikke opdatere tjeklisten.'),
-        ),
+        const SnackBar(content: Text('Kunne ikke opdatere tjeklisten.')),
       );
     }
   }
@@ -505,9 +505,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kunne ikke gemme ændringerne.'),
-        ),
+        const SnackBar(content: Text('Kunne ikke gemme ændringerne.')),
       );
     }
   }
@@ -559,9 +557,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kunne ikke slette aktiviteten.'),
-        ),
+        const SnackBar(content: Text('Kunne ikke slette aktiviteten.')),
       );
     }
   }
@@ -596,11 +592,12 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                         ? Image.network(
                             _activity.imagePath,
                             fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Text(
-                              'Kunne ikke vise billedet',
-                              style: TextStyle(color: Colors.white),
-                            ),
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Text(
+                                'Kunne ikke vise billedet',
+                                style: TextStyle(color: Colors.white),
+                              );
+                            },
                           )
                         : Image.file(
                             File(_activity.imagePath),
@@ -666,11 +663,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         child: const Text(
           'Billede gemt, men forhåndsvisning understøttes ikke i webversionen endnu.',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.black87,
-            height: 1.4,
-          ),
+          style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
         ),
       );
     }
@@ -697,10 +690,13 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: colorScheme.primaryContainer,
+        backgroundColor: isDark
+            ? const Color(0xFF050706)
+            : colorScheme.primaryContainer,
         body: const SafeArea(
           child: Center(
             child: CircularProgressIndicator(),
@@ -725,7 +721,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         : null;
 
     return Scaffold(
-      backgroundColor: colorScheme.primaryContainer,
+      backgroundColor: isDark
+          ? const Color(0xFF050706)
+          : colorScheme.primaryContainer,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -734,8 +732,11 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
               width: 420,
               constraints: const BoxConstraints(maxWidth: 420),
               decoration: BoxDecoration(
-                color: colorScheme.surface,
+                color: isDark ? const Color(0xFF101312) : colorScheme.surface,
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF2A2D2C) : Colors.transparent,
+                ),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -796,12 +797,16 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                 timeText: _formatTime(_activity.startTime),
                               ),
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
                                 child: Text(
                                   '→',
                                   style: TextStyle(
                                     fontSize: 22,
-                                    color: colorScheme.onSurface.withValues(alpha: 0.5),
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.5,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -865,11 +870,15 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                               child: Icon(
                                                 checklistItem.isChecked
                                                     ? Icons.check_circle
-                                                    : Icons.radio_button_unchecked,
+                                                    : Icons
+                                                          .radio_button_unchecked,
                                                 size: 20,
                                                 color: checklistItem.isChecked
                                                     ? colorScheme.primary
-                                                    : colorScheme.onSurface.withValues(alpha: 0.5),
+                                                    : colorScheme.onSurface
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
@@ -884,9 +893,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                                   letterSpacing: 0.5,
                                                   decoration:
                                                       checklistItem.isChecked
-                                                          ? TextDecoration
-                                                              .lineThrough
-                                                          : TextDecoration.none,
+                                                      ? TextDecoration
+                                                            .lineThrough
+                                                      : TextDecoration.none,
                                                 ),
                                               ),
                                             ),
@@ -911,7 +920,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                     _RewardCard(
                                       title: 'Direkte belønning',
                                       emoji: directReward?.emoji ?? '🎁',
-                                      rewardTitle: directReward?.title ??
+                                      rewardTitle:
+                                          directReward?.title ??
                                           'Ukendt belønning',
                                       subtitle:
                                           'Kan opnås efter denne aktivitet',
@@ -927,7 +937,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                     _RewardCard(
                                       title: 'Langsigtet belønning',
                                       emoji: streakReward?.emoji ?? '🏆',
-                                      rewardTitle: streakReward?.title ??
+                                      rewardTitle:
+                                          streakReward?.title ??
                                           'Ukendt belønning',
                                       subtitle: _activity.streakTarget != null
                                           ? 'Opnås efter ${_activity.streakTarget} gange'
@@ -976,13 +987,14 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                     Container(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
+                        color: isDark
+                            ? const Color(0xFF101312)
+                            : colorScheme.surface,
                         border: Border(
                           top: BorderSide(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.08),
+                            color: colorScheme.onSurface.withValues(
+                              alpha: 0.08,
+                            ),
                           ),
                         ),
                       ),
@@ -1076,7 +1088,8 @@ class _TimeInfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return IntrinsicWidth(
+    return SizedBox(
+      width: 115,
       child: Column(
         children: [
           Text(
@@ -1118,6 +1131,7 @@ class _InfoSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1135,8 +1149,15 @@ class _InfoSection extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
+              color: isDark
+                  ? const Color(0xFF171A19)
+                  : colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF2A2D2C)
+                    : const Color(0xFFE0E0E0),
+              ),
             ),
             child: child,
           ),
@@ -1164,15 +1185,16 @@ class _RewardCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color: isDark ? const Color(0xFF101312) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: colorScheme.onSurface.withValues(alpha: 0.12),
+          color: isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0),
         ),
       ),
       child: Row(
@@ -1180,7 +1202,9 @@ class _RewardCard extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 22,
-            backgroundColor: const Color(0xFFF8F8F8),
+            backgroundColor: isDark
+                ? const Color(0xFF171A19)
+                : const Color(0xFFF8F8F8),
             child: Text(
               emoji,
               style: const TextStyle(fontSize: 22),
@@ -1258,10 +1282,17 @@ class _BottomActionButton extends StatelessWidget {
 
     return TextButton.icon(
       onPressed: onTap,
-      icon: Icon(icon, color: color, size: 22),
+      icon: Icon(
+        icon,
+        color: color,
+        size: 22,
+      ),
       label: Text(
         label,
-        style: TextStyle(color: color, fontWeight: FontWeight.w500),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }

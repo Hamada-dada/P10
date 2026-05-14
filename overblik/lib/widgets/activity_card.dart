@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/activity.dart';
 import '../models/profile.dart';
 
@@ -50,6 +51,12 @@ class ActivityCard extends StatelessWidget {
         : cleanLabel.substring(0, 2).toUpperCase();
   }
 
+  Color _borderColor(BuildContext context, bool isDark) {
+    if (activity.isImportant) return Colors.red;
+
+    return isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -83,16 +90,38 @@ class ActivityCard extends StatelessWidget {
                 onPressed: onCompletedChanged == null
                     ? null
                     : () => onCompletedChanged!(!activity.isCompleted),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
                 icon: Icon(
                   activity.isCompleted
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  color: activity.isCompleted
-                      ? colorScheme.primary
-                      : colorScheme.onSurface.withValues(alpha: 0.4),
-                  size: 26,
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank,
+                  color: activity.isCompleted ? Colors.green : mutedTextColor,
+                ),
+              ),
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 72,
+                child: Text(
+                  '${_formatTime(activity.startTime)}\n${_formatTime(activity.endTime)}',
+                  style: TextStyle(
+                    fontFamily: 'Italiana',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w400,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '${activity.title} ${activity.emoji}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Italiana',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w400,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -147,14 +176,16 @@ class ActivityCard extends StatelessWidget {
                         return Padding(
                           padding: const EdgeInsets.only(right: 3),
                           child: CircleAvatar(
-                            radius: 12,
+                            radius: 13,
                             backgroundColor: colorScheme.primaryContainer,
                             child: Text(
                               initials,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
-                                color: colorScheme.onPrimaryContainer,
+                                color: isDark
+                                    ? Colors.black
+                                    : colorScheme.onSurface,
                               ),
                             ),
                           ),
@@ -162,14 +193,14 @@ class ActivityCard extends StatelessWidget {
                       }),
                       if (hiddenCount > 0)
                         CircleAvatar(
-                          radius: 12,
+                          radius: 15,
                           backgroundColor: isDark
                               ? const Color(0xFF2A2D2C)
                               : const Color(0xFFE0E0E0),
                           child: Text(
                             '+$hiddenCount',
                             style: TextStyle(
-                              fontSize: 9,
+                              fontSize: 11,
                               fontWeight: FontWeight.w700,
                               color: colorScheme.onSurface,
                             ),
@@ -179,10 +210,9 @@ class ActivityCard extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(width: 4),
               Icon(
                 Icons.chevron_right,
-                color: colorScheme.onSurface.withValues(alpha: 0.5),
+                color: colorScheme.onSurface,
               ),
             ],
           ),

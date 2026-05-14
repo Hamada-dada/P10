@@ -47,37 +47,19 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
   Future<String?> _loadFamilyCode(String familyId) async {
     try {
-      debugPrint(
-        'ManageProfilesScreen: loading family code for familyId=$familyId',
-      );
-
       final row = await Supabase.instance.client
           .from('families')
           .select('id, family_name, family_code, created_by')
           .eq('id', familyId)
           .maybeSingle();
 
-      debugPrint('ManageProfilesScreen: family row = $row');
-
-      if (row == null) {
-        debugPrint(
-          'ManageProfilesScreen: no family row returned. '
-          'Likely causes: RLS blocks SELECT on families, or family_id does not exist.',
-        );
-        return null;
-      }
+      if (row == null) return null;
 
       final familyCode = row['family_code'];
-
-      debugPrint('ManageProfilesScreen: raw family_code = $familyCode');
 
       if (familyCode is String && familyCode.trim().isNotEmpty) {
         return familyCode.trim();
       }
-
-      debugPrint(
-        'ManageProfilesScreen: family_code is missing or empty for familyId=$familyId',
-      );
 
       return null;
     } catch (e, st) {
@@ -89,8 +71,6 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
   Future<void> _loadProfiles() async {
     try {
-      debugPrint('ManageProfilesScreen: loading profiles...');
-
       if (mounted) {
         setState(() {
           _isLoading = true;
@@ -99,11 +79,6 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       }
 
       final parentProfile = await _profileService.getMyParentProfile();
-
-      debugPrint(
-        'ManageProfilesScreen: parent=${parentProfile?.name}, '
-        'role=${parentProfile?.role}, family=${parentProfile?.familyId}',
-      );
 
       if (!mounted) return;
 
@@ -124,25 +99,11 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       final familyCode = await _loadFamilyCode(parentProfile.familyId);
 
       final profiles =
-          await _profileService.getFamilyProfiles(parentProfile.familyId);
+      await _profileService.getFamilyProfiles(parentProfile.familyId);
 
       final joinRequests = await _parentJoinService.getJoinRequestsForFamily(
         parentProfile.familyId,
       );
-
-      debugPrint(
-        'ManageProfilesScreen: loaded ${profiles.length} profiles from family ${parentProfile.familyId}',
-      );
-
-      debugPrint(
-        'ManageProfilesScreen: loaded ${joinRequests.length} parent join requests',
-      );
-
-      for (final profile in profiles) {
-        debugPrint(
-          'ManageProfilesScreen: ${profile.name} | ${profile.role} | active=${profile.isActive}',
-        );
-      }
 
       profiles.sort(_sortProfiles);
 
@@ -182,8 +143,8 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
     }
 
     return a.displayName.toLowerCase().compareTo(
-          b.displayName.toLowerCase(),
-        );
+      b.displayName.toLowerCase(),
+    );
   }
 
   String _roleLabel(ProfileRole role) {
@@ -215,7 +176,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       case ProfileRole.childLimited:
         return const Color(0xFF1565C0);
       case ProfileRole.childExtended:
-        return const Color(0xFF6A1B9A);
+        return const Color(0xFFB57EDC);
     }
   }
 
@@ -225,8 +186,6 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
     if (currentParent == null) return false;
     if (profile.role != ProfileRole.parent) return false;
     if (!profile.isActive) return false;
-
-    // A parent must not remove their own active profile.
     if (profile.id == currentParent.id) return false;
 
     return true;
@@ -249,7 +208,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
           title: const Text('Fjern forælder?'),
           content: Text(
             'Vil du fjerne ${profile.displayName} som forælder i familien? '
-            'Personen mister adgang til familiens kalender.',
+                'Personen mister adgang til familiens kalender.',
           ),
           actions: [
             TextButton(
@@ -277,7 +236,6 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       });
 
       await _parentJoinService.removeParentFromFamily(profile.id);
-
       await _loadProfiles();
 
       if (!mounted) return;
@@ -337,7 +295,6 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       });
 
       await _parentJoinService.approveJoinRequest(request.requestId);
-
       await _loadProfiles();
 
       if (!mounted) return;
@@ -399,7 +356,6 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       });
 
       await _parentJoinService.rejectJoinRequest(request.requestId);
-
       await _loadProfiles();
 
       if (!mounted) return;
@@ -455,10 +411,6 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
     );
 
     if (!mounted || createdProfile == null) return;
-
-    debugPrint(
-      'ManageProfilesScreen: created profile ${createdProfile.name} | ${createdProfile.role}',
-    );
 
     setState(() {
       _profiles = [
@@ -525,7 +477,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
           title: const Text('Nulstil barnets kode?'),
           content: Text(
             'Vil du oprette en ny login-kode til ${profile.displayName}? '
-            'Den gamle kode virker ikke bagefter.',
+                'Den gamle kode virker ikke bagefter.',
           ),
           actions: [
             TextButton(
@@ -638,8 +590,8 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
           title: const Text('Fjern profil?'),
           content: Text(
             'Hvad vil du gøre med ${profile.displayName}?\n\n'
-            'Deaktivering skjuler profilen, men bevarer data.\n'
-            'Permanent sletning fjerner profilen fra systemet.',
+                'Deaktivering skjuler profilen, men bevarer data.\n'
+                'Permanent sletning fjerner profilen fra systemet.',
           ),
           actions: [
             TextButton(
@@ -727,7 +679,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
           title: const Text('Slet profil permanent?'),
           content: Text(
             'Er du sikker på, at du vil slette ${profile.displayName} permanent?\n\n'
-            'Dette kan ikke fortrydes. Hvis profilen bruges i aktiviteter eller deltagerlister, kan databasen blokere sletningen.',
+                'Dette kan ikke fortrydes. Hvis profilen bruges i aktiviteter eller deltagerlister, kan databasen blokere sletningen.',
           ),
           actions: [
             TextButton(
@@ -756,11 +708,11 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       });
 
       await Supabase.instance.client.rpc(
-      'delete_child_profile',
-      params: {
-        'input_profile_id': profile.id,
-      },
-    );
+        'delete_child_profile',
+        params: {
+          'input_profile_id': profile.id,
+        },
+      );
 
       await _loadProfiles();
 
@@ -807,11 +759,11 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
           icon: Icons.group_add_outlined,
           title: 'Nye forældre',
           text:
-              '${pendingRequests.length} anmodning(er) afventer godkendelse. Godkend kun personer, der skal have fuld forælderadgang til familien.',
+          '${pendingRequests.length} anmodning(er) afventer godkendelse. Godkend kun personer, der skal have fuld forælderadgang til familien.',
         ),
         const SizedBox(height: 12),
         ...pendingRequests.map(
-          (request) {
+              (request) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _ParentJoinRequestCard(
@@ -828,6 +780,8 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   }
 
   Widget _buildBody() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(),
@@ -850,7 +804,10 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
               Text(
                 _errorMessage!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 15),
+                style: TextStyle(
+                  fontSize: 15,
+                  color: colorScheme.onSurface,
+                ),
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
@@ -871,15 +828,16 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.group_outlined,
                 size: 42,
-                color: Colors.black54,
+                color: colorScheme.onSurface.withValues(alpha: 0.55),
               ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Der blev ikke fundet nogen profiler.',
                 textAlign: TextAlign.center,
+                style: TextStyle(color: colorScheme.onSurface),
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
@@ -915,11 +873,10 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
               ),
             ],
           ),
-        
           _buildJoinRequestsSection(),
           const SizedBox(height: 16),
           ..._profiles.map(
-            (profile) {
+                (profile) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _ProfileCard(
@@ -929,7 +886,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
                   roleColor: _roleColor(profile.role),
                   isProcessing: _processingProfileId == profile.id,
                   onResetCode:
-                      profile.isChild ? () => _resetChildCode(profile) : null,
+                  profile.isChild ? () => _resetChildCode(profile) : null,
                   onDeactivate: profile.isChild
                       ? () => _showProfileRemovalOptions(profile)
                       : null,
@@ -950,17 +907,22 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFA2E5AD),
+      backgroundColor: isDark
+          ? const Color(0xFF050706)
+          : colorScheme.primaryContainer,
       floatingActionButton: _parentProfile == null
           ? null
           : FloatingActionButton.extended(
-              onPressed: _isLoading ? null : _showCreateChildSheet,
-              backgroundColor: const Color(0xFF2E7D32),
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.person_add_alt_1),
-              label: const Text('Tilføj barn'),
-            ),
+        onPressed: _isLoading ? null : _showCreateChildSheet,
+        backgroundColor: const Color(0xFF2E7D32),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.person_add_alt_1),
+        label: const Text('Tilføj barn'),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -974,8 +936,15 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark
+                        ? const Color(0xFF101312)
+                        : colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF2A2D2C)
+                          : Colors.transparent,
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: _buildBody(),
@@ -1008,7 +977,7 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _displayNameController = TextEditingController();
   final TextEditingController _emojiController =
-      TextEditingController(text: '🧒');
+  TextEditingController(text: '🧒');
 
   ProfileRole _selectedRole = ProfileRole.childLimited;
   bool _isSaving = false;
@@ -1091,16 +1060,21 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF101312) : colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(
             top: Radius.circular(24),
+          ),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2A2D2C) : Colors.transparent,
           ),
         ),
         child: SafeArea(
@@ -1118,25 +1092,28 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                       width: 44,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE0E0E0),
+                        color: isDark
+                            ? const Color(0xFF2A2D2C)
+                            : const Color(0xFFE0E0E0),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Tilføj barn',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'Opret en børneprofil og vælg, hvor meget adgang barnet skal have.',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.black87,
+                      color: colorScheme.onSurface.withValues(alpha: 0.85),
                       height: 1.4,
                     ),
                   ),
@@ -1182,11 +1159,12 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const Text(
+                  Text(
                     'Adgangsniveau',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1198,10 +1176,10 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                     onChanged: _isSaving
                         ? null
                         : (value) {
-                            setState(() {
-                              _selectedRole = value;
-                            });
-                          },
+                      setState(() {
+                        _selectedRole = value;
+                      });
+                    },
                   ),
                   const SizedBox(height: 8),
                   _RoleOptionTile(
@@ -1212,10 +1190,10 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                     onChanged: _isSaving
                         ? null
                         : (value) {
-                            setState(() {
-                              _selectedRole = value;
-                            });
-                          },
+                      setState(() {
+                        _selectedRole = value;
+                      });
+                    },
                   ),
                   const SizedBox(height: 20),
                   Row(
@@ -1223,7 +1201,7 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                       Expanded(
                         child: OutlinedButton(
                           onPressed:
-                              _isSaving ? null : () => Navigator.pop(context),
+                          _isSaving ? null : () => Navigator.pop(context),
                           child: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 13),
                             child: Text('Annuller'),
@@ -1242,13 +1220,13 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                             padding: const EdgeInsets.symmetric(vertical: 13),
                             child: _isSaving
                                 ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
                                 : const Text('Opret'),
                           ),
                         ),
@@ -1277,13 +1255,16 @@ class _FamilyCodeCard extends StatelessWidget {
     final hasCode = familyCode != null && familyCode!.trim().isNotEmpty;
     final displayCode = hasCode ? familyCode!.trim() : 'Ingen kode fundet';
 
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E9),
+        color: isDark ? const Color(0xFF171A19) : const Color(0xFFE8F5E9),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF2E7D32).withValues(alpha: 0.25),
+          color: const Color(0xFF2E7D32).withValues(alpha: 0.35),
         ),
       ),
       child: Row(
@@ -1299,20 +1280,20 @@ class _FamilyCodeCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Familiens kode',
+                Text(
+                  'Familie kode',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Denne kode bruges sammen med barnets egen login-kode ved børnelogin.',
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.black87,
+                    color: colorScheme.onSurface.withValues(alpha: 0.85),
                     height: 1.35,
                   ),
                 ),
@@ -1324,7 +1305,7 @@ class _FamilyCodeCard extends StatelessWidget {
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? const Color(0xFF101312) : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: hasCode
@@ -1339,7 +1320,7 @@ class _FamilyCodeCard extends StatelessWidget {
                       fontSize: hasCode ? 24 : 15,
                       fontWeight: FontWeight.bold,
                       letterSpacing: hasCode ? 2 : 0,
-                      color: hasCode ? Colors.black : Colors.redAccent,
+                      color: hasCode ? colorScheme.onSurface : Colors.redAccent,
                     ),
                   ),
                 ),
@@ -1383,13 +1364,16 @@ class _ParentJoinRequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E1),
+        color: isDark ? const Color(0xFF171A19) : const Color(0xFFFFF8E1),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: const Color(0xFFFFECB3),
+          color: isDark ? const Color(0xFF2A2D2C) : const Color(0xFFFFECB3),
         ),
       ),
       child: Column(
@@ -1399,7 +1383,7 @@ class _ParentJoinRequestCard extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: Colors.white,
+                backgroundColor: isDark ? const Color(0xFF101312) : Colors.white,
                 child: Text(
                   request.requestedEmoji,
                   style: const TextStyle(fontSize: 23),
@@ -1412,17 +1396,18 @@ class _ParentJoinRequestCard extends StatelessWidget {
                   children: [
                     Text(
                       request.requestedDisplayName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Anmodet: ${_formatDateTime(request.createdAt)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: Colors.black54,
+                        color: colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   ],
@@ -1437,11 +1422,11 @@ class _ParentJoinRequestCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Denne person får fuld forælderadgang, hvis anmodningen godkendes.',
             style: TextStyle(
               fontSize: 13,
-              color: Colors.black87,
+              color: colorScheme.onSurface.withValues(alpha: 0.85),
               height: 1.35,
             ),
           ),
@@ -1513,14 +1498,23 @@ class _ProfileCardState extends State<_ProfileCard> {
     final hasChildLoginCode =
         childLoginCode != null && childLoginCode.isNotEmpty;
 
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final cardColor = isDark
+        ? const Color(0xFF171A19)
+        : colorScheme.surfaceContainerHighest;
+
+    final innerCardColor = isDark ? const Color(0xFF101312) : Colors.white;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F4),
+        color: cardColor,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: profile.isActive
-              ? const Color(0xFFE0E0E0)
+              ? (isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0))
               : Colors.redAccent.withValues(alpha: 0.35),
         ),
       ),
@@ -1531,7 +1525,7 @@ class _ProfileCardState extends State<_ProfileCard> {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: Colors.white,
+                backgroundColor: innerCardColor,
                 child: Text(
                   profile.emoji,
                   style: const TextStyle(fontSize: 24),
@@ -1544,17 +1538,18 @@ class _ProfileCardState extends State<_ProfileCard> {
                   children: [
                     Text(
                       profile.displayName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       profile.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: Colors.black54,
+                        color: colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   ],
@@ -1571,7 +1566,7 @@ class _ProfileCardState extends State<_ProfileCard> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: innerCardColor,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: widget.roleColor.withValues(alpha: 0.35),
@@ -1601,9 +1596,9 @@ class _ProfileCardState extends State<_ProfileCard> {
                       const SizedBox(height: 4),
                       Text(
                         widget.roleDescription,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: Colors.black87,
+                          color: colorScheme.onSurface.withValues(alpha: 0.85),
                           height: 1.35,
                         ),
                       ),
@@ -1620,10 +1615,10 @@ class _ProfileCardState extends State<_ProfileCard> {
               onPressed: widget.isProcessing ? null : widget.onRemoveParent,
               icon: widget.isProcessing
                   ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
                   : const Icon(Icons.person_remove_outlined),
               label: const Text('Fjern forælder'),
               style: OutlinedButton.styleFrom(
@@ -1639,20 +1634,27 @@ class _ProfileCardState extends State<_ProfileCard> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: innerCardColor,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFFE0E0E0),
+                  color: isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0),
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.key_outlined, size: 20),
+                  Icon(
+                    Icons.key_outlined,
+                    size: 20,
+                    color: colorScheme.onSurface,
+                  ),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Barnets login-kode',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1665,17 +1667,18 @@ class _ProfileCardState extends State<_ProfileCard> {
                           fontWeight: FontWeight.bold,
                           letterSpacing: hasChildLoginCode ? 1.4 : 0,
                           color: hasChildLoginCode
-                              ? Colors.black
+                              ? colorScheme.onSurface
                               : Colors.redAccent,
                         ),
                       ),
                     )
                   else
-                    const Text(
+                    Text(
                       '••••••',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.4,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                   const SizedBox(width: 8),
@@ -1716,9 +1719,9 @@ class _ProfileCardState extends State<_ProfileCard> {
               onChanged: widget.onChangeRole == null
                   ? null
                   : (value) {
-                      if (value == null || value == profile.role) return;
-                      widget.onChangeRole!(value);
-                    },
+                if (value == null || value == profile.role) return;
+                widget.onChangeRole!(value);
+              },
             ),
             const SizedBox(height: 12),
             Row(
@@ -1726,7 +1729,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed:
-                        widget.isProcessing ? null : widget.onResetCode,
+                    widget.isProcessing ? null : widget.onResetCode,
                     icon: const Icon(Icons.refresh),
                     label: const Text('Ny kode'),
                   ),
@@ -1735,13 +1738,13 @@ class _ProfileCardState extends State<_ProfileCard> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed:
-                        widget.isProcessing ? null : widget.onDeactivate,
+                    widget.isProcessing ? null : widget.onDeactivate,
                     icon: widget.isProcessing
                         ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                         : const Icon(Icons.manage_accounts_outlined),
                     label: const Text('Deaktivér / slet'),
                   ),
@@ -1773,6 +1776,8 @@ class _RoleOptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = value == groupValue;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -1780,10 +1785,16 @@ class _RoleOptionTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE8F5E9) : const Color(0xFFF4F4F4),
+          color: selected
+              ? const Color(0xFF2E7D32).withValues(alpha: isDark ? 0.22 : 0.12)
+              : (isDark
+              ? const Color(0xFF171A19)
+              : colorScheme.surfaceContainerHighest),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? const Color(0xFF2E7D32) : const Color(0xFFE0E0E0),
+            color: selected
+                ? const Color(0xFF2E7D32)
+                : (isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0)),
             width: selected ? 1.4 : 1,
           ),
         ),
@@ -1791,7 +1802,9 @@ class _RoleOptionTile extends StatelessWidget {
           children: [
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: selected ? const Color(0xFF2E7D32) : Colors.black54,
+              color: selected
+                  ? const Color(0xFF2E7D32)
+                  : colorScheme.onSurface.withValues(alpha: 0.55),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -1800,16 +1813,17 @@ class _RoleOptionTile extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
+                      color: colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Colors.black87,
+                      color: colorScheme.onSurface.withValues(alpha: 0.85),
                       height: 1.35,
                     ),
                   ),
@@ -1834,10 +1848,10 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 17,
         fontWeight: FontWeight.w600,
-        color: Colors.black,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
@@ -1856,16 +1870,24 @@ class _InlineInfoBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F4),
+        color: isDark
+            ? const Color(0xFF171A19)
+            : colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2A2D2C) : Colors.transparent,
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 24, color: Colors.black87),
+          Icon(icon, size: 24, color: colorScheme.onSurface),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1873,18 +1895,18 @@ class _InlineInfoBox extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   text,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Colors.black87,
+                    color: colorScheme.onSurface.withValues(alpha: 0.85),
                     height: 1.4,
                   ),
                 ),

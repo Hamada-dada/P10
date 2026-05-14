@@ -1032,16 +1032,22 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_isLoadingProfiles) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFA2E5AD),
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: isDark
+            ? const Color(0xFF050706)
+            : colorScheme.primaryContainer,
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_profilesError != null) {
       return Scaffold(
-        backgroundColor: const Color(0xFFA2E5AD),
+        backgroundColor: isDark
+            ? const Color(0xFF050706)
+            : colorScheme.primaryContainer,
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -1049,24 +1055,24 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
               width: 420,
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF171A19) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.error_outline,
                     size: 34,
-                    color: Colors.black54,
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     _profilesError!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
-                      color: Colors.black87,
+                      color: colorScheme.onSurface,
                       height: 1.4,
                     ),
                   ),
@@ -1103,7 +1109,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         .toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFA2E5AD),
+      backgroundColor: isDark
+          ? const Color(0xFF050706)
+          : colorScheme.primaryContainer,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -1117,8 +1125,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                   clipBehavior: Clip.antiAlias,
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? const Color(0xFF101312) : colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF2A2D2C) : Colors.transparent,
+                    ),
                   ),
                   child: Form(
                     key: _formKey,
@@ -1208,7 +1219,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    tileColor: const Color(0xFFF8F8F8),
+                                    tileColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                                     contentPadding:
                                         const EdgeInsets.symmetric(
                                       horizontal: 12,
@@ -1401,7 +1412,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    tileColor: const Color(0xFFF8F8F8),
+                                    tileColor: colorScheme.surfaceContainerHighest,
                                   ),
                                   if (_recurrenceEnabled) ...[
                                     const SizedBox(height: 12),
@@ -1519,10 +1530,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                   ),
                                   const SizedBox(height: 10),
                                   if (_selectedParticipants.isEmpty)
-                                    const Text(
+                                    Text(
                                       'Ingen deltagere valgt',
                                       style: TextStyle(
-                                        color: Colors.black54,
+                                        color: colorScheme.onSurface.withValues(alpha: 0.6),
                                         fontSize: 14,
                                       ),
                                     )
@@ -1597,7 +1608,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                                         top: 6,
                                                         right: 6,
                                                         child: Material(
-                                                          color: Colors.white,
+                                                          color: isDark ? const Color(0xFF171A19) : Colors.white,
                                                           shape:
                                                               const CircleBorder(),
                                                           elevation: 2,
@@ -1667,16 +1678,16 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                                   _showChecklist
                                                       ? Icons.checklist_rtl
                                                       : Icons.checklist_outlined,
-                                                  color: Colors.black87,
+                                                  color: colorScheme.onSurface,
                                                 ),
                                               ),
                                               IconButton(
                                                 tooltip: 'Tilføj billede',
                                                 onPressed:
                                                     _showImageSourceDialog,
-                                                icon: const Icon(
+                                                icon: Icon(
                                                   Icons.camera_alt_outlined,
-                                                  color: Colors.black87,
+                                                  color: colorScheme.onSurface,
                                                 ),
                                               ),
                                             ],
@@ -1695,10 +1706,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                               const EdgeInsets.only(bottom: 8),
                                           child: Row(
                                             children: [
-                                              const Icon(
+                                              Icon(
                                                 Icons.check_box_outline_blank,
                                                 size: 22,
-                                                color: Colors.black54,
+                                                color: colorScheme.onSurface.withValues(alpha: 0.6),
                                               ),
                                               const SizedBox(width: 8),
                                               Expanded(
@@ -1738,7 +1749,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
                                       ),
-                                      tileColor: const Color(0xFFF8F8F8),
+                                      tileColor: colorScheme.surfaceContainerHighest,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
                                         horizontal: 12,
@@ -1801,7 +1812,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
                                       ),
-                                      tileColor: const Color(0xFFF8F8F8),
+                                      tileColor: colorScheme.surfaceContainerHighest,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
                                         horizontal: 12,
@@ -1893,9 +1904,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                                       ),
                                       child: Text(
                                         'Valgt nu: direkte = ${_rewardTitleById(_selectedDirectRewardId)}, langsigtet = ${_rewardTitleById(_selectedStreakRewardId)}',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 14,
-                                          color: Colors.black87,
+                                          color: colorScheme.onSurface,
                                           height: 1.4,
                                         ),
                                       ),
@@ -1943,26 +1954,28 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         IconButton(
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: onBack,
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back,
             size: 30,
-            color: Colors.black,
+            color: colorScheme.onSurface,
           ),
         ),
         const Spacer(),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Italiana',
             fontSize: 26,
             fontWeight: FontWeight.w400,
-            color: Colors.black,
+            color: colorScheme.onSurface,
           ),
         ),
         const Spacer(),
@@ -1987,24 +2000,34 @@ class _PickerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8F8F8),
+          color: isDark
+              ? const Color(0xFF171A19)
+              : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE0E0E0)),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0),
+          ),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: Colors.black87),
+            Icon(icon, size: 20, color: colorScheme.onSurface),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 '$label: $value',
-                style: const TextStyle(fontSize: 15, color: Colors.black),
+                style: TextStyle(
+                  fontSize: 15,
+                  color: colorScheme.onSurface,
+                ),
               ),
             ),
           ],
