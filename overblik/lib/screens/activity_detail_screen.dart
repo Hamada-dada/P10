@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/activity.dart';
 import '../models/profile.dart';
+import '../models/reward.dart';
 import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
 import '../services/profile_service.dart';
@@ -489,6 +490,26 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
       if (updatedActivity != null) {
         await _activityService.updateActivity(updatedActivity);
+        if (_activity.isCompleted && updatedActivity.isCompleted) {
+          final oldRewardIds = {
+            if (_activity.directRewardId != null) _activity.directRewardId!,
+            if (_activity.streakRewardId != null) _activity.streakRewardId!,
+          };
+
+          final newRewardIds = {
+            if (updatedActivity.directRewardId != null) updatedActivity.directRewardId!,
+            if (updatedActivity.streakRewardId != null) updatedActivity.streakRewardId!,
+          };
+
+          final addedRewardIds = newRewardIds.difference(oldRewardIds);
+
+          for (final rewardId in addedRewardIds) {
+            await _rewardService.updateRewardProgress(
+              rewardId: rewardId,
+              delta: 1,
+            );
+          }
+        }
 
         if (!mounted) return;
 
@@ -713,11 +734,17 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     final showBottomActions = _canEditActivity || _canDeleteActivity;
 
     final directReward = _activity.directRewardId != null
-        ? _rewardService.getRewardById(_activity.directRewardId!)
+        ? _rewardService.cachedRewards
+        .where((reward) => reward.id == _activity.directRewardId)
+        .cast<Reward?>()
+        .firstOrNull
         : null;
 
     final streakReward = _activity.streakRewardId != null
-        ? _rewardService.getRewardById(_activity.streakRewardId!)
+        ? _rewardService.cachedRewards
+        .where((reward) => reward.id == _activity.streakRewardId)
+        .cast<Reward?>()
+        .firstOrNull
         : null;
 
     return Scaffold(
