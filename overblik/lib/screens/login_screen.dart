@@ -328,7 +328,7 @@ class _BrandHeader extends StatelessWidget {
           fontFamily: 'Italiana',
           fontSize: 36,
           fontWeight: FontWeight.w400,
-          color: Colors.black,
+          color: Color(0xFF1A3D1A),
           letterSpacing: 0.8,
         ),
       ),
@@ -463,7 +463,7 @@ class _SectionTitle extends StatelessWidget {
           title,
           style: const TextStyle(
             fontSize: 19,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             color: Colors.black,
           ),
         ),

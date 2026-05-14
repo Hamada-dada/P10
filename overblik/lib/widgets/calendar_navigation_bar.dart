@@ -81,102 +81,52 @@ class CalendarNavigationBar extends StatelessWidget {
         MediaQuery.of(context).orientation == Orientation.landscape;
 
     final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final titleFontSize = isLandscape ? 24.0 : 26.0;
-    final iconSize = isLandscape ? 26.0 : 28.0;
-    final topSpacing = isLandscape ? 6.0 : 8.0;
+    final titleFontSize = isLandscape ? 22.0 : 24.0;
+    final iconSize = isLandscape ? 24.0 : 26.0;
 
     final mainColor = colorScheme.onSurface;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          height: isLandscape ? 44 : 48,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  onPressed: onPrevious,
-                  icon: Icon(
-                    Icons.arrow_back_ios_new,
-                    size: iconSize,
-                    color: mainColor,
-                  ),
-                ),
-              ),
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 72),
-                  child: Text(
-                    _buildTitle(),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Italiana',
-                      fontSize: titleFontSize,
-                      fontWeight: FontWeight.w400,
-                      color: mainColor,
-                    ),
-                  ),
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showFilter)
-                      IconButton(
-                        onPressed: onFilterTap,
-                        icon: Icon(
-                          Icons.tune,
-                          size: iconSize,
-                          color: mainColor,
-                        ),
-                      ),
-                    IconButton(
-                      onPressed: onNext,
-                      icon: Icon(
-                        Icons.arrow_forward_ios,
-                        size: iconSize,
-                        color: mainColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+    return SizedBox(
+      height: isLandscape ? 44 : 48,
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onPrevious,
+            padding: EdgeInsets.zero,
+            icon: Icon(
+              Icons.arrow_back_ios_new,
+              size: iconSize,
+              color: mainColor,
+            ),
           ),
-        ),
-        SizedBox(height: topSpacing),
-        Center(
-          child: OutlinedButton(
-            onPressed: onToday,
-            style: OutlinedButton.styleFrom(
-              backgroundColor:
-              isDark ? const Color(0xFF171A19) : Colors.white,
-              foregroundColor: mainColor,
-              side: BorderSide(
-                color: isDark
-                    ? const Color(0xFF2A2D2C)
-                    : const Color(0xFFE0E0E0),
-              ),
-              shape: const StadiumBorder(),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-              textStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              _buildTitle(),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Italiana',
+                fontSize: titleFontSize,
+                fontWeight: FontWeight.w400,
+                color: mainColor,
               ),
             ),
-            child: const Text('I dag'),
           ),
-        ),
-      ],
+          const SizedBox(width: 4),
+          IconButton(
+            onPressed: onNext,
+            padding: EdgeInsets.zero,
+            icon: Icon(
+              Icons.arrow_forward_ios,
+              size: iconSize,
+              color: mainColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

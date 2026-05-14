@@ -119,9 +119,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           DropdownButtonFormField<int>(
                             key: ValueKey(_defaultReminderMinutes),
                             initialValue: _defaultReminderMinutes,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Standard påmindelsestid',
-                              border: OutlineInputBorder(),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                             items: NotificationPreferencesService
                                 .fixedReminderOptions
@@ -150,9 +152,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           DropdownButtonFormField<String>(
                             key: ValueKey(_notificationStyle),
                             initialValue: _notificationStyle,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Standard notifikationsstil',
-                              border: OutlineInputBorder(),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                             items: NotificationPreferencesService
                                 .notificationStyleOptions
@@ -182,7 +186,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             NotificationPreferencesService
                                 .notificationStyleDescription(_notificationStyle),
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 13,
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
@@ -204,9 +208,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const SizedBox(height: 12),
                           DropdownButtonFormField<ThemeMode>(
                             initialValue: _selectedThemeMode,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Tema',
-                              border: OutlineInputBorder(),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                             items: _themeModeOptions.entries
                                 .map(
@@ -232,9 +238,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const SizedBox(height: 12),
                           DropdownButtonFormField<AppColorOption>(
                             initialValue: _selectedColor,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Farve',
-                              border: OutlineInputBorder(),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                             items: _colorOptions.entries
                                 .map(

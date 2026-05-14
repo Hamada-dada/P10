@@ -106,10 +106,11 @@ class _Segment extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
 
-    final selectedBackground = isDark ? Colors.white : Colors.white;
-    final selectedTextColor = isDark ? Colors.black : Colors.black;
+    final selectedBackground =
+        isDark ? const Color(0xFF2A2D2C) : Colors.white;
+    final selectedTextColor = isDark ? Colors.white : Colors.black;
     final unselectedTextColor =
-    isDark ? Colors.white : colorScheme.onSurface;
+        isDark ? Colors.white70 : colorScheme.onSurface;
 
     return Expanded(
       child: Material(
@@ -121,9 +122,9 @@ class _Segment extends StatelessWidget {
             height: double.infinity,
             decoration: isSelected
                 ? BoxDecoration(
-              color: selectedBackground,
-              borderRadius: BorderRadius.circular(20),
-            )
+                    color: selectedBackground,
+                    borderRadius: BorderRadius.circular(20),
+                  )
                 : null,
             alignment: Alignment.center,
             child: Text(

@@ -696,10 +696,12 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFA2E5AD),
-        body: SafeArea(
+      return Scaffold(
+        backgroundColor: colorScheme.primaryContainer,
+        body: const SafeArea(
           child: Center(
             child: CircularProgressIndicator(),
           ),
@@ -723,7 +725,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         : null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFA2E5AD),
+      backgroundColor: colorScheme.primaryContainer,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -732,7 +734,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
               width: 420,
               constraints: const BoxConstraints(maxWidth: 420),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(20),
               ),
               clipBehavior: Clip.antiAlias,
@@ -741,6 +743,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: _TopBar(
+                      title: _activity.title,
                       onBack: () => Navigator.pop(context),
                     ),
                   ),
@@ -772,11 +775,11 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                   child: Text(
                                     '${_activity.title} ${_activity.emoji}',
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: 'Italiana',
                                       fontSize: 32,
                                       fontWeight: FontWeight.w400,
-                                      color: Colors.black,
+                                      color: colorScheme.onSurface,
                                       letterSpacing: 1.2,
                                     ),
                                   ),
@@ -792,12 +795,14 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                 dateText: _formatDate(_activity.startTime),
                                 timeText: _formatTime(_activity.startTime),
                               ),
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 12),
-                                child: Icon(
-                                  Icons.arrow_forward_ios,
-                                  size: 24,
-                                  color: Colors.black,
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  '→',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    color: colorScheme.onSurface.withValues(alpha: 0.5),
+                                  ),
                                 ),
                               ),
                               _TimeInfoCard(
@@ -811,10 +816,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             icon: Icons.edit_note,
                             child: Text(
                               _buildDescriptionText(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w400,
-                                color: Color(0xFF1D1B20),
+                                color: colorScheme.onSurface,
                                 height: 1.5,
                                 letterSpacing: 0.5,
                               ),
@@ -859,11 +864,12 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                               ),
                                               child: Icon(
                                                 checklistItem.isChecked
-                                                    ? Icons.check_box
-                                                    : Icons
-                                                        .check_box_outline_blank,
+                                                    ? Icons.check_circle
+                                                    : Icons.radio_button_unchecked,
                                                 size: 20,
-                                                color: Colors.black87,
+                                                color: checklistItem.isChecked
+                                                    ? colorScheme.primary
+                                                    : colorScheme.onSurface.withValues(alpha: 0.5),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
@@ -873,9 +879,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                                 style: TextStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w400,
-                                                  color: const Color(
-                                                    0xFF1D1B20,
-                                                  ),
+                                                  color: colorScheme.onSurface,
                                                   height: 1.5,
                                                   letterSpacing: 0.5,
                                                   decoration:
@@ -940,10 +944,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               icon: Icons.repeat,
                               child: Text(
                                 _buildRecurrenceText(),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w400,
-                                  color: Colors.black,
+                                  color: colorScheme.onSurface,
                                   height: 1.5,
                                   letterSpacing: 0.5,
                                 ),
@@ -955,10 +959,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             icon: Icons.group_outlined,
                             child: Text(
                               _buildParticipantsText(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w400,
-                                color: Colors.black,
+                                color: colorScheme.onSurface,
                                 height: 1.5,
                                 letterSpacing: 0.5,
                               ),
@@ -971,8 +975,16 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                   if (showBottomActions)
                     Container(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        border: Border(
+                          top: BorderSide(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.08),
+                          ),
+                        ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -982,6 +994,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               icon: Icons.delete_outline,
                               label: 'Slet',
                               onTap: _deleteActivity,
+                              isDestructive: true,
                             )
                           else
                             const SizedBox(width: 80),
@@ -990,6 +1003,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               icon: Icons.edit_outlined,
                               label: 'Rediger',
                               onTap: _editActivity,
+                              isDestructive: false,
                             )
                           else
                             const SizedBox(width: 80),
@@ -1007,22 +1021,41 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 }
 
 class _TopBar extends StatelessWidget {
+  final String title;
   final VoidCallback onBack;
 
   const _TopBar({
+    required this.title,
     required this.onBack,
   });
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         IconButton(
           onPressed: onBack,
-          icon: const Icon(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          icon: Icon(
             Icons.arrow_back_ios_new,
-            color: Colors.black,
-            size: 24,
+            color: colorScheme.onSurface,
+            size: 22,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+            ),
           ),
         ),
       ],
@@ -1041,17 +1074,18 @@ class _TimeInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 115,
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return IntrinsicWidth(
       child: Column(
         children: [
           Text(
             dateText,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
+            style: TextStyle(
+              fontSize: 15,
               fontWeight: FontWeight.w500,
-              color: Colors.black,
+              color: colorScheme.onSurface,
               height: 1.5,
               letterSpacing: 0.15,
             ),
@@ -1060,10 +1094,10 @@ class _TimeInfoCard extends StatelessWidget {
           Text(
             timeText,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
-              fontWeight: FontWeight.w500,
-              color: Colors.black,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
             ),
           ),
         ],
@@ -1083,15 +1117,17 @@ class _InfoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 44,
+          width: 36,
           child: Icon(
             icon,
-            size: 30,
-            color: Colors.black,
+            size: 22,
+            color: colorScheme.primary,
           ),
         ),
         const SizedBox(width: 8),
@@ -1099,7 +1135,7 @@ class _InfoSection extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFD9D9D9),
+              color: colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
             ),
             child: child,
@@ -1127,13 +1163,17 @@ class _RewardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.65),
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
+        border: Border.all(
+          color: colorScheme.onSurface.withValues(alpha: 0.12),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1156,16 +1196,16 @@ class _RewardCard extends StatelessWidget {
                     Icon(
                       icon,
                       size: 16,
-                      color: Colors.black87,
+                      color: colorScheme.primary,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          color: colorScheme.onSurface.withValues(alpha: 0.75),
                         ),
                       ),
                     ),
@@ -1174,18 +1214,18 @@ class _RewardCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   rewardTitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
-                    color: Colors.black54,
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
                     height: 1.35,
                   ),
                 ),
@@ -1202,28 +1242,26 @@ class _BottomActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool isDestructive;
 
   const _BottomActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
+    required this.isDestructive,
   });
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = isDestructive ? colorScheme.error : colorScheme.onSurface;
+
     return TextButton.icon(
       onPressed: onTap,
-      icon: Icon(
-        icon,
-        color: Colors.black,
-        size: 22,
-      ),
+      icon: Icon(icon, color: color, size: 22),
       label: Text(
         label,
-        style: const TextStyle(
-          color: Colors.black,
-          fontWeight: FontWeight.w500,
-        ),
+        style: TextStyle(color: color, fontWeight: FontWeight.w500),
       ),
     );
   }

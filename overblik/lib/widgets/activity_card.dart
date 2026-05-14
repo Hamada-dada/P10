@@ -34,7 +34,6 @@ class ActivityCard extends StatelessWidget {
         }
       }
 
-      // fallback if profile not found
       return participant.profileId!.substring(0, 2).toUpperCase();
     }
 
@@ -53,6 +52,9 @@ class ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -62,12 +64,12 @@ class ActivityCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8F8F8),
+            color: isDark ? const Color(0xFF171A19) : colorScheme.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: activity.isImportant
-                  ? Colors.red
-                  : const Color(0xFFE0E0E0),
+                  ? colorScheme.error
+                  : (isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0)),
               width: activity.isImportant ? 2 : 1,
             ),
           ),
@@ -75,50 +77,59 @@ class ActivityCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               IconButton(
-  tooltip: activity.isCompleted ? 'Marker som ikke færdig' : 'Marker som færdig',
-  onPressed: onCompletedChanged == null
-      ? null
-      : () => onCompletedChanged!(!activity.isCompleted),
-  icon: Icon(
-    activity.isCompleted
-        ? Icons.check_box
-        : Icons.check_box_outline_blank,
-    color: activity.isCompleted ? Colors.green : Colors.black54,
-  ),
-),
-const SizedBox(width: 4),
-              SizedBox(
-                width: 72,
-                child: Text(
-                  '${_formatTime(activity.startTime)}\n${_formatTime(activity.endTime)}',
-                  style: const TextStyle(
-                    fontFamily: 'Italiana',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w400,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '${activity.title} ${activity.emoji}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Italiana',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w400,
-                    color: Colors.black,
-                  ),
+                tooltip: activity.isCompleted
+                    ? 'Marker som ikke færdig'
+                    : 'Marker som færdig',
+                onPressed: onCompletedChanged == null
+                    ? null
+                    : () => onCompletedChanged!(!activity.isCompleted),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: Icon(
+                  activity.isCompleted
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                  color: activity.isCompleted
+                      ? colorScheme.primary
+                      : colorScheme.onSurface.withValues(alpha: 0.4),
+                  size: 26,
                 ),
               ),
               const SizedBox(width: 8),
+              SizedBox(
+                width: 60,
+                child: Text(
+                  '${_formatTime(activity.startTime)}\n${_formatTime(activity.endTime)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: colorScheme.onSurface.withValues(alpha: 0.75),
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${activity.title} ${activity.emoji}',
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontFamily: 'Italiana',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w400,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               Builder(
                 builder: (context) {
-                  final visibleParticipants = activity.participants
-                      .take(2)
-                      .toList();
+                  final visibleParticipants =
+                      activity.participants.take(1).toList();
                   final hiddenCount =
                       activity.participants.length - visibleParticipants.length;
 
@@ -134,16 +145,16 @@ const SizedBox(width: 4),
                         }
 
                         return Padding(
-                          padding: const EdgeInsets.only(right: 4),
+                          padding: const EdgeInsets.only(right: 3),
                           child: CircleAvatar(
-                            radius: 13,
-                            backgroundColor: const Color(0xFFA2E5AD),
+                            radius: 12,
+                            backgroundColor: colorScheme.primaryContainer,
                             child: Text(
                               initials,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.black,
+                                color: colorScheme.onPrimaryContainer,
                               ),
                             ),
                           ),
@@ -151,14 +162,16 @@ const SizedBox(width: 4),
                       }),
                       if (hiddenCount > 0)
                         CircleAvatar(
-                          radius: 15,
-                          backgroundColor: const Color(0xFFE0E0E0),
+                          radius: 12,
+                          backgroundColor: isDark
+                              ? const Color(0xFF2A2D2C)
+                              : const Color(0xFFE0E0E0),
                           child: Text(
                             '+$hiddenCount',
-                            style: const TextStyle(
-                              fontSize: 11,
+                            style: TextStyle(
+                              fontSize: 9,
                               fontWeight: FontWeight.w700,
-                              color: Colors.black,
+                              color: colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -166,7 +179,11 @@ const SizedBox(width: 4),
                   );
                 },
               ),
-              const Icon(Icons.chevron_right, color: Colors.black),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right,
+                color: colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
             ],
           ),
         ),

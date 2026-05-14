@@ -7,11 +7,13 @@ import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
 import '../services/profile_service.dart';
 import '../widgets/calendar_navigation_bar.dart';
+import '../widgets/content_action_row.dart';
 import '../widgets/filter_panel.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
 import 'daily_calendar_screen.dart';
+import 'login_screen.dart';
 import 'weekly_calendar_screen.dart';
 
 class MonthlyCalendarScreen extends StatefulWidget {
@@ -73,6 +75,7 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
   bool _showFamilyActivities = false;
 
   bool _isLoading = true;
+  bool _isLoggingOut = false;
 
   bool get _isChildSession => widget.isChildSession;
 
@@ -377,6 +380,20 @@ Future<void> _loadFilterProfiles() async {
     await _loadMonthActivities();
   }
 
+  Future<void> _logout() async {
+    setState(() => _isLoggingOut = true);
+    try {
+      await Supabase.instance.client.auth.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      if (mounted) setState(() => _isLoggingOut = false);
+    }
+  }
+
   Future<void> _openDay(DateTime selectedDate) async {
     await Navigator.push(
       context,
@@ -616,12 +633,6 @@ Future<void> _loadFilterProfiles() async {
     return _filterActivities(activities);
   }
 
-  bool get _hasAnyActivities {
-    return _activitiesByDate.values.any(
-      (activities) => _filterActivities(activities).isNotEmpty,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final weekRows = _buildWeekRows(_focusedDate);
@@ -658,16 +669,24 @@ Future<void> _loadFilterProfiles() async {
       backgroundColor: isDark
           ? const Color(0xFF050706)
           : colorScheme.primaryContainer,
-      body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: horizontalPadding,
-            vertical: verticalPadding,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity == null) return;
+          if (details.primaryVelocity! < -300) _goToNextMonth();
+          if (details.primaryVelocity! > 300) _goToPreviousMonth();
+        },
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _TopHeader(
+                onLogout: _logout,
+                isLoggingOut: _isLoggingOut,
                 showChildHeaderName: _showChildHeaderName,
                 displayName: _headerDisplayName,
               ),
@@ -706,53 +725,48 @@ Future<void> _loadFilterProfiles() async {
                   ),
                   child: Column(
                     children: [
-                      if (_canCreateActivity)
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _openCreateActivityScreen,
-                            icon: const Icon(Icons.add),
-                            label: const Text('Ny aktivitet'),
-                          ),
-                        ),
-                      if (_canCreateActivity) const SizedBox(height: 12),
+                      ContentActionRow(
+                        canCreate: _canCreateActivity,
+                        onNew: _openCreateActivityScreen,
+                        onToday: _goToToday,
+                        onFilter: _openFilterPanel,
+                      ),
+                      const SizedBox(height: 6),
                       _WeekdayHeaderRow(weekNumberWidth: weekNumberWidth),
                       const SizedBox(height: 8),
                       Expanded(
                         child: _isLoading
                             ? const Center(child: CircularProgressIndicator())
-                            : !_hasAnyActivities
-                                ? const _EmptyMonthView()
-                                : SingleChildScrollView(
-                                    child: Column(
-                                      children: weekRows
-                                          .map(
-                                            (week) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 8,
-                                              ),
-                                              child: _MonthWeekRow(
-                                                week: week,
-                                                focusedMonth:
-                                                    _focusedDate.month,
-                                                today: today,
-                                                weekNumber:
-                                                    _getWeekNumber(week[0]),
-                                                weekNumberWidth:
-                                                    weekNumberWidth,
-                                                cellHeight: cellHeight,
-                                                getActivitiesForDate:
-                                                    _getActivitiesForDate,
-                                                activityColorBuilder:
-                                                    _activityColor,
-                                                isSameDate: _isSameDate,
-                                                onTapDay: _openDay,
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                    ),
-                                  ),
+                            : SingleChildScrollView(
+                                child: Column(
+                                  children: weekRows
+                                      .map(
+                                        (week) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          child: _MonthWeekRow(
+                                            week: week,
+                                            focusedMonth:
+                                                _focusedDate.month,
+                                            today: today,
+                                            weekNumber:
+                                                _getWeekNumber(week[0]),
+                                            weekNumberWidth:
+                                                weekNumberWidth,
+                                            cellHeight: cellHeight,
+                                            getActivitiesForDate:
+                                                _getActivitiesForDate,
+                                            activityColorBuilder:
+                                                _activityColor,
+                                            isSameDate: _isSameDate,
+                                            onTapDay: _openDay,
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              ),
                       ),
                     ],
                   ),
@@ -762,15 +776,20 @@ Future<void> _loadFilterProfiles() async {
           ),
         ),
       ),
+      ),
     );
   }
 }
 
 class _TopHeader extends StatelessWidget {
+  final VoidCallback onLogout;
+  final bool isLoggingOut;
   final bool showChildHeaderName;
   final String? displayName;
 
   const _TopHeader({
+    required this.onLogout,
+    required this.isLoggingOut,
     required this.showChildHeaderName,
     this.displayName,
   });
@@ -782,14 +801,17 @@ class _TopHeader extends StatelessWidget {
     return Row(
       children: [
         IconButton(
+          tooltip: 'Log ud',
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
-          onPressed: () => Navigator.maybePop(context),
-          icon: Icon(
-            Icons.arrow_back,
-            size: 30,
-            color: colorScheme.onSurface,
-          ),
+          onPressed: isLoggingOut ? null : onLogout,
+          icon: isLoggingOut
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(Icons.logout, size: 28, color: colorScheme.onSurface),
         ),
         const Spacer(),
         if (showChildHeaderName)
@@ -967,12 +989,6 @@ class _MonthDayCell extends StatelessWidget {
         ? const Color(0xFFF8F8F8)
         : const Color(0xFFF1F1F1));
 
-    final borderColor = isToday
-        ? colorScheme.onSurface
-        : (isDark
-        ? const Color(0xFF2A2D2C)
-        : const Color(0xFFE0E0E0));
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final isVerySmallCell = constraints.maxWidth < 44;
@@ -991,22 +1007,44 @@ class _MonthDayCell extends StatelessWidget {
             decoration: BoxDecoration(
               color: backgroundColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderColor, width: isToday ? 2 : 1),
+              border: Border.all(
+                color: isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0),
+                width: 1,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${date.day}',
-                  maxLines: 1,
-                  overflow: TextOverflow.clip,
-                  style: TextStyle(
-                    fontFamily: 'Italiana',
-                    fontSize: isVerySmallCell ? 16 : 18,
-                    fontWeight: FontWeight.w400,
-                    color: textColor,
-                  ),
-                ),
+                isToday
+                    ? Container(
+                        width: isVerySmallCell ? 22 : 26,
+                        height: isVerySmallCell ? 22 : 26,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${date.day}',
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          style: TextStyle(
+                            fontSize: isVerySmallCell ? 12 : 13,
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.onPrimary,
+                          ),
+                        ),
+                      )
+                    : Text(
+                        '${date.day}',
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                        style: TextStyle(
+                          fontSize: isVerySmallCell ? 13 : 14,
+                          fontWeight: FontWeight.w500,
+                          color: textColor,
+                        ),
+                      ),
                 const Spacer(),
                 if (activities.isNotEmpty)
                   _CompactMonthActivityIndicator(
@@ -1073,35 +1111,3 @@ class _CompactMonthActivityIndicator extends StatelessWidget {
   }
 }
 
-class _EmptyMonthView extends StatelessWidget {
-  const _EmptyMonthView();
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.calendar_month_outlined,
-            size: 40,
-            color: colorScheme.onSurface.withValues(alpha: 0.45),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Ingen aktiviteter i denne måned',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Italiana',
-              fontSize: 24,
-              fontWeight: FontWeight.w400,
-              color: colorScheme.onSurface,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

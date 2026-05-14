@@ -8,11 +8,13 @@ import '../services/activity_service.dart';
 import '../services/profile_service.dart';
 import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
+import '../widgets/content_action_row.dart';
 import '../widgets/filter_panel.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
 import 'daily_calendar_screen.dart';
+import 'login_screen.dart';
 import 'monthly_calendar_screen.dart';
 
 class WeeklyCalendarScreen extends StatefulWidget {
@@ -74,6 +76,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   bool _showFamilyActivities = false;
 
   bool _isLoading = true;
+  bool _isLoggingOut = false;
 
   bool get _isChildSession => widget.isChildSession;
 
@@ -347,6 +350,20 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     await _loadWeekActivities();
   }
 
+  Future<void> _logout() async {
+    setState(() => _isLoggingOut = true);
+    try {
+      await Supabase.instance.client.auth.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      if (mounted) setState(() => _isLoggingOut = false);
+    }
+  }
+
   Future<void> _openDay(DateTime selectedDate) async {
     await Navigator.push(
       context,
@@ -539,12 +556,6 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     return '${normalized.year}-${normalized.month}-${normalized.day}';
   }
 
-  bool get _hasAnyActivities {
-    return _activitiesByDate.values.any(
-      (activities) => _filterActivities(activities).isNotEmpty,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final weekDays = _activityService.getWeekDates(_focusedDate);
@@ -569,16 +580,24 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
       backgroundColor: isDark
           ? const Color(0xFF050706)
           : colorScheme.primaryContainer,
-      body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: horizontalPadding,
-            vertical: verticalPadding,
-          ),
-          child: Column(
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity == null) return;
+          if (details.primaryVelocity! < -300) _goToNextWeek();
+          if (details.primaryVelocity! > 300) _goToPreviousWeek();
+        },
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
+            ),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _TopHeader(
+                onLogout: _logout,
+                isLoggingOut: _isLoggingOut,
                 showChildHeaderName: _showChildHeaderName,
                 displayName: _headerDisplayName,
               ),
@@ -617,21 +636,16 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
                   clipBehavior: Clip.antiAlias,
                   child: Column(
                     children: [
-                      if (_canCreateActivity)
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _openCreateActivityScreen,
-                            icon: const Icon(Icons.add),
-                            label: const Text('Ny aktivitet'),
-                          ),
-                        ),
-                      if (_canCreateActivity) const SizedBox(height: 12),
+                      ContentActionRow(
+                        canCreate: _canCreateActivity,
+                        onNew: _openCreateActivityScreen,
+                        onToday: _goToToday,
+                        onFilter: _openFilterPanel,
+                      ),
+                      const SizedBox(height: 6),
                       Expanded(
                         child: _isLoading
                             ? const Center(child: CircularProgressIndicator())
-                            : !_hasAnyActivities
-                            ? const _EmptyWeekView()
                             : ListView.separated(
                                 itemCount: weekDays.length,
                                 separatorBuilder: (_, _) =>
@@ -660,15 +674,23 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
           ),
         ),
       ),
+      ),
     );
   }
 }
 
 class _TopHeader extends StatelessWidget {
+  final VoidCallback onLogout;
+  final bool isLoggingOut;
   final bool showChildHeaderName;
   final String? displayName;
 
-  const _TopHeader({required this.showChildHeaderName, this.displayName});
+  const _TopHeader({
+    required this.onLogout,
+    required this.isLoggingOut,
+    required this.showChildHeaderName,
+    this.displayName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -677,10 +699,17 @@ class _TopHeader extends StatelessWidget {
     return Row(
       children: [
         IconButton(
+          tooltip: 'Log ud',
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
-          onPressed: () => Navigator.maybePop(context),
-          icon: Icon(Icons.arrow_back, size: 30, color: colorScheme.onSurface),
+          onPressed: isLoggingOut ? null : onLogout,
+          icon: isLoggingOut
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(Icons.logout, size: 28, color: colorScheme.onSurface),
         ),
         const Spacer(),
         if (showChildHeaderName)
@@ -802,15 +831,14 @@ class _WeekDayCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: 84,
+              width: 72,
               child: Text(
                 '${_weekdayName(date.weekday)}\n${date.day}/${date.month}',
                 style: TextStyle(
-                  fontFamily: 'Italiana',
-                  fontSize: 19,
-                  fontWeight: FontWeight.w400,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                   color: colorScheme.onSurface,
-                  height: 1.15,
+                  height: 1.25,
                 ),
               ),
             ),
@@ -885,34 +913,3 @@ class _WeekDayCard extends StatelessWidget {
   }
 }
 
-class _EmptyWeekView extends StatelessWidget {
-  const _EmptyWeekView();
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.view_week_outlined,
-            size: 40,
-            color: colorScheme.onSurface.withValues(alpha: 0.45),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Ingen aktiviteter i denne uge',
-            style: TextStyle(
-              fontFamily: 'Italiana',
-              fontSize: 24,
-              fontWeight: FontWeight.w400,
-              color: colorScheme.onSurface,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

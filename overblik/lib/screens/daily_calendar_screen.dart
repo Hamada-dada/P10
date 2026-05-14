@@ -14,6 +14,7 @@ import '../services/profile_service.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
+import '../widgets/content_action_row.dart';
 import '../widgets/filter_panel.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
@@ -596,7 +597,13 @@ Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor:
       isDark ? const Color(0xFF050706) : colorScheme.primaryContainer,
-      body: SafeArea(
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity == null) return;
+          if (details.primaryVelocity! < -300) _goToNextDay();
+          if (details.primaryVelocity! > 300) _goToPreviousDay();
+        },
+        child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -639,17 +646,14 @@ Widget build(BuildContext context) {
                   clipBehavior: Clip.antiAlias,
                   child: Column(
                     children: [
-                      if (_canCreateActivity)
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed:
-                            _isLoggingOut ? null : _openCreateActivityScreen,
-                            icon: const Icon(Icons.add),
-                            label: const Text('Ny aktivitet'),
-                          ),
-                        ),
-                      if (_canCreateActivity) const SizedBox(height: 12),
+                      ContentActionRow(
+                        canCreate: _canCreateActivity,
+                        isDisabled: _isLoggingOut,
+                        onNew: _openCreateActivityScreen,
+                        onToday: _goToToday,
+                        onFilter: _openFilterPanel,
+                      ),
+                      const SizedBox(height: 6),
                       _DailySummaryCard(activities: activities),
                       const SizedBox(height: 12),
                       Expanded(
@@ -741,6 +745,7 @@ Widget build(BuildContext context) {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -855,13 +860,25 @@ class _DailySummaryCard extends StatelessWidget {
           : Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Dagens overblik',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: colorScheme.onSurface.withValues(alpha: 0.9),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Dagens overblik',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurface.withValues(alpha: 0.9),
+                ),
+              ),
+              Text(
+                '${activities.length} aktivitet${activities.length == 1 ? '' : 'er'}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colorScheme.onSurface.withValues(alpha: 0.55),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           ActivityIndicators(
@@ -875,6 +892,58 @@ class _DailySummaryCard extends StatelessWidget {
             itemSpacing: 4,
             sectionSpacing: 10,
           ),
+          const SizedBox(height: 8),
+          _DotLegend(colorScheme: colorScheme),
+        ],
+      ),
+    );
+  }
+}
+
+class _DotLegend extends StatelessWidget {
+  final ColorScheme colorScheme;
+
+  const _DotLegend({required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    const items = [
+      (Colors.green, 'Udført'),
+      (Colors.red, 'Vigtig'),
+      (Colors.amber, 'Favorit'),
+      (Colors.purple, 'Familie'),
+      (Colors.blue, 'Personlig'),
+    ];
+
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          for (int i = 0; i < items.length; i++) ...[
+            if (i > 0) const SizedBox(width: 10),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: items[i].$1,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  items[i].$2,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colorScheme.onSurface.withValues(alpha: 0.55),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
