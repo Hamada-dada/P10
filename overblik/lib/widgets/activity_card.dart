@@ -24,18 +24,22 @@ class ActivityCard extends StatelessWidget {
   }
 
   String _participantLabel(ActivityParticipant participant) {
-    if (participant.externalName != null) {
-      return participant.externalName!.trim();
+    final externalName = participant.externalName?.trim();
+
+    if (externalName != null && externalName.isNotEmpty) {
+      return externalName;
     }
 
-    if (participant.profileId != null) {
+    final profileId = participant.profileId;
+
+    if (profileId != null && profileId.trim().isNotEmpty) {
       for (final profile in profiles) {
-        if (profile.id == participant.profileId) {
+        if (profile.id == profileId) {
           return profile.name.trim();
         }
       }
 
-      return participant.profileId!.substring(0, 2).toUpperCase();
+      return profileId.substring(0, 2).toUpperCase();
     }
 
     return '';
@@ -52,7 +56,11 @@ class ActivityCard extends StatelessWidget {
   }
 
   Color _borderColor(BuildContext context, bool isDark) {
-    if (activity.isImportant) return Colors.red;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (activity.isImportant) {
+      return colorScheme.error;
+    }
 
     return isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0);
   }
@@ -61,6 +69,10 @@ class ActivityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final cardColor = isDark ? const Color(0xFF171A19) : colorScheme.surface;
+
+    final mutedTextColor = colorScheme.onSurface.withValues(alpha: 0.65);
 
     return Material(
       color: Colors.transparent,
@@ -71,12 +83,10 @@ class ActivityCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF171A19) : colorScheme.surface,
+            color: cardColor,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: activity.isImportant
-                  ? colorScheme.error
-                  : (isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0)),
+              color: _borderColor(context, isDark),
               width: activity.isImportant ? 2 : 1,
             ),
           ),
@@ -90,38 +100,16 @@ class ActivityCard extends StatelessWidget {
                 onPressed: onCompletedChanged == null
                     ? null
                     : () => onCompletedChanged!(!activity.isCompleted),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 icon: Icon(
                   activity.isCompleted
-                      ? Icons.check_box
-                      : Icons.check_box_outline_blank,
-                  color: activity.isCompleted ? Colors.green : mutedTextColor,
-                ),
-              ),
-              const SizedBox(width: 4),
-              SizedBox(
-                width: 72,
-                child: Text(
-                  '${_formatTime(activity.startTime)}\n${_formatTime(activity.endTime)}',
-                  style: TextStyle(
-                    fontFamily: 'Italiana',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w400,
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '${activity.title} ${activity.emoji}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'Italiana',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w400,
-                    color: colorScheme.onSurface,
-                  ),
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                  color: activity.isCompleted
+                      ? colorScheme.primary
+                      : mutedTextColor,
+                  size: 26,
                 ),
               ),
               const SizedBox(width: 8),
@@ -176,16 +164,14 @@ class ActivityCard extends StatelessWidget {
                         return Padding(
                           padding: const EdgeInsets.only(right: 3),
                           child: CircleAvatar(
-                            radius: 13,
+                            radius: 12,
                             backgroundColor: colorScheme.primaryContainer,
                             child: Text(
                               initials,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
-                                color: isDark
-                                    ? Colors.black
-                                    : colorScheme.onSurface,
+                                color: colorScheme.onPrimaryContainer,
                               ),
                             ),
                           ),
@@ -193,14 +179,14 @@ class ActivityCard extends StatelessWidget {
                       }),
                       if (hiddenCount > 0)
                         CircleAvatar(
-                          radius: 15,
+                          radius: 12,
                           backgroundColor: isDark
                               ? const Color(0xFF2A2D2C)
                               : const Color(0xFFE0E0E0),
                           child: Text(
                             '+$hiddenCount',
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 9,
                               fontWeight: FontWeight.w700,
                               color: colorScheme.onSurface,
                             ),
@@ -210,9 +196,10 @@ class ActivityCard extends StatelessWidget {
                   );
                 },
               ),
+              const SizedBox(width: 4),
               Icon(
                 Icons.chevron_right,
-                color: colorScheme.onSurface,
+                color: colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ],
           ),
