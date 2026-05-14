@@ -5,29 +5,27 @@ import 'reward_type_chip.dart';
 
 class RewardCard extends StatelessWidget {
   final Reward reward;
+  final String? assignedProfileName;
   final VoidCallback? onDelete;
   final VoidCallback? onTap;
 
   const RewardCard({
     super.key,
     required this.reward,
+    this.assignedProfileName,
     this.onDelete,
     this.onTap,
   });
 
   String _profileLabel() {
-    final profile = reward.assignedProfile.trim();
-    if (profile.isEmpty) {
-      return 'Ingen profil valgt';
-    }
+    final profile = assignedProfileName?.trim() ?? '';
+    if (profile.isEmpty) return 'Ingen profil valgt';
     return profile;
   }
 
   String _emojiLabel() {
     final emoji = reward.emoji.trim();
-    if (emoji.isEmpty) {
-      return '🎁';
-    }
+    if (emoji.isEmpty) return '🎁';
     return emoji;
   }
 
@@ -133,11 +131,6 @@ class RewardCard extends StatelessWidget {
                   const RewardTypeChip(
                     icon: Icons.trending_up_outlined,
                     label: 'Langsigtet',
-                  ),
-                if (!reward.isDirectReward && !reward.isStreakReward)
-                  const RewardTypeChip(
-                    icon: Icons.remove_circle_outline,
-                    label: 'Ingen type valgt',
                   ),
               ],
             ),

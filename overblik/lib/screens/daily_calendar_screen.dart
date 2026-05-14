@@ -11,6 +11,7 @@ import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
 import '../services/notification_service.dart';
 import '../services/profile_service.dart';
+import '../services/reward_service.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
@@ -76,6 +77,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   );
 
   final ProfileService _profileService = ProfileService();
+  final RewardService _rewardService = RewardService();
 
   late DateTime _focusedDate;
 
@@ -581,6 +583,46 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
       ),
     );
   }
+  Future<void> _handleRewardProgress(
+      Activity activity,
+      bool isCompleted,
+      ) async {
+    final rewardIds = <String>[
+      if (activity.directRewardId != null &&
+          activity.directRewardId!.trim().isNotEmpty)
+        activity.directRewardId!,
+      if (activity.streakRewardId != null &&
+          activity.streakRewardId!.trim().isNotEmpty)
+        activity.streakRewardId!,
+    ];
+
+    for (final rewardId in rewardIds) {
+      final beforeReward = await _rewardService.getRewardById(rewardId);
+
+      await _rewardService.updateRewardProgress(
+        rewardId: rewardId,
+        delta: isCompleted ? 1 : -1,
+      );
+
+      final afterReward = await _rewardService.getRewardById(rewardId);
+
+      if (!mounted || afterReward == null) continue;
+
+      final wasTriggered = beforeReward?.isTriggered == true;
+      final isNowTriggered = afterReward.isTriggered;
+
+      if (!wasTriggered && isNowTriggered) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Belønning udløst: ${afterReward.emoji} ${afterReward.title}',
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
 
   @override
 Widget build(BuildContext context) {
@@ -699,11 +741,17 @@ Widget build(BuildContext context) {
                                   });
 
                                   try {
-                                    await _activityService
-                                        .setActivityCompleted(
+                                    await _activityService.setActivityCompleted(
                                       activityId: activity.id,
                                       isCompleted: isCompleted,
                                     );
+
+                                    if (isCompleted != activity.isCompleted) {
+                                      await _handleRewardProgress(
+                                        activity,
+                                        isCompleted,
+                                      );
+                                    }
                                   } catch (_) {
                                     if (!mounted) return;
 
