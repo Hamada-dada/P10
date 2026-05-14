@@ -152,15 +152,17 @@ class ActivityCard extends StatelessWidget {
                           padding: const EdgeInsets.only(right: 4),
                           child: CircleAvatar(
                             radius: 13,
-                            backgroundColor: colorScheme.primaryContainer,
+                            backgroundColor: isDark
+                                ? colorScheme.primary
+                                : colorScheme.primaryContainer,
                             child: Text(
                               initials,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 color: isDark
-                                    ? Colors.black
-                                    : colorScheme.onSurface,
+                                    ? colorScheme.onPrimary
+                                    : colorScheme.onPrimaryContainer,
                               ),
                             ),
                           ),
