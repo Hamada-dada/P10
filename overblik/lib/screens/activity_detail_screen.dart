@@ -184,7 +184,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       return _loadProfileNamesForLegacyChild();
     }
 
-    final profile = currentProfile ??
+    final profile =
+        currentProfile ??
         _currentProfile ??
         await _profileService.getCurrentAuthenticatedProfile();
 
@@ -250,8 +251,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     try {
       final currentProfile = await _loadCurrentProfileForSession();
 
-      final freshActivity =
-          await _activityService.getActivityById(widget.activity.id);
+      final freshActivity = await _activityService.getActivityById(
+        widget.activity.id,
+      );
 
       final activityToShow = freshActivity ?? widget.activity;
 
@@ -459,9 +461,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kunne ikke opdatere tjeklisten.'),
-        ),
+        const SnackBar(content: Text('Kunne ikke opdatere tjeklisten.')),
       );
     }
   }
@@ -505,9 +505,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kunne ikke gemme ændringerne.'),
-        ),
+        const SnackBar(content: Text('Kunne ikke gemme ændringerne.')),
       );
     }
   }
@@ -559,9 +557,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kunne ikke slette aktiviteten.'),
-        ),
+        const SnackBar(content: Text('Kunne ikke slette aktiviteten.')),
       );
     }
   }
@@ -598,9 +594,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             fit: BoxFit.contain,
                             errorBuilder: (context, error, stackTrace) =>
                                 const Text(
-                              'Kunne ikke vise billedet',
-                              style: TextStyle(color: Colors.white),
-                            ),
+                                  'Kunne ikke vise billedet',
+                                  style: TextStyle(color: Colors.white),
+                                ),
                           )
                         : Image.file(
                             File(_activity.imagePath),
@@ -666,11 +662,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         child: const Text(
           'Billede gemt, men forhåndsvisning understøttes ikke i webversionen endnu.',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.black87,
-            height: 1.4,
-          ),
+          style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
         ),
       );
     }
@@ -696,14 +688,15 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFA2E5AD),
-        body: SafeArea(
-          child: Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
+      return Scaffold(
+        backgroundColor: isDark
+            ? const Color(0xFF050706)
+            : colorScheme.primaryContainer,
+        body: const SafeArea(child: Center(child: CircularProgressIndicator())),
       );
     }
 
@@ -723,7 +716,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         : null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFA2E5AD),
+      backgroundColor: isDark
+          ? const Color(0xFF050706)
+          : colorScheme.primaryContainer,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -732,17 +727,18 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
               width: 420,
               constraints: const BoxConstraints(maxWidth: 420),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF101312) : colorScheme.surface,
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF2A2D2C) : Colors.transparent,
+                ),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: _TopBar(
-                      onBack: () => Navigator.pop(context),
-                    ),
+                    child: _TopBar(onBack: () => Navigator.pop(context)),
                   ),
                   Expanded(
                     child: SingleChildScrollView(
@@ -772,11 +768,11 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                   child: Text(
                                     '${_activity.title} ${_activity.emoji}',
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: 'Italiana',
                                       fontSize: 32,
                                       fontWeight: FontWeight.w400,
-                                      color: Colors.black,
+                                      color: colorScheme.onSurface,
                                       letterSpacing: 1.2,
                                     ),
                                   ),
@@ -792,12 +788,14 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                 dateText: _formatDate(_activity.startTime),
                                 timeText: _formatTime(_activity.startTime),
                               ),
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 12),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
                                 child: Icon(
                                   Icons.arrow_forward_ios,
                                   size: 24,
-                                  color: Colors.black,
+                                  color: colorScheme.onSurface,
                                 ),
                               ),
                               _TimeInfoCard(
@@ -811,10 +809,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             icon: Icons.edit_note,
                             child: Text(
                               _buildDescriptionText(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w400,
-                                color: Color(0xFF1D1B20),
+                                color: colorScheme.onSurface,
                                 height: 1.5,
                                 letterSpacing: 0.5,
                               ),
@@ -861,9 +859,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                                 checklistItem.isChecked
                                                     ? Icons.check_box
                                                     : Icons
-                                                        .check_box_outline_blank,
+                                                          .check_box_outline_blank,
                                                 size: 20,
-                                                color: Colors.black87,
+                                                color: colorScheme.onSurface,
                                               ),
                                             ),
                                             const SizedBox(width: 8),
@@ -873,16 +871,14 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                                 style: TextStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w400,
-                                                  color: const Color(
-                                                    0xFF1D1B20,
-                                                  ),
+                                                  color: colorScheme.onSurface,
                                                   height: 1.5,
                                                   letterSpacing: 0.5,
                                                   decoration:
                                                       checklistItem.isChecked
-                                                          ? TextDecoration
-                                                              .lineThrough
-                                                          : TextDecoration.none,
+                                                      ? TextDecoration
+                                                            .lineThrough
+                                                      : TextDecoration.none,
                                                 ),
                                               ),
                                             ),
@@ -907,7 +903,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                     _RewardCard(
                                       title: 'Direkte belønning',
                                       emoji: directReward?.emoji ?? '🎁',
-                                      rewardTitle: directReward?.title ??
+                                      rewardTitle:
+                                          directReward?.title ??
                                           'Ukendt belønning',
                                       subtitle:
                                           'Kan opnås efter denne aktivitet',
@@ -923,7 +920,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                     _RewardCard(
                                       title: 'Langsigtet belønning',
                                       emoji: streakReward?.emoji ?? '🏆',
-                                      rewardTitle: streakReward?.title ??
+                                      rewardTitle:
+                                          streakReward?.title ??
                                           'Ukendt belønning',
                                       subtitle: _activity.streakTarget != null
                                           ? 'Opnås efter ${_activity.streakTarget} gange'
@@ -940,10 +938,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               icon: Icons.repeat,
                               child: Text(
                                 _buildRecurrenceText(),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w400,
-                                  color: Colors.black,
+                                  color: colorScheme.onSurface,
                                   height: 1.5,
                                   letterSpacing: 0.5,
                                 ),
@@ -955,10 +953,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             icon: Icons.group_outlined,
                             child: Text(
                               _buildParticipantsText(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w400,
-                                color: Colors.black,
+                                color: colorScheme.onSurface,
                                 height: 1.5,
                                 letterSpacing: 0.5,
                               ),
@@ -971,8 +969,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                   if (showBottomActions)
                     Container(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF101312)
+                            : colorScheme.surface,
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1009,19 +1009,19 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 class _TopBar extends StatelessWidget {
   final VoidCallback onBack;
 
-  const _TopBar({
-    required this.onBack,
-  });
+  const _TopBar({required this.onBack});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         IconButton(
           onPressed: onBack,
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back_ios_new,
-            color: Colors.black,
+            color: colorScheme.onSurface,
             size: 24,
           ),
         ),
@@ -1034,13 +1034,12 @@ class _TimeInfoCard extends StatelessWidget {
   final String dateText;
   final String timeText;
 
-  const _TimeInfoCard({
-    required this.dateText,
-    required this.timeText,
-  });
+  const _TimeInfoCard({required this.dateText, required this.timeText});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return SizedBox(
       width: 115,
       child: Column(
@@ -1048,10 +1047,10 @@ class _TimeInfoCard extends StatelessWidget {
           Text(
             dateText,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
-              color: Colors.black,
+              color: colorScheme.onSurface,
               height: 1.5,
               letterSpacing: 0.15,
             ),
@@ -1060,10 +1059,10 @@ class _TimeInfoCard extends StatelessWidget {
           Text(
             timeText,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w500,
-              color: Colors.black,
+              color: colorScheme.onSurface,
             ),
           ),
         ],
@@ -1076,31 +1075,34 @@ class _InfoSection extends StatelessWidget {
   final IconData icon;
   final Widget child;
 
-  const _InfoSection({
-    required this.icon,
-    required this.child,
-  });
+  const _InfoSection({required this.icon, required this.child});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
           width: 44,
-          child: Icon(
-            icon,
-            size: 30,
-            color: Colors.black,
-          ),
+          child: Icon(icon, size: 30, color: colorScheme.onSurface),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFD9D9D9),
+              color: isDark
+                  ? const Color(0xFF171A19)
+                  : colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF2A2D2C)
+                    : const Color(0xFFE0E0E0),
+              ),
             ),
             child: child,
           ),
@@ -1127,24 +1129,28 @@ class _RewardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.65),
+        color: isDark ? const Color(0xFF101312) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2A2D2C) : const Color(0xFFE0E0E0),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(
             radius: 22,
-            backgroundColor: const Color(0xFFF8F8F8),
-            child: Text(
-              emoji,
-              style: const TextStyle(fontSize: 22),
-            ),
+            backgroundColor: isDark
+                ? const Color(0xFF171A19)
+                : const Color(0xFFF8F8F8),
+            child: Text(emoji, style: const TextStyle(fontSize: 22)),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1153,19 +1159,15 @@ class _RewardCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(
-                      icon,
-                      size: 16,
-                      color: Colors.black87,
-                    ),
+                    Icon(icon, size: 16, color: colorScheme.onSurface),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          color: colorScheme.onSurface.withValues(alpha: 0.85),
                         ),
                       ),
                     ),
@@ -1174,18 +1176,18 @@ class _RewardCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   rewardTitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
-                    color: Colors.black54,
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
                     height: 1.35,
                   ),
                 ),
@@ -1211,17 +1213,15 @@ class _BottomActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return TextButton.icon(
       onPressed: onTap,
-      icon: Icon(
-        icon,
-        color: Colors.black,
-        size: 22,
-      ),
+      icon: Icon(icon, color: colorScheme.onSurface, size: 22),
       label: Text(
         label,
-        style: const TextStyle(
-          color: Colors.black,
+        style: TextStyle(
+          color: colorScheme.onSurface,
           fontWeight: FontWeight.w500,
         ),
       ),
