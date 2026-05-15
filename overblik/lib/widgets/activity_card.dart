@@ -146,7 +146,7 @@ class ActivityCard extends StatelessWidget {
               Builder(
                 builder: (context) {
                   final visibleParticipants =
-                      activity.participants.take(1).toList();
+                      activity.participants.take(2).toList();
                   final hiddenCount =
                       activity.participants.length - visibleParticipants.length;
 
@@ -164,14 +164,18 @@ class ActivityCard extends StatelessWidget {
                         return Padding(
                           padding: const EdgeInsets.only(right: 3),
                           child: CircleAvatar(
-                            radius: 12,
-                            backgroundColor: colorScheme.primaryContainer,
+                            radius: 13,
+                            backgroundColor: isDark
+                                ? colorScheme.primary
+                                : colorScheme.primaryContainer,
                             child: Text(
                               initials,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
-                                color: colorScheme.onPrimaryContainer,
+                                color: isDark
+                                    ? colorScheme.onPrimary
+                                    : colorScheme.onPrimaryContainer,
                               ),
                             ),
                           ),
@@ -179,14 +183,14 @@ class ActivityCard extends StatelessWidget {
                       }),
                       if (hiddenCount > 0)
                         CircleAvatar(
-                          radius: 12,
+                          radius: 13,
                           backgroundColor: isDark
                               ? const Color(0xFF2A2D2C)
                               : const Color(0xFFE0E0E0),
                           child: Text(
                             '+$hiddenCount',
                             style: TextStyle(
-                              fontSize: 9,
+                              fontSize: 10,
                               fontWeight: FontWeight.w700,
                               color: colorScheme.onSurface,
                             ),
