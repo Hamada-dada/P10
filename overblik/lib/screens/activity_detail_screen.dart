@@ -583,6 +583,35 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     }
   }
 
+  Future<void> _toggleActivityCompleted() async {
+    final newValue = !_activity.isCompleted;
+    final previous = _activity;
+
+    setState(() {
+      _activity = _activity.copyWith(isCompleted: newValue);
+    });
+
+    try {
+      await _activityService.setActivityCompleted(
+        activityId: _activity.id,
+        isCompleted: newValue,
+      );
+    } catch (e, st) {
+      debugPrint('ActivityDetailScreen _toggleActivityCompleted failed: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (!mounted) return;
+
+      setState(() {
+        _activity = previous;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kunne ikke opdatere aktiviteten.')),
+      );
+    }
+  }
+
   void _openImagePreview(BuildContext context) {
     if (_activity.imagePath.trim().isEmpty) return;
 
@@ -731,7 +760,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         _activity.directRewardId != null || _activity.streakRewardId != null;
     final hasChecklist = _activity.checklistItems.isNotEmpty;
     final hasRecurrence = _activity.recurrence != ActivityRecurrence.none;
-    final showBottomActions = _canEditActivity || _canDeleteActivity;
+    const showBottomActions = true;
 
     final directReward = _activity.directRewardId != null
         ? _rewardService.cachedRewards
@@ -777,12 +806,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                   ),
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        4,
-                        16,
-                        showBottomActions ? 16 : 24,
-                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -1037,6 +1061,14 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             )
                           else
                             const SizedBox(width: 80),
+                          _BottomActionButton(
+                            icon: _activity.isCompleted
+                                ? Icons.check_circle
+                                : Icons.radio_button_unchecked,
+                            label: _activity.isCompleted ? 'Udført' : 'Markér udført',
+                            onTap: _toggleActivityCompleted,
+                            isDestructive: false,
+                          ),
                           if (_canEditActivity)
                             _BottomActionButton(
                               icon: Icons.edit_outlined,

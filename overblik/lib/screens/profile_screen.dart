@@ -160,14 +160,7 @@ class ProfileScreen extends StatelessWidget {
                         const SizedBox(height: 10),
                         _FamilyMembersCard(familyMembers: familyMembers),
                         const SizedBox(height: 22),
-                        const _SectionTitle(title: 'Profiloplysninger'),
-                        const SizedBox(height: 10),
-                        _LargeInfoCard(
-                          icon: Icons.info_outline,
-                          title: 'Om profilen',
-                          body:
-                          '${profile.name} vises her med rolle, familieoversigt og adgang til relevante profilfunktioner.',
-                        ),
+                        //her kommer der en log ud knap
                       ],
                     ),
                   ),
@@ -349,7 +342,7 @@ class _ActionCard extends StatelessWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
+      onTap: isDisabled ? null : onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
         decoration: BoxDecoration(
@@ -435,6 +428,7 @@ class _FamilyMembersCard extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _LargeInfoCard extends StatelessWidget {
   final IconData icon;
   final String title;

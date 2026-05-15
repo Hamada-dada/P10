@@ -83,16 +83,14 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       if (!mounted) return;
 
       if (parentProfile == null) {
-        setState(() {
-          _parentProfile = null;
-          _familyCode = null;
-          _profiles = [];
-          _joinRequests = [];
-          _processingRequestId = null;
-          _processingProfileId = null;
-          _isLoading = false;
-          _errorMessage = 'Kunne ikke finde forælderprofilen.';
-        });
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Kun forældre kan administrere profiler.'),
+            ),
+          );
+        }
         return;
       }
 

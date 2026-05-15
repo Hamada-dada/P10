@@ -139,6 +139,13 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     return null;
   }
 
+  String? get _headerChildEmoji {
+    if (_currentProfile?.isChild == true) {
+      return _currentProfile?.emoji;
+    }
+    return null;
+  }
+
   bool get _showChildHeaderName {
     return _isChildSession || _currentProfile?.isChild == true;
   }
@@ -655,6 +662,7 @@ Widget build(BuildContext context) {
                 onLogout: _logout,
                 isLoggingOut: _isLoggingOut,
                 displayName: _headerDisplayName,
+                childEmoji: _headerChildEmoji,
                 showChildHeaderName: _showChildHeaderName,
               ),
               const SizedBox(height: 8),
@@ -804,17 +812,20 @@ class _TopHeader extends StatelessWidget {
   final bool isLoggingOut;
   final bool showChildHeaderName;
   final String? displayName;
+  final String? childEmoji;
 
   const _TopHeader({
     required this.onLogout,
     required this.isLoggingOut,
     required this.showChildHeaderName,
     this.displayName,
+    this.childEmoji,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Row(
       children: [
@@ -833,12 +844,25 @@ class _TopHeader extends StatelessWidget {
         ),
         const Spacer(),
         if (showChildHeaderName)
-          Text(
-            displayName ?? 'Barn',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: colorScheme.onSurface.withValues(alpha: 0.85),
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF2A2D2C)
+                    : colorScheme.primary.withValues(alpha: 0.25),
+                width: 1.5,
+              ),
+            ),
+            child: CircleAvatar(
+              radius: 22,
+              backgroundColor: isDark
+                  ? const Color(0xFF171A19)
+                  : Colors.white,
+              child: Text(
+                childEmoji ?? '🙂',
+                style: const TextStyle(fontSize: 20),
+              ),
             ),
           )
         else

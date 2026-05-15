@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../controllers/theme_controller.dart';
 import '../main.dart';
+import '../models/profile.dart';
 import '../services/notification_preferences.dart';
+import '../services/profile_service.dart';
 import '../widgets/app_top_header.dart';
 import 'manage_profiles_screen.dart';
 
@@ -21,6 +23,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ThemeMode _selectedThemeMode = themeController.themeMode;
   AppColorOption _selectedColor = themeController.colorOption;
 
+  Profile? _currentProfile;
+
   final Map<ThemeMode, String> _themeModeOptions = {
     ThemeMode.light: 'Lys tilstand',
     ThemeMode.dark: 'Mørk tilstand',
@@ -38,6 +42,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadNotificationDefaults();
+    _loadCurrentProfile();
+  }
+
+  Future<void> _loadCurrentProfile() async {
+    final profile = await ProfileService().getCurrentAuthenticatedProfile();
+    if (!mounted) return;
+    setState(() => _currentProfile = profile);
   }
 
   Future<void> _loadNotificationDefaults() async {
@@ -268,31 +279,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    _SettingsCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const _SectionTitle(
-                            title: 'Familieprofiler',
-                            icon: Icons.group_outlined,
-                          ),
-                          const SizedBox(height: 12),
-                          const _InlineInfoBox(
-                            icon: Icons.group_outlined,
-                            title: 'Administrér profiler',
-                            text:
-                                'Opret børneprofiler, vælg adgangsniveau, se login-koder og ændre børnenes rolle mellem begrænset og udvidet adgang.',
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: _openManageProfiles,
-                            icon: const Icon(Icons.manage_accounts_outlined),
-                            label: const Text('Administrér profiler'),
-                          ),
-                        ],
+                    if (_currentProfile?.isParent == true) ...[
+                      const SizedBox(height: 14),
+                      _SettingsCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const _SectionTitle(
+                              title: 'Familieprofiler',
+                              icon: Icons.group_outlined,
+                            ),
+                            const SizedBox(height: 12),
+                            const _InlineInfoBox(
+                              icon: Icons.group_outlined,
+                              title: 'Administrér profiler',
+                              text:
+                                  'Opret børneprofiler, vælg adgangsniveau, se login-koder og ændre børnenes rolle mellem begrænset og udvidet adgang.',
+                            ),
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: _openManageProfiles,
+                              icon: const Icon(Icons.manage_accounts_outlined),
+                              label: const Text('Administrér profiler'),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                     const SizedBox(height: 14),
                     const _SettingsCard(
                       child: Column(
