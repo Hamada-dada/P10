@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../main.dart' show themeController;
 import '../services/parent_join_service.dart';
 import 'daily_calendar_screen.dart';
 import 'login_screen.dart';
@@ -164,6 +165,7 @@ class _PendingParentRequestScreenState
   Future<void> _logout() async {
     try {
       await Supabase.instance.client.auth.signOut();
+      await themeController.setThemeMode(ThemeMode.light);
 
       if (!mounted) return;
 

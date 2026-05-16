@@ -112,6 +112,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
     Profile selectedProfile = childProfiles.first;
     RewardType selectedType = RewardType.direct;
     bool isSaving = false;
+    String? dialogError;
 
     final created = await showDialog<bool>(
       context: context,
@@ -151,7 +152,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: selectedProfile.id,
+                      initialValue: selectedProfile.id,
                       decoration: const InputDecoration(
                         labelText: 'Tilhører barn',
                         border: OutlineInputBorder(),
@@ -178,7 +179,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<RewardType>(
-                      value: selectedType,
+                      initialValue: selectedType,
                       decoration: const InputDecoration(
                         labelText: 'Belønningstype',
                         border: OutlineInputBorder(),
@@ -222,6 +223,16 @@ class _RewardsScreenState extends State<RewardsScreen> {
                         border: const OutlineInputBorder(),
                       ),
                     ),
+                    if (dialogError != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        dialogError!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -246,29 +257,22 @@ class _RewardsScreenState extends State<RewardsScreen> {
                             1;
 
                     if (title.isEmpty) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Skriv en titel til belønningen.',
-                          ),
-                        ),
-                      );
+                      setDialogState(() {
+                        dialogError = 'Skriv en titel til belønningen.';
+                      });
                       return;
                     }
 
                     if (targetCount < 1) {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Antal gennemførelser skal være mindst 1.',
-                          ),
-                        ),
-                      );
+                      setDialogState(() {
+                        dialogError = 'Antal gennemførelser skal være mindst 1.';
+                      });
                       return;
                     }
 
                     setDialogState(() {
                       isSaving = true;
+                      dialogError = null;
                     });
 
                     try {
@@ -297,15 +301,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
                       setDialogState(() {
                         isSaving = false;
+                        dialogError = 'Kunne ikke oprette belønning: $e';
                       });
-
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Kunne ikke oprette belønning: $e',
-                          ),
-                        ),
-                      );
                     }
                   },
                   child: isSaving

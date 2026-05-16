@@ -12,14 +12,40 @@ class RewardService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   List<Reward> _cachedRewards = [];
+  String? _cachedFamilyId;
 
   List<Reward> get cachedRewards => List.unmodifiable(_cachedRewards);
 
+  Future<String?> _getFamilyId() async {
+    if (_cachedFamilyId != null) return _cachedFamilyId;
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return null;
+    try {
+      final result = await _supabase
+          .from('profiles')
+          .select('family_id')
+          .eq('auth_user_id', userId)
+          .single();
+      _cachedFamilyId = result['family_id'] as String?;
+      return _cachedFamilyId;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void clearCache() {
+    _cachedFamilyId = null;
+    _cachedRewards = [];
+  }
+
   Future<List<Reward>> getAllRewards() async {
-    final result = await _supabase
-        .from('rewards')
-        .select()
-        .order('created_at', ascending: false);
+    final familyId = await _getFamilyId();
+
+    var query = _supabase.from('rewards').select();
+    if (familyId != null) {
+      query = query.eq('family_id', familyId);
+    }
+    final result = await query.order('created_at', ascending: false);
 
     final rewards = (result as List)
         .map((item) => Reward.fromMap(item))
@@ -45,11 +71,16 @@ class RewardService {
   }
 
   Future<List<Reward>> getRewardsForProfile(String profileId) async {
-    final result = await _supabase
+    final familyId = await _getFamilyId();
+
+    var query = _supabase
         .from('rewards')
         .select()
-        .eq('profile_id', profileId)
-        .order('created_at');
+        .eq('profile_id', profileId);
+    if (familyId != null) {
+      query = query.eq('family_id', familyId);
+    }
+    final result = await query.order('created_at');
 
     return (result as List)
         .map((item) => Reward.fromMap(item))
@@ -60,15 +91,18 @@ class RewardService {
       String profileId,
       RewardType type,
       ) async {
-    final rewardType =
-    type == RewardType.direct ? 'direct' : 'streak';
+    final familyId = await _getFamilyId();
+    final rewardType = type == RewardType.direct ? 'direct' : 'streak';
 
-    final result = await _supabase
+    var query = _supabase
         .from('rewards')
         .select()
         .eq('profile_id', profileId)
-        .eq('reward_type', rewardType)
-        .order('created_at');
+        .eq('reward_type', rewardType);
+    if (familyId != null) {
+      query = query.eq('family_id', familyId);
+    }
+    final result = await query.order('created_at');
 
     return (result as List)
         .map((item) => Reward.fromMap(item))

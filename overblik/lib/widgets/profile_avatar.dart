@@ -34,15 +34,6 @@ class _ProfileAvatarButtonState extends State<ProfileAvatarButton> {
           borderRadius: BorderRadius.circular(999),
           onTap: currentProfile == null
               ? null
-              : currentProfile.isChild
-              ? () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Profilsiden er ikke tilgængelig for børn.'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
               : () async {
                   final familyProfiles = await ProfileService()
                       .getFamilyProfiles(currentProfile.familyId);

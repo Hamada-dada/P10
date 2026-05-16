@@ -6,6 +6,7 @@ import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
 import '../services/profile_service.dart';
+import '../main.dart' show themeController;
 import '../widgets/calendar_navigation_bar.dart';
 import '../widgets/content_action_row.dart';
 import '../widgets/filter_panel.dart';
@@ -114,6 +115,13 @@ class _MonthlyCalendarScreenState extends State<MonthlyCalendarScreen> {
       return _currentProfile?.displayName;
     }
 
+    return null;
+  }
+
+  String? get _headerChildEmoji {
+    if (_currentProfile?.isChild == true) {
+      return _currentProfile?.emoji;
+    }
     return null;
   }
 
@@ -384,6 +392,7 @@ Future<void> _loadFilterProfiles() async {
     setState(() => _isLoggingOut = true);
     try {
       await Supabase.instance.client.auth.signOut();
+      await themeController.setThemeMode(ThemeMode.light);
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -689,6 +698,7 @@ Future<void> _loadFilterProfiles() async {
                 isLoggingOut: _isLoggingOut,
                 showChildHeaderName: _showChildHeaderName,
                 displayName: _headerDisplayName,
+                childEmoji: _headerChildEmoji,
               ),
               SizedBox(height: mediumGap),
               _ScreenTitle(fontSize: titleFontSize),
@@ -786,41 +796,52 @@ class _TopHeader extends StatelessWidget {
   final bool isLoggingOut;
   final bool showChildHeaderName;
   final String? displayName;
+  final String? childEmoji;
 
   const _TopHeader({
     required this.onLogout,
     required this.isLoggingOut,
     required this.showChildHeaderName,
     this.displayName,
+    this.childEmoji,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        IconButton(
-          tooltip: 'Log ud',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: isLoggingOut ? null : onLogout,
-          icon: isLoggingOut
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(Icons.logout, size: 28, color: colorScheme.onSurface),
-        ),
-        const Spacer(),
         if (showChildHeaderName)
-          Text(
-            displayName ?? 'Barn',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: colorScheme.onSurface.withValues(alpha: 0.85),
+          InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: isLoggingOut ? null : onLogout,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF2A2D2C)
+                      : colorScheme.primary.withValues(alpha: 0.25),
+                  width: 1.5,
+                ),
+              ),
+              child: CircleAvatar(
+                radius: 22,
+                backgroundColor: isDark ? const Color(0xFF171A19) : Colors.white,
+                child: isLoggingOut
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        childEmoji ?? '🙂',
+                        style: const TextStyle(fontSize: 20),
+                      ),
+              ),
             ),
           )
         else

@@ -1,10 +1,13 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../main.dart' show themeController;
 import '../models/profile.dart';
+import 'login_screen.dart';
 import 'rewards_screen.dart';
 import 'settings_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   final Profile profile;
   final List<String> familyMembers;
   final VoidCallback? onOpenCalendar;
@@ -22,8 +25,15 @@ class ProfileScreen extends StatelessWidget {
     this.onBack,
   });
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _isLoggingOut = false;
+
   String get _roleLabel {
-    switch (profile.role) {
+    switch (widget.profile.role) {
       case ProfileRole.parent:
         return 'Forælder';
       case ProfileRole.childExtended:
@@ -33,58 +43,83 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
-  bool get _canOpenSettings {
-    return profile.role == ProfileRole.parent;
-  }
+  bool get _canOpenSettings => widget.profile.role == ProfileRole.parent;
+  bool get _canOpenRewards => widget.profile.role == ProfileRole.parent;
 
-  bool get _canOpenRewards {
-    return profile.role == ProfileRole.parent;
-  }
-
-  void _openSettings(BuildContext context) {
+  void _openSettings() {
     if (!_canOpenSettings) {
-      _showMessage(context, 'Indstillinger er kun tilgængelige for forældre');
+      _showMessage('Indstillinger er kun tilgængelige for forældre');
       return;
     }
 
-    if (onOpenSettings != null) {
-      onOpenSettings!.call();
+    if (widget.onOpenSettings != null) {
+      widget.onOpenSettings!.call();
       return;
     }
 
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const SettingsScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
     );
   }
 
-  void _openRewards(BuildContext context) {
+  void _openRewards() {
     if (!_canOpenRewards) {
-      _showMessage(context, 'Belønninger kan kun administreres af forældre');
+      _showMessage('Belønninger kan kun administreres af forældre');
       return;
     }
 
-    if (onOpenRewards != null) {
-      onOpenRewards!.call();
+    if (widget.onOpenRewards != null) {
+      widget.onOpenRewards!.call();
       return;
     }
 
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const RewardsScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const RewardsScreen()),
     );
   }
 
-  void _showMessage(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(label),
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Log ud'),
+        content: const Text('Er du sikker på, at du vil logge ud?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuller'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Log ud'),
+          ),
+        ],
       ),
     );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoggingOut = true);
+
+    try {
+      await Supabase.instance.client.auth.signOut();
+      await themeController.setThemeMode(ThemeMode.light);
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      if (mounted) setState(() => _isLoggingOut = false);
+    }
+  }
+
+  void _showMessage(String label) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(label)));
   }
 
   @override
@@ -104,7 +139,7 @@ class ProfileScreen extends StatelessWidget {
             children: [
               _TopBar(
                 title: 'Profil',
-                onBack: onBack ?? () => Navigator.pop(context),
+                onBack: widget.onBack ?? () => Navigator.pop(context),
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -127,9 +162,9 @@ class ProfileScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _ProfileHeader(
-                          name: profile.name,
+                          name: widget.profile.name,
                           roleLabel: _roleLabel,
-                          emoji: profile.emoji,
+                          emoji: widget.profile.emoji,
                         ),
                         const SizedBox(height: 22),
                         const _SectionTitle(title: 'Hurtige handlinger'),
@@ -141,7 +176,7 @@ class ProfileScreen extends StatelessWidget {
                                 icon: Icons.card_giftcard_outlined,
                                 label: 'Belønninger',
                                 isDisabled: !_canOpenRewards,
-                                onTap: () => _openRewards(context),
+                                onTap: _openRewards,
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -150,7 +185,7 @@ class ProfileScreen extends StatelessWidget {
                                 icon: Icons.settings_outlined,
                                 label: 'Indstillinger',
                                 isDisabled: !_canOpenSettings,
-                                onTap: () => _openSettings(context),
+                                onTap: _openSettings,
                               ),
                             ),
                           ],
@@ -158,9 +193,12 @@ class ProfileScreen extends StatelessWidget {
                         const SizedBox(height: 22),
                         const _SectionTitle(title: 'Familie og deltagere'),
                         const SizedBox(height: 10),
-                        _FamilyMembersCard(familyMembers: familyMembers),
+                        _FamilyMembersCard(familyMembers: widget.familyMembers),
                         const SizedBox(height: 22),
-                        //her kommer der en log ud knap
+                        _LogoutButton(
+                          isLoading: _isLoggingOut,
+                          onTap: _logout,
+                        ),
                       ],
                     ),
                   ),
@@ -491,6 +529,36 @@ class _LargeInfoCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LogoutButton extends StatelessWidget {
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _LogoutButton({required this.isLoading, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: isLoading ? null : onTap,
+        icon: isLoading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.logout, size: 20),
+        label: const Text('Log ud'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Theme.of(context).colorScheme.error,
+          side: BorderSide(color: Theme.of(context).colorScheme.error),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
       ),
     );
   }

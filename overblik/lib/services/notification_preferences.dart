@@ -52,7 +52,7 @@ class NotificationPreferencesService {
   static String notificationStyleDescription(String style) {
     switch (style) {
       case 'rolig':
-        return 'Lyd, ingen vibration – mindre forstyrrende';
+        return 'Vibration, ingen lyd – mindre forstyrrende';
       case 'diskret':
         return 'Ingen lyd, ingen vibration – stille påmindelser';
       case 'tydelig':

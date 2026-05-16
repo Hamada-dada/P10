@@ -10,6 +10,7 @@ import '../widgets/activity_indicators.dart';
 import '../widgets/calendar_navigation_bar.dart';
 import '../widgets/content_action_row.dart';
 import '../widgets/filter_panel.dart';
+import '../main.dart' show themeController;
 import '../widgets/profile_avatar.dart';
 import '../widgets/view_switcher.dart';
 import 'create_activity_screen.dart';
@@ -361,6 +362,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     setState(() => _isLoggingOut = true);
     try {
       await Supabase.instance.client.auth.signOut();
+      await themeController.setThemeMode(ThemeMode.light);
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -708,40 +710,37 @@ class _TopHeader extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        IconButton(
-          tooltip: 'Log ud',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: isLoggingOut ? null : onLogout,
-          icon: isLoggingOut
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(Icons.logout, size: 28, color: colorScheme.onSurface),
-        ),
-        const Spacer(),
         if (showChildHeaderName)
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isDark
-                    ? const Color(0xFF2A2D2C)
-                    : colorScheme.primary.withValues(alpha: 0.25),
-                width: 1.5,
+          InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: isLoggingOut ? null : onLogout,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF2A2D2C)
+                      : colorScheme.primary.withValues(alpha: 0.25),
+                  width: 1.5,
+                ),
               ),
-            ),
-            child: CircleAvatar(
-              radius: 22,
-              backgroundColor: isDark
-                  ? const Color(0xFF171A19)
-                  : Colors.white,
-              child: Text(
-                childEmoji ?? '🙂',
-                style: const TextStyle(fontSize: 20),
+              child: CircleAvatar(
+                radius: 22,
+                backgroundColor: isDark
+                    ? const Color(0xFF171A19)
+                    : Colors.white,
+                child: isLoggingOut
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        childEmoji ?? '🙂',
+                        style: const TextStyle(fontSize: 20),
+                      ),
               ),
             ),
           )

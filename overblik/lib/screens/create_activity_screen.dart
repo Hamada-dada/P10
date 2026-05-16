@@ -639,6 +639,12 @@ Future<void> _pickStartTime() async {
 
   setState(() {
     _startTime = picked;
+    final startMinutes = picked.hour * 60 + picked.minute;
+    final endMinutes = _endTime.hour * 60 + _endTime.minute;
+    if (endMinutes <= startMinutes) {
+      final newEnd = startMinutes + 60;
+      _endTime = TimeOfDay(hour: (newEnd ~/ 60) % 24, minute: newEnd % 60);
+    }
   });
 }
 
@@ -801,11 +807,25 @@ Future<void> _showAddExternalParticipantDialog() async {
 
   controller.dispose();
 
-  if (!mounted || value == null || value
-      .trim()
-      .isEmpty) return;
+  if (!mounted || value == null || value.trim().isEmpty) {
+    return;
+  }
 
   final participant = value.trim();
+
+  if (participant == 'Familie') {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('"Familie" er et reserveret navn. Brug valgmuligheden i listen.')),
+    );
+    return;
+  }
+
+  if (_participantOptions.any((o) => o.toLowerCase() == participant.toLowerCase())) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('"$participant" findes allerede i listen.')),
+    );
+    return;
+  }
 
   setState(() {
     final nextOptions = _uniqueStrings([..._participantOptions, participant]);

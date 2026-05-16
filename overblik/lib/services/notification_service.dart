@@ -272,14 +272,15 @@ class NotificationService {
       case 'rolig':
         return const NotificationDetails(
           android: AndroidNotificationDetails(
-            'activity_reminders_rolig',
+            'activity_reminders_rolig_v2',
             'Aktivitetspåmindelser – Rolig',
-            channelDescription: 'Stille påmindelser uden vibration',
+            channelDescription: 'Påmindelser med vibration, ingen lyd',
             importance: Importance.defaultImportance,
             priority: Priority.defaultPriority,
-            enableVibration: false,
+            enableVibration: true,
+            playSound: false,
           ),
-          iOS: DarwinNotificationDetails(presentSound: true),
+          iOS: DarwinNotificationDetails(presentSound: false),
         );
       case 'diskret':
         return const NotificationDetails(

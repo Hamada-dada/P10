@@ -1050,34 +1050,47 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                         ),
                       ),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          if (_canDeleteActivity)
-                            _BottomActionButton(
-                              icon: Icons.delete_outline,
-                              label: 'Slet',
-                              onTap: _deleteActivity,
-                              isDestructive: true,
-                            )
-                          else
-                            const SizedBox(width: 80),
-                          _BottomActionButton(
-                            icon: _activity.isCompleted
-                                ? Icons.check_circle
-                                : Icons.radio_button_unchecked,
-                            label: _activity.isCompleted ? 'Udført' : 'Markér udført',
-                            onTap: _toggleActivityCompleted,
-                            isDestructive: false,
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: _canDeleteActivity
+                                  ? _BottomActionButton(
+                                      icon: Icons.delete_outline,
+                                      label: 'Slet',
+                                      onTap: _deleteActivity,
+                                      isDestructive: true,
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
                           ),
-                          if (_canEditActivity)
-                            _BottomActionButton(
-                              icon: Icons.edit_outlined,
-                              label: 'Rediger',
-                              onTap: _editActivity,
-                              isDestructive: false,
-                            )
-                          else
-                            const SizedBox(width: 80),
+                          Expanded(
+                            child: Center(
+                              child: _BottomActionButton(
+                                icon: _activity.isCompleted
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                label: _activity.isCompleted
+                                    ? 'Udført'
+                                    : 'Markér udført',
+                                onTap: _toggleActivityCompleted,
+                                isDestructive: false,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: _canEditActivity
+                                  ? _BottomActionButton(
+                                      icon: Icons.edit_outlined,
+                                      label: 'Rediger',
+                                      onTap: _editActivity,
+                                      isDestructive: false,
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ),
                         ],
                       ),
                     ),
