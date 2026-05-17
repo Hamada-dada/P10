@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../controllers/theme_controller.dart' show AppColorOption;
+import '../l10n/app_localizations.dart';
+import '../main.dart' show localeController, themeController;
 import '../services/parent_join_service.dart';
 import 'child_login_screen.dart';
 import 'daily_calendar_screen.dart';
@@ -24,6 +27,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
   bool _isParentLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    themeController.setThemeMode(ThemeMode.light);
+    themeController.setColorOption(AppColorOption.green);
+  }
 
   @override
   void dispose() {
@@ -103,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Noget gik galt under login: $e'),
+          content: Text(AppLocalizations.of(context).loginError(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -135,6 +145,8 @@ void _openNewParentFlow() {
 }
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
       body: SafeArea(
@@ -144,7 +156,13 @@ void _openNewParentFlow() {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 4),
-              const _BrandHeader(),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  const _BrandHeader(),
+                  const Positioned(right: 0, child: _LangToggle()),
+                ],
+              ),
               const SizedBox(height: 14),
               Expanded(
                 child: Container(
@@ -159,9 +177,9 @@ void _openNewParentFlow() {
                       children: [
                         const _FamilyHero(),
                         const SizedBox(height: 22),
-                        const _SectionTitle(
-                          title: 'Forælder',
-                          subtitle: 'Log ind, hvis du allerede har adgang.',
+                        _SectionTitle(
+                          title: l.loginParentSectionTitle,
+                          subtitle: l.loginParentSubtitle,
                         ),
                         const SizedBox(height: 14),
                         Form(
@@ -173,19 +191,12 @@ void _openNewParentFlow() {
                                 keyboardType: TextInputType.emailAddress,
                                 textInputAction: TextInputAction.next,
                                 decoration: _inputDecoration(
-                                  labelText: 'Email',
+                                  labelText: l.emailLabel,
                                 ),
                                 validator: (value) {
                                   final text = value?.trim() ?? '';
-
-                                  if (text.isEmpty) {
-                                    return 'Skriv din email';
-                                  }
-
-                                  if (!text.contains('@')) {
-                                    return 'Skriv en gyldig email';
-                                  }
-
+                                  if (text.isEmpty) return l.emailRequired;
+                                  if (!text.contains('@')) return l.emailInvalid;
                                   return null;
                                 },
                               ),
@@ -195,7 +206,7 @@ void _openNewParentFlow() {
                                 obscureText: _obscurePassword,
                                 textInputAction: TextInputAction.done,
                                 decoration: _inputDecoration(
-                                  labelText: 'Adgangskode',
+                                  labelText: l.passwordLabel,
                                   suffixIcon: IconButton(
                                     onPressed: () {
                                       setState(() {
@@ -211,15 +222,8 @@ void _openNewParentFlow() {
                                 ),
                                 validator: (value) {
                                   final text = value ?? '';
-
-                                  if (text.isEmpty) {
-                                    return 'Skriv din adgangskode';
-                                  }
-
-                                  if (text.length < 6) {
-                                    return 'Mindst 6 tegn';
-                                  }
-
+                                  if (text.isEmpty) return l.passwordRequired;
+                                  if (text.length < 6) return l.passwordTooShort;
                                   return null;
                                 },
                                 onFieldSubmitted: (_) {
@@ -256,9 +260,9 @@ void _openNewParentFlow() {
                                               color: Colors.white,
                                             ),
                                           )
-                                        : const Text(
-                                            'Log ind',
-                                            style: TextStyle(
+                                        : Text(
+                                            l.loginButton,
+                                            style: const TextStyle(
                                               fontSize: 15,
                                               fontWeight: FontWeight.w700,
                                             ),
@@ -336,11 +340,78 @@ class _BrandHeader extends StatelessWidget {
   }
 }
 
+class _LangToggle extends StatelessWidget {
+  const _LangToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    final current = localeController.locale.languageCode;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _LangChip(
+          label: 'DA',
+          selected: current == 'da',
+          onTap: () => localeController.setLocale(const Locale('da')),
+        ),
+        const SizedBox(width: 2),
+        _LangChip(
+          label: 'EN',
+          selected: current == 'en',
+          onTap: () => localeController.setLocale(const Locale('en')),
+        ),
+      ],
+    );
+  }
+}
+
+class _LangChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _LangChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: selected ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF2E7D32) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF2E7D32)
+                : const Color(0xFF1A3D1A).withValues(alpha: 0.4),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : const Color(0xFF1A3D1A),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FamilyHero extends StatelessWidget {
   const _FamilyHero();
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       decoration: BoxDecoration(
@@ -352,32 +423,19 @@ class _FamilyHero extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _HeroBubble(
-                emoji: '👩',
-                label: 'Mor',
-                size: 64,
-              ),
-              SizedBox(width: 12),
-              _HeroBubble(
-                emoji: '🧒',
-                label: 'Barn',
-                size: 76,
-                highlighted: true,
-              ),
-              SizedBox(width: 12),
-              _HeroBubble(
-                emoji: '👨',
-                label: 'Far',
-                size: 64,
-              ),
+              _HeroBubble(emoji: '👩', label: l.mom, size: 64),
+              const SizedBox(width: 12),
+              _HeroBubble(emoji: '🧒', label: l.child, size: 76, highlighted: true),
+              const SizedBox(width: 12),
+              _HeroBubble(emoji: '👨', label: l.dad, size: 64),
             ],
           ),
           const SizedBox(height: 14),
           Text(
-            'Et roligt overblik for hele familien',
+            l.familyTagline,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 15,
@@ -504,43 +562,48 @@ class _ChildLoginCard extends StatelessWidget {
               color: const Color(0xFFE0E0E0),
             ),
           ),
-          child: const Row(
-            children: [
-              Icon(
-                Icons.child_care_outlined,
-                size: 26,
-                color: Colors.black87,
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Barn',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black,
-                      ),
+          child: Builder(
+            builder: (ctx) {
+              final l = AppLocalizations.of(ctx);
+              return Row(
+                children: [
+                  const Icon(
+                    Icons.child_care_outlined,
+                    size: 26,
+                    color: Colors.black87,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l.childLoginCardTitle,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          l.childLoginCardSubtitle,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black54,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Log ind med familiekode og børnekode.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.black54,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: Colors.black54,
-              ),
-            ],
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: Colors.black54,
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -572,43 +635,48 @@ class _NewParentCard extends StatelessWidget {
               color: const Color(0xFFE4EFE6),
             ),
           ),
-          child: const Row(
-            children: [
-              Icon(
-                Icons.add_home_outlined,
-                size: 26,
-                color: Colors.black87,
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Ny forælder?',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black,
-                      ),
+          child: Builder(
+            builder: (ctx) {
+              final l = AppLocalizations.of(ctx);
+              return Row(
+                children: [
+                  const Icon(
+                    Icons.add_home_outlined,
+                    size: 26,
+                    color: Colors.black87,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l.newParentCardTitle,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          l.newParentCardSubtitle,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black54,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Opret en ny familie eller anmod om adgang til en eksisterende familie.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.black54,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: Colors.black54,
-              ),
-            ],
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: Colors.black54,
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),

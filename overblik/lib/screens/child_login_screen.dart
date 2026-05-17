@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import '../services/profile_service.dart';
 import 'daily_calendar_screen.dart';
 
@@ -29,77 +30,53 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
   }
 
   Future<void> _handleChildLogin() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    final l = AppLocalizations.of(context);
+
+    setState(() => _isLoading = true);
 
     final familyCode = _familyCodeController.text.trim().toUpperCase();
     final childCode = _childCodeController.text.trim();
 
     try {
-      debugPrint(
-        'ChildLoginScreen: logging in through Edge Function '
-        'familyCode=$familyCode childCode=$childCode',
-      );
-
       final childSession = await _profileService.loginChildWithCode(
         familyCode: familyCode,
         childCode: childCode,
       );
 
       if (childSession == null) {
-        throw Exception('Familiekoden eller børnekoden er forkert.');
+        throw Exception('WRONG_CODES');
       }
 
       final currentUser = Supabase.instance.client.auth.currentUser;
 
-      debugPrint(
-        'ChildLoginScreen: child login success '
-        'authUserId=${currentUser?.id} '
-        'familyId=${childSession.familyId} '
-        'profileId=${childSession.profileId} '
-        'displayName=${childSession.displayName} '
-        'role=${childSession.role}',
-      );
-
       if (currentUser == null) {
-        throw Exception(
-          'Børnelogin lykkedes, men der blev ikke oprettet en aktiv session.',
-        );
+        throw Exception('NO_SESSION');
       }
 
       if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => const DailyCalendarScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const DailyCalendarScreen()),
       );
     } on AuthException catch (e) {
-      debugPrint('ChildLoginScreen AuthException message: ${e.message}');
-
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Loginfejl: ${e.message}'),
+          content: Text(l.childLoginAuthError(e.message)),
           duration: const Duration(seconds: 5),
         ),
       );
-    } on FunctionException catch (e) {
-      debugPrint('ChildLoginScreen FunctionException: ${e.details}');
-
+    } on FunctionException catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kunne ikke logge barnet ind. Prøv igen.'),
-          duration: Duration(seconds: 5),
+        SnackBar(
+          content: Text(l.childLoginFailed),
+          duration: const Duration(seconds: 5),
         ),
       );
     } catch (e, st) {
@@ -108,18 +85,21 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
 
       if (!mounted) return;
 
+      final raw = e.toString().replaceFirst('Exception: ', '');
+      final message = raw == 'WRONG_CODES'
+          ? l.wrongCodes
+          : raw == 'NO_SESSION'
+              ? l.noSessionCreated
+              : raw;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(message),
           duration: const Duration(seconds: 5),
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -134,21 +114,19 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
       fillColor: const Color(0xFFF7F7F7),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: Color(0xFFE0E0E0),
-        ),
+        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: Color(0xFFE0E0E0),
-        ),
+        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
       body: SafeArea(
@@ -170,20 +148,20 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
                   children: [
                     const _ChildHero(),
                     const SizedBox(height: 22),
-                    const Text(
-                      'Log ind som barn',
+                    Text(
+                      l.childLoginTitle,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
                         color: Colors.black,
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Indtast familiekode og børnekode',
+                    Text(
+                      l.childLoginSubtitle,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 14,
                         color: Colors.black54,
                       ),
@@ -199,20 +177,13 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
                             textAlign: TextAlign.center,
                             textInputAction: TextInputAction.next,
                             decoration: _inputDecoration(
-                              labelText: 'Familiekode',
-                              hintText: 'Indtast familiekoden',
+                              labelText: l.familyCodeLabel,
+                              hintText: l.familyCodeHint,
                             ),
                             validator: (value) {
                               final text = value?.trim() ?? '';
-
-                              if (text.isEmpty) {
-                                return 'Skriv familiekoden';
-                              }
-
-                              if (text.length < 4) {
-                                return 'Familiekoden er for kort';
-                              }
-
+                              if (text.isEmpty) return l.familyCodeRequired;
+                              if (text.length < 4) return l.familyCodeTooShort;
                               return null;
                             },
                           ),
@@ -223,26 +194,17 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
                             textAlign: TextAlign.center,
                             textInputAction: TextInputAction.done,
                             decoration: _inputDecoration(
-                              labelText: 'Børnekode',
-                              hintText: 'Indtast børnekoden',
+                              labelText: l.childCodeLabel,
+                              hintText: l.childCodeHint,
                             ),
                             validator: (value) {
                               final text = value?.trim() ?? '';
-
-                              if (text.isEmpty) {
-                                return 'Skriv børnekoden';
-                              }
-
-                              if (text.length < 4) {
-                                return 'Børnekoden er for kort';
-                              }
-
+                              if (text.isEmpty) return l.childCodeRequired;
+                              if (text.length < 4) return l.childCodeTooShort;
                               return null;
                             },
                             onFieldSubmitted: (_) {
-                              if (!_isLoading) {
-                                _handleChildLogin();
-                              }
+                              if (!_isLoading) _handleChildLogin();
                             },
                           ),
                         ],
@@ -272,9 +234,9 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Text(
-                                  'Fortsæt',
-                                  style: TextStyle(
+                              : Text(
+                                  l.continueButton,
+                                  style: const TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -284,9 +246,8 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
                     ),
                     const SizedBox(height: 8),
                     TextButton(
-                      onPressed:
-                          _isLoading ? null : () => Navigator.pop(context),
-                      child: const Text('Tilbage'),
+                      onPressed: _isLoading ? null : () => Navigator.pop(context),
+                      child: Text(l.back),
                     ),
                   ],
                 ),
@@ -312,16 +273,10 @@ class _ChildHero extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFFDDF4E3),
             shape: BoxShape.circle,
-            border: Border.all(
-              color: const Color(0xFF8BCB99),
-              width: 2,
-            ),
+            border: Border.all(color: const Color(0xFF8BCB99), width: 2),
           ),
           alignment: Alignment.center,
-          child: const Text(
-            '🧒',
-            style: TextStyle(fontSize: 36),
-          ),
+          child: const Text('🧒', style: TextStyle(fontSize: 36)),
         ),
       ],
     );

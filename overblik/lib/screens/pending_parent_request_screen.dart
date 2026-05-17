@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import '../main.dart' show themeController;
 import '../services/parent_join_service.dart';
 import 'daily_calendar_screen.dart';
@@ -92,7 +93,7 @@ class _PendingParentRequestScreenState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke opdatere status: $e'),
+          content: Text(AppLocalizations.of(context).errorUpdateStatus(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -106,22 +107,21 @@ class _PendingParentRequestScreenState
       return;
     }
 
+    final l = AppLocalizations.of(context);
     final shouldCancel = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Annuller anmodning'),
-          content: const Text(
-            'Er du sikker på, at du vil annullere din anmodning?',
-          ),
+          title: Text(l.cancelRequestDialogTitle),
+          content: Text(l.cancelRequestDialogContent),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Nej'),
+              child: Text(l.no),
             ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Ja, annuller'),
+              child: Text(l.yesCancelButton),
             ),
           ],
         );
@@ -155,7 +155,7 @@ class _PendingParentRequestScreenState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke annullere anmodning: $e'),
+          content: Text(AppLocalizations.of(context).errorCancelRequest(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -181,7 +181,7 @@ class _PendingParentRequestScreenState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke logge ud: $e'),
+          content: Text(AppLocalizations.of(context).errorLogout(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -190,9 +190,10 @@ class _PendingParentRequestScreenState
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final familyName = _familyName?.trim().isNotEmpty == true
         ? _familyName!
-        : 'familien';
+        : l.family;
 
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
@@ -218,10 +219,10 @@ class _PendingParentRequestScreenState
                     color: Colors.black87,
                   ),
                   const SizedBox(height: 18),
-                  const Text(
-                    'Afventer godkendelse',
+                  Text(
+                    l.pendingApprovalTitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'Italiana',
                       fontSize: 30,
                       fontWeight: FontWeight.w400,
@@ -230,7 +231,7 @@ class _PendingParentRequestScreenState
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Din anmodning om adgang til $familyName er sendt. En eksisterende forælder skal godkende dig, før du får adgang.',
+                    l.pendingApprovalDescription(familyName),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 14,
@@ -254,7 +255,7 @@ class _PendingParentRequestScreenState
                               ),
                             )
                           : const Icon(Icons.refresh),
-                      label: const Text('Opdater status'),
+                      label: Text(l.updateStatus),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -271,12 +272,12 @@ class _PendingParentRequestScreenState
                             ),
                           )
                         : const Icon(Icons.close),
-                    label: const Text('Annuller anmodning'),
+                    label: Text(l.cancelRequest),
                   ),
                   const SizedBox(height: 8),
                   TextButton(
                     onPressed: _isLoading || _isCancelling ? null : _logout,
-                    child: const Text('Tilbage'),
+                    child: Text(l.back),
                   ),
                 ],
               ),

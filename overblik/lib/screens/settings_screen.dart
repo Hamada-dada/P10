@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/theme_controller.dart';
+import '../l10n/app_localizations.dart';
 import '../main.dart';
 import '../models/profile.dart';
 import '../services/notification_preferences.dart';
@@ -22,21 +23,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   ThemeMode _selectedThemeMode = themeController.themeMode;
   AppColorOption _selectedColor = themeController.colorOption;
+  String _selectedLocale = localeController.locale.languageCode;
 
   Profile? _currentProfile;
-
-  final Map<ThemeMode, String> _themeModeOptions = {
-    ThemeMode.light: 'Lys tilstand',
-    ThemeMode.dark: 'Mørk tilstand',
-  };
-
-  final Map<AppColorOption, String> _colorOptions = {
-    AppColorOption.green: 'Grøn',
-    AppColorOption.blue: 'Blå',
-    AppColorOption.purple: 'Lilla',
-    AppColorOption.orange: 'Orange',
-    AppColorOption.pink: 'Rosa',
-  };
 
   @override
   void initState() {
@@ -67,24 +56,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _openManageProfiles() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const ManageProfilesScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const ManageProfilesScreen()),
     );
   }
 
   void _showSavedSnackBar() {
+    final l = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Din ændring er gemt.'),
-      ),
+      SnackBar(content: Text(l.changesSaved)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final themeModeOptions = {
+      ThemeMode.light: l.lightMode,
+      ThemeMode.dark: l.darkMode,
+    };
+
+    final colorOptions = {
+      AppColorOption.green: l.colorGreen,
+      AppColorOption.blue: l.colorBlue,
+      AppColorOption.purple: l.colorPurple,
+      AppColorOption.orange: l.colorOrange,
+      AppColorOption.pink: l.colorPink,
+    };
 
     return Scaffold(
       backgroundColor:
@@ -95,9 +95,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const AppTopHeader(
-                title: 'Indstillinger',
-              ),
+              AppTopHeader(title: l.settingsTitle),
               const SizedBox(height: 12),
               Expanded(
                 child: ListView(
@@ -107,8 +105,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const _SectionTitle(
-                            title: 'Notifikationer',
+                          _SectionTitle(
+                            title: l.notificationsSectionTitle,
                             icon: Icons.notifications_none_outlined,
                           ),
                           const SizedBox(height: 12),
@@ -119,11 +117,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               await NotificationPreferencesService()
                                   .saveDefaultEnabled(value);
                             },
-                            title: const Text('Notifikationer til nye aktiviteter'),
-                            subtitle: const Text(
-                              'Standardindstilling for nye aktiviteter. '
-                              'Kan ændres per aktivitet.',
-                            ),
+                            title: Text(l.notificationsForNewActivities),
+                            subtitle: Text(l.notificationsNewActivitiesSubtitle),
                             contentPadding: EdgeInsets.zero,
                           ),
                           const Divider(),
@@ -131,7 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             key: ValueKey(_defaultReminderMinutes),
                             initialValue: _defaultReminderMinutes,
                             decoration: InputDecoration(
-                              labelText: 'Standard påmindelsestid',
+                              labelText: l.defaultReminderTime,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
@@ -141,10 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 .map(
                                   (m) => DropdownMenuItem<int>(
                                     value: m,
-                                    child: Text(
-                                      NotificationPreferencesService
-                                          .reminderLabel(m),
-                                    ),
+                                    child: Text(l.reminderLabel(m)),
                                   ),
                                 )
                                 .toList(),
@@ -164,7 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             key: ValueKey(_notificationStyle),
                             initialValue: _notificationStyle,
                             decoration: InputDecoration(
-                              labelText: 'Standard notifikationsstil',
+                              labelText: l.defaultNotifStyle,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
@@ -174,19 +166,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 .map(
                                   (s) => DropdownMenuItem(
                                     value: s,
-                                    child: Text(
-                                      NotificationPreferencesService
-                                          .notificationStyleLabel(s),
-                                    ),
+                                    child: Text(l.notificationStyleLabel(s)),
                                   ),
                                 )
                                 .toList(),
                             onChanged: _defaultEnabled
                                 ? (value) async {
                                     if (value == null) return;
-                                    setState(
-                                      () => _notificationStyle = value,
-                                    );
+                                    setState(() => _notificationStyle = value);
                                     await NotificationPreferencesService()
                                         .saveDefaultNotificationStyle(value);
                                   }
@@ -194,8 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            NotificationPreferencesService
-                                .notificationStyleDescription(_notificationStyle),
+                            l.notificationStyleDescription(_notificationStyle),
                             style: TextStyle(
                               fontSize: 13,
                               color: Theme.of(context)
@@ -212,20 +198,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const _SectionTitle(
-                            title: 'Udseende',
+                          _SectionTitle(
+                            title: l.appearanceSectionTitle,
                             icon: Icons.palette_outlined,
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<ThemeMode>(
                             initialValue: _selectedThemeMode,
                             decoration: InputDecoration(
-                              labelText: 'Tema',
+                              labelText: l.themeLabel,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            items: _themeModeOptions.entries
+                            items: themeModeOptions.entries
                                 .map(
                                   (entry) => DropdownMenuItem(
                                     value: entry.key,
@@ -235,13 +221,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 .toList(),
                             onChanged: (value) async {
                               if (value == null) return;
-
-                              setState(() {
-                                _selectedThemeMode = value;
-                              });
-
+                              setState(() => _selectedThemeMode = value);
                               await themeController.setThemeMode(value);
-
                               if (!context.mounted) return;
                               _showSavedSnackBar();
                             },
@@ -250,12 +231,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           DropdownButtonFormField<AppColorOption>(
                             initialValue: _selectedColor,
                             decoration: InputDecoration(
-                              labelText: 'Farve',
+                              labelText: l.colorLabel,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            items: _colorOptions.entries
+                            items: colorOptions.entries
                                 .map(
                                   (entry) => DropdownMenuItem(
                                     value: entry.key,
@@ -265,13 +246,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 .toList(),
                             onChanged: (value) async {
                               if (value == null) return;
-
-                              setState(() {
-                                _selectedColor = value;
-                              });
-
+                              setState(() => _selectedColor = value);
                               await themeController.setColorOption(value);
-
+                              if (!context.mounted) return;
+                              _showSavedSnackBar();
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            key: ValueKey(_selectedLocale),
+                            initialValue: _selectedLocale,
+                            decoration: InputDecoration(
+                              labelText: l.languageLabel,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            items: [
+                              DropdownMenuItem(
+                                value: 'da',
+                                child: Text(l.languageDanish),
+                              ),
+                              DropdownMenuItem(
+                                value: 'en',
+                                child: Text(l.languageEnglish),
+                              ),
+                            ],
+                            onChanged: (value) async {
+                              if (value == null) return;
+                              setState(() => _selectedLocale = value);
+                              await localeController.setLocale(Locale(value));
                               if (!context.mounted) return;
                               _showSavedSnackBar();
                             },
@@ -285,64 +289,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const _SectionTitle(
-                              title: 'Familieprofiler',
+                            _SectionTitle(
+                              title: l.familyProfilesSectionTitle,
                               icon: Icons.group_outlined,
                             ),
                             const SizedBox(height: 12),
-                            const _InlineInfoBox(
+                            _InlineInfoBox(
                               icon: Icons.group_outlined,
-                              title: 'Administrér profiler',
-                              text:
-                                  'Opret børneprofiler, vælg adgangsniveau, se login-koder og ændre børnenes rolle mellem begrænset og udvidet adgang.',
+                              title: l.manageProfilesInfoTitle,
+                              text: l.manageProfilesInfoText,
                             ),
                             const SizedBox(height: 12),
                             ElevatedButton.icon(
                               onPressed: _openManageProfiles,
                               icon: const Icon(Icons.manage_accounts_outlined),
-                              label: const Text('Administrér profiler'),
+                              label: Text(l.manageProfilesButton),
                             ),
                           ],
                         ),
                       ),
                     ],
-                    const SizedBox(height: 14),
-                    const _SettingsCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _SectionTitle(
-                            title: 'Adgangsstruktur',
-                            icon: Icons.admin_panel_settings_outlined,
-                          ),
-                          SizedBox(height: 12),
-                          _InlineInfoBox(
-                            icon: Icons.admin_panel_settings_outlined,
-                            title: 'Forælder',
-                            text:
-                                'Har fuld adgang til at oprette, redigere og slette aktiviteter samt administrere profiler, belønninger og indstillinger.',
-                          ),
-                          SizedBox(height: 12),
-                          Divider(),
-                          SizedBox(height: 12),
-                          _InlineInfoBox(
-                            icon: Icons.child_care_outlined,
-                            title: 'Barn · begrænset adgang',
-                            text:
-                                'Kan se kalenderen, markere aktiviteter som udført og krydse checklisten af.',
-                          ),
-                          SizedBox(height: 12),
-                          Divider(),
-                          SizedBox(height: 12),
-                          _InlineInfoBox(
-                            icon: Icons.edit_calendar_outlined,
-                            title: 'Barn · udvidet adgang',
-                            text:
-                                'Kan også oprette, redigere og slette egne aktiviteter.',
-                          ),
-                        ],
+                    if (_currentProfile?.isParent == true) ...[
+                      const SizedBox(height: 14),
+                      _SettingsCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _SectionTitle(
+                              title: l.accessStructureSectionTitle,
+                              icon: Icons.admin_panel_settings_outlined,
+                            ),
+                            const SizedBox(height: 12),
+                            _InlineInfoBox(
+                              icon: Icons.admin_panel_settings_outlined,
+                              title: l.accessStructureParentTitle,
+                              text: l.accessStructureParentText,
+                            ),
+                            const SizedBox(height: 12),
+                            const Divider(),
+                            const SizedBox(height: 12),
+                            _InlineInfoBox(
+                              icon: Icons.child_care_outlined,
+                              title: l.accessStructureChildLimitedTitle,
+                              text: l.accessStructureChildLimitedText,
+                            ),
+                            const SizedBox(height: 12),
+                            const Divider(),
+                            const SizedBox(height: 12),
+                            _InlineInfoBox(
+                              icon: Icons.edit_calendar_outlined,
+                              title: l.accessStructureChildExtendedTitle,
+                              text: l.accessStructureChildExtendedText,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -358,10 +360,7 @@ class _SectionTitle extends StatelessWidget {
   final String title;
   final IconData icon;
 
-  const _SectionTitle({
-    required this.title,
-    required this.icon,
-  });
+  const _SectionTitle({required this.title, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -372,11 +371,7 @@ class _SectionTitle extends StatelessWidget {
         CircleAvatar(
           radius: 18,
           backgroundColor: colorScheme.primary.withValues(alpha: 0.18),
-          child: Icon(
-            icon,
-            size: 20,
-            color: colorScheme.primary,
-          ),
+          child: Icon(icon, size: 20, color: colorScheme.primary),
         ),
         const SizedBox(width: 10),
         Text(
@@ -395,9 +390,7 @@ class _SectionTitle extends StatelessWidget {
 class _SettingsCard extends StatelessWidget {
   final Widget child;
 
-  const _SettingsCard({
-    required this.child,
-  });
+  const _SettingsCard({required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -439,14 +432,10 @@ class _InlineInfoBox extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 20,
-          backgroundColor: colorScheme.primary.withValues(alpha:
-            isDark ? 0.22 : 0.14,
+          backgroundColor: colorScheme.primary.withValues(
+            alpha: isDark ? 0.22 : 0.14,
           ),
-          child: Icon(
-            icon,
-            size: 22,
-            color: colorScheme.primary,
-          ),
+          child: Icon(icon, size: 22, color: colorScheme.primary),
         ),
         const SizedBox(width: 12),
         Expanded(

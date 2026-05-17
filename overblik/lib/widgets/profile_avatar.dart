@@ -36,7 +36,7 @@ class _ProfileAvatarButtonState extends State<ProfileAvatarButton> {
               ? null
               : () async {
                   final familyProfiles = await ProfileService()
-                      .getFamilyProfiles(currentProfile.familyId);
+                      .getMyFamilyProfiles();
 
                   if (!context.mounted) return;
 

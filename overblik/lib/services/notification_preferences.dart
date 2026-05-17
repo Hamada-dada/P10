@@ -21,8 +21,8 @@ class NotificationPreferencesService {
 
   /// Valid values for notification style.
   static const List<String> notificationStyleOptions = [
-    'rolig',
     'tydelig',
+    'rolig',
     'diskret',
   ];
 

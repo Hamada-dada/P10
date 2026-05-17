@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
+
 class ContentActionRow extends StatelessWidget {
   final bool canCreate;
   final bool isDisabled;
@@ -25,6 +27,7 @@ class ContentActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    final l = AppLocalizations.of(context);
 
     final baseStyle = TextButton.styleFrom(
       minimumSize: const Size(0, 36),
@@ -48,7 +51,7 @@ class ContentActionRow extends StatelessWidget {
                           onPressed: isDisabled ? null : onNew,
                           icon: Icon(Icons.add, size: 18, color: color),
                           label: Text(
-                            'Ny aktivitet',
+                            l.newActivityButton,
                             style: _buttonStyle.copyWith(color: color),
                           ),
                           style: baseStyle,
@@ -67,7 +70,7 @@ class ContentActionRow extends StatelessWidget {
                     onPressed: isDisabled ? null : onToday,
                     icon: Icon(Icons.today_outlined, size: 18, color: color),
                     label: Text(
-                      'I dag',
+                      l.todayLabel,
                       style: _buttonStyle.copyWith(color: color),
                     ),
                     style: baseStyle,

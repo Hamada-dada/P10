@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 import '../models/reward.dart';
@@ -244,6 +245,7 @@ Future<void> _loadProfiles() async {
     if (currentProfile == null) {
       if (!mounted) return;
 
+      final l = AppLocalizations.of(context);
       setState(() {
         _availableProfiles = [];
         _currentProfile = null;
@@ -251,8 +253,7 @@ Future<void> _loadProfiles() async {
         _participantOptions = [];
         _selectedParticipants = [];
         _isLoadingProfiles = false;
-        _profilesError =
-        'Kunne ikke finde din profil. Din bruger er sandsynligvis ikke koblet til en profil i databasen.';
+        _profilesError = l.errorProfileNotFound;
       });
 
       return;
@@ -261,6 +262,7 @@ Future<void> _loadProfiles() async {
     if (currentProfile.isChildLimited) {
       if (!mounted) return;
 
+      final l = AppLocalizations.of(context);
       setState(() {
         _availableProfiles = [];
         _currentProfile = currentProfile;
@@ -268,8 +270,7 @@ Future<void> _loadProfiles() async {
         _participantOptions = [];
         _selectedParticipants = [];
         _isLoadingProfiles = false;
-        _profilesError =
-        'Denne børneprofil har ikke adgang til at oprette aktiviteter.';
+        _profilesError = l.errorChildLimitedNoCreate;
       });
 
       return;
@@ -355,6 +356,7 @@ Future<void> _loadProfiles() async {
 
     if (!mounted) return;
 
+    final l = AppLocalizations.of(context);
     setState(() {
       _availableProfiles = [];
       _currentProfile = null;
@@ -362,7 +364,7 @@ Future<void> _loadProfiles() async {
       _participantOptions = [];
       _selectedParticipants = [];
       _isLoadingProfiles = false;
-      _profilesError = 'Kunne ikke hente profiler: $e';
+      _profilesError = l.errorLoadProfiles(e);
     });
   }
 }
@@ -441,35 +443,6 @@ int _amountUnitToMinutes(int amount, String unit) {
   }
 }
 
-String _recurrenceLabel(ActivityRecurrence recurrence) {
-  switch (recurrence) {
-    case ActivityRecurrence.none:
-      return 'Ingen gentagelse';
-    case ActivityRecurrence.daily:
-      return 'Dagligt';
-    case ActivityRecurrence.weekly:
-      return 'Ugentligt';
-    case ActivityRecurrence.monthly:
-      return 'Månedligt';
-    case ActivityRecurrence.custom:
-      return 'Brugerdefineret';
-  }
-}
-
-String _intervalSuffix(ActivityRecurrence recurrence) {
-  switch (recurrence) {
-    case ActivityRecurrence.none:
-      return '';
-    case ActivityRecurrence.daily:
-      return 'dag(e)';
-    case ActivityRecurrence.weekly:
-      return 'uge(r)';
-    case ActivityRecurrence.monthly:
-      return 'måned(er)';
-    case ActivityRecurrence.custom:
-      return '';
-  }
-}
 
 List<Reward> _availableRewards() {
   final rewards = List<Reward>.from(_rewards);
@@ -508,15 +481,13 @@ void _revalidateSelectedRewards() {
   }
 }
 
-String _rewardTitleById(String? rewardId) {
-  if (rewardId == null) return 'Ingen valgt';
+String _rewardTitleById(String? rewardId, AppLocalizations l) {
+  if (rewardId == null) return l.noneSelected;
 
   try {
-    return _rewards
-        .firstWhere((reward) => reward.id == rewardId)
-        .title;
+    return _rewards.firstWhere((reward) => reward.id == rewardId).title;
   } catch (_) {
-    return 'Ukendt belønning';
+    return l.unknownReward;
   }
 }
 
@@ -714,7 +685,7 @@ Future<void> _pickImage(ImageSource source) async {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Kunne ikke uploade billede: $e')),
+      SnackBar(content: Text(AppLocalizations.of(context).errorUploadImage(e))),
     );
   }
 }
@@ -730,6 +701,7 @@ Future<void> _showImageSourceDialog() async {
   await showModalBottomSheet<void>(
     context: context,
     builder: (sheetContext) {
+      final l = AppLocalizations.of(sheetContext);
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -738,7 +710,7 @@ Future<void> _showImageSourceDialog() async {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Vælg fra billeder'),
+                title: Text(l.chooseFromGallery),
                 onTap: () async {
                   Navigator.pop(sheetContext);
                   await _pickImage(ImageSource.gallery);
@@ -746,7 +718,7 @@ Future<void> _showImageSourceDialog() async {
               ),
               ListTile(
                 leading: const Icon(Icons.camera_alt_outlined),
-                title: const Text('Tag billede med kamera'),
+                title: Text(l.takePhoto),
                 onTap: () async {
                   Navigator.pop(sheetContext);
                   await _pickImage(ImageSource.camera);
@@ -757,7 +729,7 @@ Future<void> _showImageSourceDialog() async {
                   .isNotEmpty)
                 ListTile(
                   leading: const Icon(Icons.delete_outline),
-                  title: const Text('Slet billede'),
+                  title: Text(l.deleteImageLabel),
                   onTap: () {
                     Navigator.pop(sheetContext);
                     _removeImage();
@@ -772,40 +744,40 @@ Future<void> _showImageSourceDialog() async {
 }
 
 Future<void> _showAddExternalParticipantDialog() async {
-  final controller = TextEditingController();
-
+  final l = AppLocalizations.of(context);
   final value = await showDialog<String>(
     context: context,
     builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('Tilføj anden deltager'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Navn',
-            border: OutlineInputBorder(),
+      final controller = TextEditingController();
+      return StatefulBuilder(
+        builder: (_, setState) => AlertDialog(
+          title: Text(l.addExternalParticipantDialog),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Navn',
+              border: OutlineInputBorder(),
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(l.cancel),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final text = controller.text.trim();
+                if (text.isEmpty) return;
+                Navigator.pop(dialogContext, text);
+              },
+              child: Text(l.add),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Annuller'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final text = controller.text.trim();
-              if (text.isEmpty) return;
-
-              Navigator.pop(dialogContext, text);
-            },
-            child: const Text('Tilføj'),
-          ),
-        ],
       );
     },
   );
-
-  controller.dispose();
 
   if (!mounted || value == null || value.trim().isEmpty) {
     return;
@@ -815,14 +787,14 @@ Future<void> _showAddExternalParticipantDialog() async {
 
   if (participant == 'Familie') {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('"Familie" er et reserveret navn. Brug valgmuligheden i listen.')),
+      SnackBar(content: Text(l.familyNameReserved)),
     );
     return;
   }
 
   if (_participantOptions.any((o) => o.toLowerCase() == participant.toLowerCase())) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('"$participant" findes allerede i listen.')),
+      SnackBar(content: Text(l.participantAlreadyExists(participant))),
     );
     return;
   }
@@ -898,10 +870,7 @@ Future<void> _openCreateRewardDialog(RewardType rewardType) async {
 
   if (childProfiles.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-            'Du skal oprette et barn først, før du kan lave en belønning.'),
-      ),
+      SnackBar(content: Text(AppLocalizations.of(context).needChildFirst)),
     );
     return;
   }
@@ -915,6 +884,7 @@ Future<void> _openCreateRewardDialog(RewardType rewardType) async {
 
   Profile selectedProfile = childProfiles.first;
   bool isSaving = false;
+  final l = AppLocalizations.of(context);
 
   final createdReward = await showDialog<Reward>(
     context: context,
@@ -924,8 +894,8 @@ Future<void> _openCreateRewardDialog(RewardType rewardType) async {
           return AlertDialog(
             title: Text(
               rewardType == RewardType.direct
-                  ? 'Opret direkte belønning'
-                  : 'Opret langsigtet belønning',
+                  ? l.createDirectRewardDialogTitle
+                  : l.createStreakRewardDialogTitle,
             ),
             content: SingleChildScrollView(
               child: Column(
@@ -933,35 +903,35 @@ Future<void> _openCreateRewardDialog(RewardType rewardType) async {
                 children: [
                   TextField(
                     controller: titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Titel',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: l.title,
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: emojiController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Emoji',
-                      hintText: 'f.eks. 🍦',
-                      border: OutlineInputBorder(),
+                      hintText: l.emojiHintReward,
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: descriptionController,
                     maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Beskrivelse',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: l.description,
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: selectedProfile.id,
-                    decoration: const InputDecoration(
-                      labelText: 'Tilhører barn',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: l.belongsToChild,
+                      border: const OutlineInputBorder(),
                     ),
                     items: childProfiles.map((profile) {
                       return DropdownMenuItem<String>(
@@ -988,9 +958,9 @@ Future<void> _openCreateRewardDialog(RewardType rewardType) async {
                     TextField(
                       controller: targetCountController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Udløses efter X gennemførelser',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: l.completionCountStreak,
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                   ],
@@ -1000,7 +970,7 @@ Future<void> _openCreateRewardDialog(RewardType rewardType) async {
             actions: [
               TextButton(
                 onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
-                child: const Text('Annuller'),
+                child: Text(l.cancel),
               ),
               ElevatedButton(
                 onPressed: isSaving
@@ -1014,18 +984,14 @@ Future<void> _openCreateRewardDialog(RewardType rewardType) async {
 
                   if (title.isEmpty) {
                     ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      const SnackBar(
-                        content: Text('Skriv en titel til belønningen.'),
-                      ),
+                      SnackBar(content: Text(l.rewardTitleRequired)),
                     );
                     return;
                   }
 
                   if (targetCount < 1) {
                     ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      const SnackBar(
-                        content: Text('Antal skal være mindst 1.'),
-                      ),
+                      SnackBar(content: Text(l.amountMin1)),
                     );
                     return;
                   }
@@ -1070,9 +1036,7 @@ Future<void> _openCreateRewardDialog(RewardType rewardType) async {
                     });
 
                     ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      SnackBar(
-                        content: Text('Kunne ikke oprette belønning: $e'),
-                      ),
+                      SnackBar(content: Text(l.errorCreateReward(e))),
                     );
                   }
                 },
@@ -1082,7 +1046,7 @@ Future<void> _openCreateRewardDialog(RewardType rewardType) async {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-                    : const Text('Gem'),
+                    : Text(l.save),
               ),
             ],
           );
@@ -1109,7 +1073,7 @@ Future<void> _openCreateRewardDialog(RewardType rewardType) async {
   });
 
   ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Belønning oprettet')),
+    SnackBar(content: Text(AppLocalizations.of(context).rewardCreated)),
   );
 }
 
@@ -1146,9 +1110,9 @@ Widget _buildImagePreview() {
           width: double.infinity,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
-            return const SizedBox(
+            return SizedBox(
               height: 90,
-              child: Center(child: Text('Kunne ikke vise billedet')),
+              child: Center(child: Text(AppLocalizations.of(context).couldNotLoadImage)),
             );
           },
         ),
@@ -1161,11 +1125,11 @@ Widget _buildImagePreview() {
       width: double.infinity,
       constraints: const BoxConstraints(maxHeight: 140, minHeight: 90),
       decoration: containerDecoration,
-      child: const Center(
+      child: Center(
         child: Padding(
-          padding: EdgeInsets.all(12),
+          padding: const EdgeInsets.all(12),
           child: Text(
-            'Billede valgt, men forhåndsvisning understøttes ikke i webversionen endnu.',
+            AppLocalizations.of(context).imagePreviewNotSupported,
             textAlign: TextAlign.center,
           ),
         ),
@@ -1184,9 +1148,9 @@ Widget _buildImagePreview() {
         width: double.infinity,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
-          return const SizedBox(
+          return SizedBox(
             height: 90,
-            child: Center(child: Text('Kunne ikke vise billedet')),
+            child: Center(child: Text(AppLocalizations.of(context).couldNotLoadImage)),
           );
         },
       ),
@@ -1207,23 +1171,21 @@ void _saveActivity() {
       .trim()
       .isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Du er ikke logget ind. Log ind igen.')),
+      SnackBar(content: Text(AppLocalizations.of(context).errorNotLoggedIn)),
     );
     return;
   }
 
   if (currentProfile == null || currentFamilyId == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Kunne ikke finde familie eller profil.')),
+      SnackBar(content: Text(AppLocalizations.of(context).errorFamilyOrProfile)),
     );
     return;
   }
 
   if (currentProfile.isChildLimited) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Denne børneprofil kan ikke oprette aktiviteter.'),
-      ),
+      SnackBar(content: Text(AppLocalizations.of(context).childCannotCreateActivities)),
     );
     return;
   }
@@ -1233,14 +1195,14 @@ void _saveActivity() {
 
   if (!endDateTime.isAfter(startDateTime)) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Sluttid skal være efter starttid.')),
+      SnackBar(content: Text(AppLocalizations.of(context).endAfterStart)),
     );
     return;
   }
 
   if (_selectedParticipants.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Vælg mindst én deltager.')),
+      SnackBar(content: Text(AppLocalizations.of(context).selectAtLeastOneParticipant)),
     );
     return;
   }
@@ -1250,7 +1212,7 @@ void _saveActivity() {
 
   if (participants.isEmpty && visibility != ActivityVisibility.family) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Vælg mindst én gyldig deltager.')),
+      SnackBar(content: Text(AppLocalizations.of(context).selectAtLeastOneValidParticipant)),
     );
     return;
   }
@@ -1260,9 +1222,7 @@ void _saveActivity() {
 
   if (_recurrenceEnabled && parsedInterval < 1) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Gentagelsesinterval skal være mindst 1.'),
-      ),
+      SnackBar(content: Text(AppLocalizations.of(context).recurrenceIntervalMin)),
     );
     return;
   }
@@ -1272,9 +1232,7 @@ void _saveActivity() {
 
     if (streakTarget == null || streakTarget < 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Angiv et gyldigt mål for langsigtet belønning.'),
-        ),
+        SnackBar(content: Text(AppLocalizations.of(context).streakTargetValid)),
       );
       return;
     }
@@ -1326,6 +1284,7 @@ void _saveActivity() {
 
 @override
 Widget build(BuildContext context) {
+  final l = AppLocalizations.of(context);
   final colorScheme = Theme
       .of(context)
       .colorScheme;
@@ -1384,11 +1343,11 @@ Widget build(BuildContext context) {
 
                     _loadProfiles();
                   },
-                  child: const Text('Prøv igen'),
+                  child: Text(l.retry),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Tilbage'),
+                  child: Text(l.back),
                 ),
               ],
             ),
@@ -1398,7 +1357,7 @@ Widget build(BuildContext context) {
     );
   }
 
-  final title = _isEditing ? 'Rediger aktivitet' : 'Ny aktivitet';
+  final title = _isEditing ? l.editActivityTitle : l.newActivityTitle;
   final directRewards = _directRewards();
   final streakRewards = _streakRewards();
 
@@ -1436,15 +1395,15 @@ Widget build(BuildContext context) {
                     children: [
                       TextFormField(
                         controller: _titleController,
-                        decoration: const InputDecoration(
-                          labelText: 'Titel',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l.title,
+                          border: const OutlineInputBorder(),
                         ),
                         validator: (value) {
                           if (value == null || value
                               .trim()
                               .isEmpty) {
-                            return 'Skriv en titel';
+                            return l.titleRequired;
                           }
 
                           return null;
@@ -1453,16 +1412,16 @@ Widget build(BuildContext context) {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _emojiController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Emoji',
-                          border: OutlineInputBorder(),
-                          hintText: 'f.eks. 🎮',
+                          border: const OutlineInputBorder(),
+                          hintText: l.emojiHint,
                         ),
                         validator: (value) {
                           if (value == null) return null;
 
                           if (!_looksLikeSingleEmoji(value)) {
-                            return 'Brug kun én emoji';
+                            return l.singleEmojiOnly;
                           }
 
                           return null;
@@ -1470,7 +1429,7 @@ Widget build(BuildContext context) {
                       ),
                       const SizedBox(height: 12),
                       _PickerTile(
-                        label: 'Dato',
+                        label: l.dateLabel,
                         value: _formatDate(_selectedDate),
                         icon: Icons.calendar_today_outlined,
                         onTap: _pickDate,
@@ -1480,7 +1439,7 @@ Widget build(BuildContext context) {
                         children: [
                           Expanded(
                             child: _PickerTile(
-                              label: 'Start',
+                              label: l.startLabel,
                               value: _formatTime(_startTime),
                               icon: Icons.schedule,
                               onTap: _pickStartTime,
@@ -1489,7 +1448,7 @@ Widget build(BuildContext context) {
                           const SizedBox(width: 12),
                           Expanded(
                             child: _PickerTile(
-                              label: 'Slut',
+                              label: l.endLabel,
                               value: _formatTime(_endTime),
                               icon: Icons.schedule_outlined,
                               onTap: _pickEndTime,
@@ -1502,8 +1461,8 @@ Widget build(BuildContext context) {
                         leading: const Icon(Icons.tune),
                         title: Text(
                           _showMoreSettings
-                              ? 'Færre indstillinger'
-                              : 'Flere indstillinger',
+                              ? l.fewerSettings
+                              : l.moreSettings,
                         ),
                         onExpansionChanged: (expanded) {
                           setState(() {
@@ -1528,10 +1487,8 @@ Widget build(BuildContext context) {
                                   const EdgeInsets.symmetric(
                                     horizontal: 12,
                                   ),
-                                  title: const Text('Notifikationer'),
-                                  subtitle: const Text(
-                                    'Påmind mig om denne aktivitet',
-                                  ),
+                                  title: Text(l.notificationsLabel),
+                                  subtitle: Text(l.remindAboutActivity),
                                   value: _notificationsEnabled,
                                   onChanged: (value) {
                                     setState(() {
@@ -1550,9 +1507,9 @@ Widget build(BuildContext context) {
                                     initialValue: _isCustomReminder
                                         ? null
                                         : _reminderMinutesBefore,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Påmind mig',
-                                      border: OutlineInputBorder(),
+                                    decoration: InputDecoration(
+                                      labelText: l.remindMeLabel,
+                                      border: const OutlineInputBorder(),
                                     ),
                                     items: [
                                       ...NotificationPreferencesService
@@ -1566,9 +1523,9 @@ Widget build(BuildContext context) {
                                                       .reminderLabel(m)),
                                             ),
                                       ),
-                                      const DropdownMenuItem<int?>(
+                                      DropdownMenuItem<int?>(
                                         value: null,
-                                        child: Text('Tilpasset'),
+                                        child: Text(l.customOption),
                                       ),
                                     ],
                                     onChanged: (value) {
@@ -1600,9 +1557,9 @@ Widget build(BuildContext context) {
                                             controller: _customAmountController,
                                             keyboardType:
                                             TextInputType.number,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Antal',
-                                              border: OutlineInputBorder(),
+                                            decoration: InputDecoration(
+                                              labelText: l.amountLabel,
+                                              border: const OutlineInputBorder(),
                                             ),
                                             validator: (value) {
                                               if (!_notificationsEnabled ||
@@ -1612,13 +1569,13 @@ Widget build(BuildContext context) {
                                               final raw =
                                                   value?.trim() ?? '';
                                               if (raw.isEmpty) {
-                                                return 'Angiv antal.';
+                                                return l.enterAmount;
                                               }
                                               final amount =
                                               int.tryParse(raw);
                                               if (amount == null ||
                                                   amount < 0) {
-                                                return 'Angiv antal.';
+                                                return l.enterAmount;
                                               }
                                               final total =
                                               _amountUnitToMinutes(
@@ -1626,7 +1583,7 @@ Widget build(BuildContext context) {
                                                 _customReminderUnit,
                                               );
                                               if (total > 10080) {
-                                                return 'Påmindelsen kan højst være 7 dage før aktiviteten.';
+                                                return l.reminderMaxDays;
                                               }
                                               return null;
                                             },
@@ -1639,26 +1596,26 @@ Widget build(BuildContext context) {
                                           DropdownButtonFormField<String>(
                                             key: ValueKey(_customReminderUnit),
                                             initialValue: _customReminderUnit,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Enhed',
-                                              border: OutlineInputBorder(),
+                                            decoration: InputDecoration(
+                                              labelText: l.unitLabel,
+                                              border: const OutlineInputBorder(),
                                             ),
-                                            items: const [
+                                            items: [
                                               DropdownMenuItem(
                                                 value: 'minutter',
-                                                child: Text('minutter'),
+                                                child: Text(l.unitMinutes),
                                               ),
                                               DropdownMenuItem(
                                                 value: 'timer',
-                                                child: Text('timer'),
+                                                child: Text(l.unitHours),
                                               ),
                                               DropdownMenuItem(
                                                 value: 'dage',
-                                                child: Text('dage'),
+                                                child: Text(l.unitDays),
                                               ),
                                               DropdownMenuItem(
                                                 value: 'uger',
-                                                child: Text('uger'),
+                                                child: Text(l.unitWeeks),
                                               ),
                                             ],
                                             onChanged: (unit) {
@@ -1676,9 +1633,9 @@ Widget build(BuildContext context) {
                                   DropdownButtonFormField<String>(
                                     key: ValueKey(_notificationStyle),
                                     initialValue: _notificationStyle,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Notifikationsstil',
-                                      border: OutlineInputBorder(),
+                                    decoration: InputDecoration(
+                                      labelText: l.notifStyleLabel,
+                                      border: const OutlineInputBorder(),
                                     ),
                                     items: NotificationPreferencesService
                                         .notificationStyleOptions
@@ -1715,8 +1672,9 @@ Widget build(BuildContext context) {
                                       }
                                     });
                                   },
-                                  title: const Text('Gentag aktivitet'),
-                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(l.repeatActivityLabel),
+                                  contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -1731,9 +1689,9 @@ Widget build(BuildContext context) {
                                         ActivityRecurrence.none
                                         ? ActivityRecurrence.daily
                                         : _selectedRecurrence,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Gentagelse',
-                                      border: OutlineInputBorder(),
+                                    decoration: InputDecoration(
+                                      labelText: l.recurrenceLabel,
+                                      border: const OutlineInputBorder(),
                                     ),
                                     items: ActivityRecurrence.values
                                         .where(
@@ -1745,8 +1703,7 @@ Widget build(BuildContext context) {
                                           (r) =>
                                           DropdownMenuItem(
                                             value: r,
-                                            child:
-                                            Text(_recurrenceLabel(r)),
+                                            child: Text(l.recurrenceEnumLabel(r)),
                                           ),
                                     )
                                         .toList(),
@@ -1763,10 +1720,9 @@ Widget build(BuildContext context) {
                                     keyboardType: TextInputType.number,
                                     decoration: InputDecoration(
                                       labelText:
-                                      'Hver X ${_intervalSuffix(
-                                          _selectedRecurrence)}',
+                                      'Hver X ${l.intervalSuffix(_selectedRecurrence)}',
                                       border: const OutlineInputBorder(),
-                                      hintText: 'f.eks. 2',
+                                      hintText: l.intervalHint,
                                     ),
                                     validator: (value) {
                                       if (!_recurrenceEnabled) return null;
@@ -1774,16 +1730,16 @@ Widget build(BuildContext context) {
                                         (value ?? '').trim(),
                                       );
                                       if (number == null || number < 1) {
-                                        return 'Skriv et tal på mindst 1';
+                                        return l.numberMin1;
                                       }
                                       return null;
                                     },
                                   ),
                                   const SizedBox(height: 12),
                                   _PickerTile(
-                                    label: 'Gentag indtil',
+                                    label: l.repeatUntilLabel,
                                     value: _recurrenceEndDate == null
-                                        ? 'Ingen slutdato'
+                                        ? l.noEndDate
                                         : _formatDate(_recurrenceEndDate!),
                                     icon: Icons.event_available_outlined,
                                     onTap: _pickRecurrenceEndDate,
@@ -1795,53 +1751,62 @@ Widget build(BuildContext context) {
                                           _recurrenceEndDate = null;
                                         });
                                       },
-                                      child: const Text('Fjern slutdato'),
+                                      child: Text(l.removeEndDate),
                                     ),
                                 ],
                                 const SizedBox(height: 12),
-                                DropdownButtonFormField<String>(
-                                  key: ValueKey(_participantDropdownResetKey),
-                                  initialValue: null,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Tilføj deltagere',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: availableParticipantOptions
-                                      .map((participant) {
-                                    return DropdownMenuItem<String>(
-                                      value: participant,
-                                      child: Text(participant),
-                                    );
-                                  }).toList(),
-                                  onChanged: availableParticipantOptions.isEmpty
-                                      ? null
-                                      : (value) {
-                                    if (value == null) return;
-
-                                    setState(() {
-                                      _selectedParticipants =
-                                          _uniqueStrings([
-                                            ..._selectedParticipants,
-                                            value,
-                                          ]);
-                                      _participantDropdownResetKey++;
-                                      _revalidateSelectedRewards();
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 8),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: TextButton.icon(
-                                    onPressed: _showAddExternalParticipantDialog,
-                                    icon: const Icon(Icons.person_add_alt_1),
-                                    label: const Text('Tilføj andre deltagere'),
-                                  ),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        key: ValueKey(
+                                            _participantDropdownResetKey),
+                                        initialValue: null,
+                                        decoration: InputDecoration(
+                                          labelText: l.addParticipantsLabel,
+                                          border: const OutlineInputBorder(),
+                                        ),
+                                        items: availableParticipantOptions
+                                            .map((participant) {
+                                          return DropdownMenuItem<String>(
+                                            value: participant,
+                                            child: Text(participant),
+                                          );
+                                        }).toList(),
+                                        onChanged:
+                                        availableParticipantOptions.isEmpty
+                                            ? null
+                                            : (value) {
+                                          if (value == null) return;
+                                          setState(() {
+                                            _selectedParticipants =
+                                                _uniqueStrings([
+                                                  ..._selectedParticipants,
+                                                  value,
+                                                ]);
+                                            _participantDropdownResetKey++;
+                                            _revalidateSelectedRewards();
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Tooltip(
+                                      message: l.addOtherParticipants,
+                                      child: IconButton(
+                                        onPressed:
+                                        _showAddExternalParticipantDialog,
+                                        icon: const Icon(
+                                            Icons.person_add_alt_1),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 10),
                                 if (_selectedParticipants.isEmpty)
                                   Text(
-                                    'Ingen deltagere valgt',
+                                    l.noParticipantsSelected,
                                     style: TextStyle(
                                       color: colorScheme.onSurface.withValues(
                                           alpha: 0.6),
@@ -1901,8 +1866,8 @@ Widget build(BuildContext context) {
                                                 minLines: 4,
                                                 maxLines: null,
                                                 decoration:
-                                                const InputDecoration(
-                                                  labelText: 'Beskrivelse',
+                                                InputDecoration(
+                                                  labelText: l.description,
                                                   alignLabelWithHint: true,
                                                   border: InputBorder.none,
                                                   isCollapsed: true,
@@ -1927,8 +1892,7 @@ Widget build(BuildContext context) {
                                                         const CircleBorder(),
                                                         elevation: 2,
                                                         child: IconButton(
-                                                          tooltip:
-                                                          'Slet billede',
+                                                          tooltip: l.deleteImageLabel,
                                                           onPressed:
                                                           _removeImage,
                                                           icon: const Icon(
@@ -1956,7 +1920,7 @@ Widget build(BuildContext context) {
                                         child: Row(
                                           children: [
                                             IconButton(
-                                              tooltip: 'Favorit',
+                                              tooltip: l.favouriteTooltip,
                                               onPressed: () {
                                                 setState(() {
                                                   _isFavorite = !_isFavorite;
@@ -1972,7 +1936,7 @@ Widget build(BuildContext context) {
                                               ),
                                             ),
                                             IconButton(
-                                              tooltip: 'Belønning',
+                                              tooltip: l.rewardTooltip,
                                               onPressed: _toggleRewardFields,
                                               icon: Icon(
                                                 _showRewardFields
@@ -1986,7 +1950,7 @@ Widget build(BuildContext context) {
                                             ),
                                             const Spacer(),
                                             IconButton(
-                                              tooltip: 'Tjekliste',
+                                              tooltip: l.checklistTooltip,
                                               onPressed: _toggleChecklist,
                                               icon: Icon(
                                                 _showChecklist
@@ -1996,7 +1960,7 @@ Widget build(BuildContext context) {
                                               ),
                                             ),
                                             IconButton(
-                                              tooltip: 'Tilføj billede',
+                                              tooltip: l.addImageTooltip,
                                               onPressed:
                                               _showImageSourceDialog,
                                               icon: Icon(
@@ -2032,8 +1996,7 @@ Widget build(BuildContext context) {
                                                 controller:
                                                 _checklistControllers[index],
                                                 decoration: InputDecoration(
-                                                  hintText: 'Punkt ${index +
-                                                      1}',
+                                                  hintText: l.checklistItemHint(index + 1),
                                                   border:
                                                   const OutlineInputBorder(),
                                                 ),
@@ -2055,7 +2018,7 @@ Widget build(BuildContext context) {
                                     child: TextButton.icon(
                                       onPressed: _addChecklistItem,
                                       icon: const Icon(Icons.add),
-                                      label: const Text('Tilføj punkt'),
+                                      label: Text(l.addChecklistItem),
                                     ),
                                   ),
                                 ],
@@ -2071,10 +2034,8 @@ Widget build(BuildContext context) {
                                     const EdgeInsets.symmetric(
                                       horizontal: 12,
                                     ),
-                                    title: const Text('Direkte belønning'),
-                                    subtitle: const Text(
-                                      'Belønning efter én aktivitet.',
-                                    ),
+                                    title: Text(l.directRewardLabel),
+                                    subtitle: Text(l.directRewardSubtitle),
                                     value: _enableDirectReward,
                                     onChanged: (value) {
                                       setState(() {
@@ -2093,9 +2054,9 @@ Widget build(BuildContext context) {
                                       )
                                           ? _selectedDirectRewardId
                                           : null,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Vælg direkte belønning',
-                                        border: OutlineInputBorder(),
+                                      decoration: InputDecoration(
+                                        labelText: l.selectDirectReward,
+                                        border: const OutlineInputBorder(),
                                       ),
                                       items: directRewards.map((reward) {
                                         return DropdownMenuItem<String>(
@@ -2115,7 +2076,7 @@ Widget build(BuildContext context) {
                                       child: TextButton.icon(
                                         onPressed: () => _openCreateRewardDialog(RewardType.direct),
                                         icon: const Icon(Icons.add),
-                                        label: const Text('Opret ny direkte belønning'),
+                                        label: Text(l.createNewDirectReward),
                                       ),
                                     ),
                                   ],
@@ -2130,10 +2091,8 @@ Widget build(BuildContext context) {
                                     const EdgeInsets.symmetric(
                                       horizontal: 12,
                                     ),
-                                    title: const Text('Langsigtet belønning'),
-                                    subtitle: const Text(
-                                      'Belønning efter flere gennemførelser.',
-                                    ),
+                                    title: Text(l.streakRewardLabel),
+                                    subtitle: Text(l.streakRewardSubtitle),
                                     value: _enableStreakReward,
                                     onChanged: (value) {
                                       setState(() {
@@ -2153,9 +2112,9 @@ Widget build(BuildContext context) {
                                       )
                                           ? _selectedStreakRewardId
                                           : null,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Vælg langsigtet belønning',
-                                        border: OutlineInputBorder(),
+                                      decoration: InputDecoration(
+                                        labelText: l.selectStreakReward,
+                                        border: const OutlineInputBorder(),
                                       ),
                                       items: streakRewards.map((reward) {
                                         return DropdownMenuItem<String>(
@@ -2175,17 +2134,17 @@ Widget build(BuildContext context) {
                                       child: TextButton.icon(
                                         onPressed: () => _openCreateRewardDialog(RewardType.streak),
                                         icon: const Icon(Icons.add),
-                                        label: const Text('Opret ny langsigtet belønning'),
+                                        label: Text(l.createNewStreakReward),
                                       ),
                                     ),
                                     const SizedBox(height: 10),
                                     TextFormField(
                                       controller: _streakTargetController,
                                       keyboardType: TextInputType.number,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Opnås efter X gange',
-                                        border: OutlineInputBorder(),
-                                        hintText: 'f.eks. 5',
+                                      decoration: InputDecoration(
+                                        labelText: l.streakTargetLabel,
+                                        border: const OutlineInputBorder(),
+                                        hintText: l.streakTargetHint,
                                       ),
                                       validator: (value) {
                                         if (!_enableStreakReward) return null;
@@ -2195,7 +2154,7 @@ Widget build(BuildContext context) {
                                         );
 
                                         if (number == null || number < 1) {
-                                          return 'Skriv et tal på mindst 1';
+                                          return l.numberMin1;
                                         }
 
                                         return null;
@@ -2216,9 +2175,10 @@ Widget build(BuildContext context) {
                                       ),
                                     ),
                                     child: Text(
-                                      'Valgt nu: direkte = ${_rewardTitleById(
-                                          _selectedDirectRewardId)}, langsigtet = ${_rewardTitleById(
-                                          _selectedStreakRewardId)}',
+                                      l.selectedRewardsSummary(
+                                        _rewardTitleById(_selectedDirectRewardId, l),
+                                        _rewardTitleById(_selectedStreakRewardId, l),
+                                      ),
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: colorScheme.onSurface,
@@ -2240,7 +2200,7 @@ Widget build(BuildContext context) {
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             child: Text(
-                              _isEditing ? 'Gem ændringer' : 'Opret aktivitet',
+                              _isEditing ? l.saveChangesButton : l.saveActivityButton,
                             ),
                           ),
                         ),

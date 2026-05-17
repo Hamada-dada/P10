@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import '../services/parent_join_service.dart';
 import 'pending_parent_request_screen.dart';
 
@@ -47,6 +48,8 @@ class _RequestParentJoinScreenState extends State<RequestParentJoinScreen> {
       return;
     }
 
+    final errorMsg = AppLocalizations.of(context).accountNeedsEmailConfirm;
+
     final response = await Supabase.instance.client.auth.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text,
@@ -55,9 +58,7 @@ class _RequestParentJoinScreenState extends State<RequestParentJoinScreen> {
     final user = response.user ?? Supabase.instance.client.auth.currentUser;
 
     if (user == null) {
-      throw Exception(
-        'Kontoen blev oprettet, men du skal muligvis bekræfte din email og logge ind, før anmodningen kan sendes.',
-      );
+      throw Exception(errorMsg);
     }
   }
 
@@ -168,224 +169,191 @@ class _RequestParentJoinScreenState extends State<RequestParentJoinScreen> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: SingleChildScrollView(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const _FamilyHero(),
-                      const SizedBox(height: 26),
-                      const Text(
-                        'Anmod om adgang',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Send en anmodning til en eksisterende familie',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.black45,
-                        ),
-                      ),
-                      const SizedBox(height: 22),
-                      TextFormField(
-                        controller: _nameController,
-                        textInputAction: TextInputAction.next,
-                        decoration: _inputDecoration(
-                          hintText: 'Forælders navn',
-                        ),
-                        validator: (value) {
-                          final text = value?.trim() ?? '';
-
-                          if (text.isEmpty) {
-                            return 'Skriv forælders navn';
-                          }
-
-                          if (text.length < 2) {
-                            return 'Navnet er for kort';
-                          }
-
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _familyCodeController,
-                        textCapitalization: TextCapitalization.characters,
-                        textAlign: TextAlign.start,
-                        textInputAction: hasAuthUser
-                            ? TextInputAction.done
-                            : TextInputAction.next,
-                        decoration: _inputDecoration(
-                          hintText: 'Familiekode',
-                        ),
-                        validator: (value) {
-                          final text = value?.trim() ?? '';
-
-                          if (text.isEmpty) {
-                            return 'Skriv familiekoden';
-                          }
-
-                          if (text.length < 4) {
-                            return 'Familiekoden er for kort';
-                          }
-
-                          return null;
-                        },
-                        onFieldSubmitted: (_) {
-                          if (hasAuthUser && !_isLoading) {
-                            _sendRequest();
-                          }
-                        },
-                      ),
-                      if (!hasAuthUser) ...[
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          decoration: _inputDecoration(
-                            hintText: 'Email',
+              child: Builder(
+                builder: (ctx) {
+                  final l = AppLocalizations.of(ctx);
+                  return SingleChildScrollView(
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const _FamilyHero(),
+                          const SizedBox(height: 26),
+                          Text(
+                            l.requestAccessButton,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black,
+                            ),
                           ),
-                          validator: (value) {
-                            final text = value?.trim() ?? '';
-
-                            if (text.isEmpty) {
-                              return 'Skriv din email';
-                            }
-
-                            if (!text.contains('@')) {
-                              return 'Skriv en gyldig email';
-                            }
-
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          textInputAction: TextInputAction.next,
-                          decoration: _inputDecoration(
-                            hintText: 'Adgangskode',
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
+                          const SizedBox(height: 8),
+                          Text(
+                            l.requestAccessSubtitle,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.black45,
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          TextFormField(
+                            controller: _nameController,
+                            textInputAction: TextInputAction.next,
+                            decoration: _inputDecoration(
+                              hintText: l.parentNameLabel,
+                            ),
+                            validator: (value) {
+                              final text = value?.trim() ?? '';
+                              if (text.isEmpty) return l.parentNameRequired;
+                              if (text.length < 2) return l.parentNameTooShort;
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _familyCodeController,
+                            textCapitalization: TextCapitalization.characters,
+                            textAlign: TextAlign.start,
+                            textInputAction: hasAuthUser
+                                ? TextInputAction.done
+                                : TextInputAction.next,
+                            decoration: _inputDecoration(
+                              hintText: l.familyCodeLabel,
+                            ),
+                            validator: (value) {
+                              final text = value?.trim() ?? '';
+                              if (text.isEmpty) return l.familyCodeRequired;
+                              if (text.length < 4) return l.familyCodeTooShort;
+                              return null;
+                            },
+                            onFieldSubmitted: (_) {
+                              if (hasAuthUser && !_isLoading) _sendRequest();
+                            },
+                          ),
+                          if (!hasAuthUser) ...[
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                              decoration: _inputDecoration(
+                                hintText: l.emailLabel,
                               ),
-                            ),
-                          ),
-                          validator: (value) {
-                            final text = value ?? '';
-
-                            if (text.isEmpty) {
-                              return 'Skriv en adgangskode';
-                            }
-
-                            if (text.length < 6) {
-                              return 'Mindst 6 tegn';
-                            }
-
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _repeatPasswordController,
-                          obscureText: _obscureRepeatPassword,
-                          textInputAction: TextInputAction.done,
-                          decoration: _inputDecoration(
-                            hintText: 'Gentag adgangskode',
-                            suffixIcon: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _obscureRepeatPassword =
-                                      !_obscureRepeatPassword;
-                                });
+                              validator: (value) {
+                                final text = value?.trim() ?? '';
+                                if (text.isEmpty) return l.emailRequired;
+                                if (!text.contains('@')) return l.emailInvalid;
+                                return null;
                               },
-                              icon: Icon(
-                                _obscureRepeatPassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                              ),
                             ),
-                          ),
-                          validator: (value) {
-                            final text = value ?? '';
-
-                            if (text.isEmpty) {
-                              return 'Gentag adgangskoden';
-                            }
-
-                            if (text != _passwordController.text) {
-                              return 'Adgangskoderne er ikke ens';
-                            }
-
-                            return null;
-                          },
-                          onFieldSubmitted: (_) {
-                            if (!_isLoading) {
-                              _sendRequest();
-                            }
-                          },
-                        ),
-                      ],
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _sendRequest,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2E7D32),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.4,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Send anmodning',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _passwordController,
+                              obscureText: _obscurePassword,
+                              textInputAction: TextInputAction.next,
+                              decoration: _inputDecoration(
+                                hintText: l.passwordLabel,
+                                suffixIcon: IconButton(
+                                  onPressed: () => setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  }),
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
                                   ),
+                                ),
+                              ),
+                              validator: (value) {
+                                final text = value ?? '';
+                                if (text.isEmpty) return l.passwordRequired;
+                                if (text.length < 6) return l.passwordTooShort;
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _repeatPasswordController,
+                              obscureText: _obscureRepeatPassword,
+                              textInputAction: TextInputAction.done,
+                              decoration: _inputDecoration(
+                                hintText: l.confirmPasswordLabel,
+                                suffixIcon: IconButton(
+                                  onPressed: () => setState(() {
+                                    _obscureRepeatPassword =
+                                        !_obscureRepeatPassword;
+                                  }),
+                                  icon: Icon(
+                                    _obscureRepeatPassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                  ),
+                                ),
+                              ),
+                              validator: (value) {
+                                final text = value ?? '';
+                                if (text.isEmpty) {
+                                  return l.confirmPasswordRequired;
+                                }
+                                if (text != _passwordController.text) {
+                                  return l.passwordsDoNotMatch;
+                                }
+                                return null;
+                              },
+                              onFieldSubmitted: (_) {
+                                if (!_isLoading) _sendRequest();
+                              },
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _sendRequest,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2E7D32),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 15),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.4,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        l.sendRequestButton,
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 10),
+                          TextButton(
+                            onPressed: _isLoading ? null : _goBack,
+                            child: Text(l.back),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      TextButton(
-                        onPressed: _isLoading ? null : _goBack,
-                        child: const Text('Tilbage'),
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ),

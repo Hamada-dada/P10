@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/profile.dart';
 import '../services/parent_join_service.dart';
 import '../services/profile_service.dart';
@@ -86,8 +87,8 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
         if (mounted) {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Kun forældre kan administrere profiler.'),
+            SnackBar(
+              content: Text(AppLocalizations.of(context).parentOnlyManage),
             ),
           );
         }
@@ -126,7 +127,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
         _processingRequestId = null;
         _processingProfileId = null;
         _isLoading = false;
-        _errorMessage = 'Kunne ikke hente profiler: $e';
+        _errorMessage = AppLocalizations.of(context).errorLoadProfilesManage(e);
       });
     }
   }
@@ -146,24 +147,26 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   }
 
   String _roleLabel(ProfileRole role) {
+    final l = AppLocalizations.of(context);
     switch (role) {
       case ProfileRole.parent:
-        return 'Forælder';
+        return l.roleParentLabel;
       case ProfileRole.childLimited:
-        return 'Barn · begrænset adgang';
+        return l.roleChildLimitedLabel;
       case ProfileRole.childExtended:
-        return 'Barn · udvidet adgang';
+        return l.roleChildExtendedLabel;
     }
   }
 
   String _roleDescription(ProfileRole role) {
+    final l = AppLocalizations.of(context);
     switch (role) {
       case ProfileRole.parent:
-        return 'Kan administrere familie, profiler, aktiviteter og indstillinger.';
+        return l.roleDescriptionParent;
       case ProfileRole.childLimited:
-        return 'Kan se kalenderen, gennemføre aktiviteter og krydse checklisten af.';
+        return l.roleDescriptionChildLimited;
       case ProfileRole.childExtended:
-        return 'Kan også oprette, redigere og slette egne aktiviteter.';
+        return l.roleDescriptionChildExtended;
     }
   }
 
@@ -192,34 +195,32 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   Future<void> _removeParentFromFamily(Profile profile) async {
     if (!_canRemoveParent(profile)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Denne forælder kan ikke fjernes her.'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).cannotRemoveParentHere),
         ),
       );
       return;
     }
 
+    final l = AppLocalizations.of(context);
     final shouldRemove = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (ctx) {
         return AlertDialog(
-          title: const Text('Fjern forælder?'),
-          content: Text(
-            'Vil du fjerne ${profile.displayName} som forælder i familien? '
-                'Personen mister adgang til familiens kalender.',
-          ),
+          title: Text(l.removeParentDialogTitle),
+          content: Text(l.removeParentDialogContent(profile.displayName)),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Annuller'),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l.cancel),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Fjern'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l.remove),
             ),
           ],
         );
@@ -240,7 +241,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${profile.displayName} blev fjernet som forælder.'),
+          content: Text(AppLocalizations.of(context).parentRemoved(profile.displayName)),
         ),
       );
     } catch (e, st) {
@@ -255,7 +256,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke fjerne forælder: $e'),
+          content: Text(AppLocalizations.of(context).errorRemoveParent(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -263,22 +264,21 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   }
 
   Future<void> _approveJoinRequest(ParentJoinRequest request) async {
+    final l = AppLocalizations.of(context);
     final shouldApprove = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (ctx) {
         return AlertDialog(
-          title: const Text('Godkend forælder?'),
-          content: Text(
-            'Vil du give ${request.requestedDisplayName} adgang som forælder?',
-          ),
+          title: Text(l.approveParentDialogTitle),
+          content: Text(l.approveParentDialogContent(request.requestedDisplayName)),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Annuller'),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l.cancel),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Godkend'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l.approve),
             ),
           ],
         );
@@ -299,9 +299,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            '${request.requestedDisplayName} blev godkendt som forælder.',
-          ),
+          content: Text(AppLocalizations.of(context).parentApproved(request.requestedDisplayName)),
         ),
       );
     } catch (e, st) {
@@ -316,7 +314,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke godkende anmodning: $e'),
+          content: Text(AppLocalizations.of(context).errorApproveRequest(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -324,22 +322,21 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   }
 
   Future<void> _rejectJoinRequest(ParentJoinRequest request) async {
+    final l = AppLocalizations.of(context);
     final shouldReject = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (ctx) {
         return AlertDialog(
-          title: const Text('Afvis anmodning?'),
-          content: Text(
-            'Vil du afvise anmodningen fra ${request.requestedDisplayName}?',
-          ),
+          title: Text(l.rejectRequestDialogTitle),
+          content: Text(l.rejectRequestDialogContent(request.requestedDisplayName)),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Annuller'),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l.cancel),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Afvis'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l.reject),
             ),
           ],
         );
@@ -360,9 +357,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Anmodningen fra ${request.requestedDisplayName} blev afvist.',
-          ),
+          content: Text(AppLocalizations.of(context).requestRejected(request.requestedDisplayName)),
         ),
       );
     } catch (e, st) {
@@ -377,7 +372,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke afvise anmodning: $e'),
+          content: Text(AppLocalizations.of(context).errorRejectRequest(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -389,8 +384,8 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
     if (parentProfile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Forælderprofilen mangler. Prøv at genindlæse.'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).parentProfileMissing),
         ),
       );
       return;
@@ -423,28 +418,27 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
     if (!mounted) return;
 
+    final l = AppLocalizations.of(context);
     await showDialog<void>(
       context: context,
-      builder: (context) {
+      builder: (ctx) {
         return AlertDialog(
-          title: const Text('Barn oprettet'),
+          title: Text(l.childCreatedDialogTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('${createdProfile.displayName} blev oprettet som:'),
+              Text(l.childCreatedDialogContent(createdProfile.displayName)),
               const SizedBox(height: 8),
               Text(
                 _roleLabel(createdProfile.role),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-              const Text('Barnets login-kode:'),
+              Text(l.childLoginCodeLabel),
               const SizedBox(height: 6),
               SelectableText(
-                createdProfile.childLoginCode ?? 'Ingen kode',
+                createdProfile.childLoginCode ?? l.noCodeFound,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 26,
@@ -456,8 +450,8 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Luk'),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l.close),
             ),
           ],
         );
@@ -468,23 +462,21 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   Future<void> _resetChildCode(Profile profile) async {
     if (!profile.isChild) return;
 
+    final l = AppLocalizations.of(context);
     final shouldReset = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (ctx) {
         return AlertDialog(
-          title: const Text('Nulstil barnets kode?'),
-          content: Text(
-            'Vil du oprette en ny login-kode til ${profile.displayName}? '
-                'Den gamle kode virker ikke bagefter.',
-          ),
+          title: Text(l.resetChildCodeDialogTitle),
+          content: Text(l.resetChildCodeDialogContent(profile.displayName)),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Annuller'),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l.cancel),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Nulstil kode'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l.resetCodeButton),
             ),
           ],
         );
@@ -500,15 +492,16 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       if (!mounted) return;
 
+      final lAfter = AppLocalizations.of(context);
       await showDialog<void>(
         context: context,
-        builder: (context) {
+        builder: (ctx) {
           return AlertDialog(
-            title: const Text('Ny login-kode'),
+            title: Text(lAfter.newLoginCodeDialogTitle),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Ny kode til ${profile.displayName}:'),
+                Text(lAfter.newLoginCodeContent(profile.displayName)),
                 const SizedBox(height: 10),
                 SelectableText(
                   newCode,
@@ -522,8 +515,8 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Luk'),
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(lAfter.close),
               ),
             ],
           );
@@ -534,7 +527,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke nulstille kode: $e'),
+          content: Text(AppLocalizations.of(context).errorDeactivateProfile(e)),
         ),
       );
     }
@@ -565,7 +558,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke ændre rolle: $e'),
+          content: Text(AppLocalizations.of(context).errorRejectRequest(e)),
         ),
       );
     }
@@ -574,34 +567,31 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   Future<void> _showProfileRemovalOptions(Profile profile) async {
     if (profile.role == ProfileRole.parent) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Forælderprofilen kan ikke fjernes her.'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).parentCannotBeRemovedHere),
         ),
       );
       return;
     }
 
+    final l = AppLocalizations.of(context);
     final action = await showDialog<_ProfileRemovalAction>(
       context: context,
-      builder: (context) {
+      builder: (ctx) {
         return AlertDialog(
-          title: const Text('Fjern profil?'),
-          content: Text(
-            'Hvad vil du gøre med ${profile.displayName}?\n\n'
-                'Deaktivering skjuler profilen, men bevarer data.\n'
-                'Permanent sletning fjerner profilen fra systemet.',
-          ),
+          title: Text(l.removeProfileDialogTitle),
+          content: Text(l.removeProfileDialogContent(profile.displayName)),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Annuller'),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l.cancel),
             ),
             OutlinedButton.icon(
               onPressed: () {
-                Navigator.pop(context, _ProfileRemovalAction.deactivate);
+                Navigator.pop(ctx, _ProfileRemovalAction.deactivate);
               },
               icon: const Icon(Icons.visibility_off_outlined),
-              label: const Text('Deaktivér'),
+              label: Text(l.deactivateButton),
             ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
@@ -609,10 +599,10 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
                 foregroundColor: Colors.white,
               ),
               onPressed: () {
-                Navigator.pop(context, _ProfileRemovalAction.delete);
+                Navigator.pop(ctx, _ProfileRemovalAction.delete);
               },
               icon: const Icon(Icons.delete_outline),
-              label: const Text('Slet'),
+              label: Text(l.delete),
             ),
           ],
         );
@@ -648,7 +638,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${profile.displayName} blev deaktiveret.'),
+          content: Text(AppLocalizations.of(context).profileDeactivated(profile.displayName)),
         ),
       );
     } catch (e) {
@@ -660,7 +650,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke deaktivere profil: $e'),
+          content: Text(AppLocalizations.of(context).errorDeactivateProfile(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -670,28 +660,26 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
   Future<void> _deleteChildProfile(Profile profile) async {
     if (!profile.isChild) return;
 
+    final l = AppLocalizations.of(context);
     final shouldDelete = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (ctx) {
         return AlertDialog(
-          title: const Text('Slet profil permanent?'),
-          content: Text(
-            'Er du sikker på, at du vil slette ${profile.displayName} permanent?\n\n'
-                'Dette kan ikke fortrydes. Hvis profilen bruges i aktiviteter eller deltagerlister, kan databasen blokere sletningen.',
-          ),
+          title: Text(l.deletePermanentlyDialogTitle),
+          content: Text(l.deletePermanentlyDialogContent(profile.displayName)),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Annuller'),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l.cancel),
             ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () => Navigator.pop(ctx, true),
               icon: const Icon(Icons.delete_outline),
-              label: const Text('Slet permanent'),
+              label: Text(l.deletePermanentlyButton),
             ),
           ],
         );
@@ -718,7 +706,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${profile.displayName} blev slettet.'),
+          content: Text(AppLocalizations.of(context).profileDeleted(profile.displayName)),
         ),
       );
     } catch (e, st) {
@@ -733,7 +721,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke slette profil: $e'),
+          content: Text(AppLocalizations.of(context).errorDeleteProfile(e)),
           duration: const Duration(seconds: 6),
         ),
       );
@@ -751,13 +739,12 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 18),
-        const _SectionTitle(title: 'Afventende forældreanmodninger'),
+        _SectionTitle(title: AppLocalizations.of(context).pendingRequestsSectionTitle),
         const SizedBox(height: 8),
         _InlineInfoBox(
           icon: Icons.group_add_outlined,
-          title: 'Nye forældre',
-          text:
-          '${pendingRequests.length} anmodning(er) afventer godkendelse. Godkend kun personer, der skal have fuld forælderadgang til familien.',
+          title: AppLocalizations.of(context).newParentsInfoTitle,
+          text: AppLocalizations.of(context).pendingRequestsInfo(pendingRequests.length),
         ),
         const SizedBox(height: 12),
         ...pendingRequests.map(
@@ -811,7 +798,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
               ElevatedButton.icon(
                 onPressed: _loadProfiles,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Prøv igen'),
+                label: Text(AppLocalizations.of(context).retry),
               ),
             ],
           ),
@@ -833,7 +820,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Der blev ikke fundet nogen profiler.',
+                AppLocalizations.of(context).noProfilesFound,
                 textAlign: TextAlign.center,
                 style: TextStyle(color: colorScheme.onSurface),
               ),
@@ -841,7 +828,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
               ElevatedButton.icon(
                 onPressed: _loadProfiles,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Genindlæs'),
+                label: Text(AppLocalizations.of(context).reload),
               ),
             ],
           ),
@@ -861,13 +848,13 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
           const SizedBox(height: 18),
           Row(
             children: [
-              const Expanded(
-                child: _SectionTitle(title: 'Familieprofiler'),
+              Expanded(
+                child: _SectionTitle(title: AppLocalizations.of(context).familyProfilesHeader),
               ),
               TextButton.icon(
                 onPressed: _loadProfiles,
                 icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Genindlæs'),
+                label: Text(AppLocalizations.of(context).reload),
               ),
             ],
           ),
@@ -919,7 +906,7 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
         backgroundColor: const Color(0xFF2E7D32),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.person_add_alt_1),
-        label: const Text('Tilføj barn'),
+        label: Text(AppLocalizations.of(context).addChildButton),
       ),
       body: SafeArea(
         child: Padding(
@@ -927,8 +914,8 @@ class _ManageProfilesScreenState extends State<ManageProfilesScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const AppTopHeader(
-                title: 'Profiler',
+              AppTopHeader(
+                title: AppLocalizations.of(context).manageProfilesTitle,
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -1027,31 +1014,33 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke oprette barn: $e'),
+          content: Text(AppLocalizations.of(context).errorCreateChild(e)),
         ),
       );
     }
   }
 
   String _roleTitle(ProfileRole role) {
+    final l = AppLocalizations.of(context);
     switch (role) {
       case ProfileRole.parent:
-        return 'Forælder';
+        return l.roleParentLabel;
       case ProfileRole.childLimited:
-        return 'Begrænset adgang';
+        return l.limitedAccessOption;
       case ProfileRole.childExtended:
-        return 'Udvidet adgang';
+        return l.extendedAccessOption;
     }
   }
 
   String _roleSubtitle(ProfileRole role) {
+    final l = AppLocalizations.of(context);
     switch (role) {
       case ProfileRole.parent:
-        return 'Ikke relevant ved oprettelse af barn.';
+        return l.roleDescriptionParent;
       case ProfileRole.childLimited:
-        return 'Kan se kalenderen, gennemføre aktiviteter og krydse checklisten af.';
+        return l.roleDescriptionChildLimited;
       case ProfileRole.childExtended:
-        return 'Kan også oprette, redigere og slette egne aktiviteter.';
+        return l.roleDescriptionChildExtended;
     }
   }
 
@@ -1099,7 +1088,7 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Tilføj barn',
+                    AppLocalizations.of(context).addChildSheetTitle,
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -1108,7 +1097,7 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Opret en børneprofil og vælg, hvor meget adgang barnet skal have.',
+                    AppLocalizations.of(context).addChildSheetSubtitle,
                     style: TextStyle(
                       fontSize: 14,
                       color: colorScheme.onSurface.withValues(alpha: 0.85),
@@ -1116,49 +1105,48 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  TextFormField(
-                    controller: _nameController,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Navn',
-                      hintText: 'Fx Adam',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Skriv barnets navn';
-                      }
-
-                      if (value.trim().length < 2) {
-                        return 'Navnet er for kort';
-                      }
-
-                      return null;
+                  Builder(
+                    builder: (ctx) {
+                      final l = AppLocalizations.of(ctx);
+                      return TextFormField(
+                        controller: _nameController,
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          labelText: l.name,
+                          hintText: l.nameHint,
+                          border: const OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) return l.nameRequired;
+                          if (value.trim().length < 2) return l.nameTooShort;
+                          return null;
+                        },
+                      );
                     },
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _displayNameController,
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Visningsnavn',
-                      hintText: 'Valgfrit',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: AppLocalizations.of(context).displayNameLabel,
+                      hintText: AppLocalizations.of(context).displayNameHint,
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _emojiController,
                     textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(
-                      labelText: 'Emoji',
+                    decoration: InputDecoration(
+                      labelText: AppLocalizations.of(context).emoji,
                       hintText: '🧒',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Adgangsniveau',
+                    AppLocalizations.of(context).accessLevelLabel,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1200,9 +1188,9 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                         child: OutlinedButton(
                           onPressed:
                           _isSaving ? null : () => Navigator.pop(context),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 13),
-                            child: Text('Annuller'),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            child: Text(AppLocalizations.of(context).cancel),
                           ),
                         ),
                       ),
@@ -1225,7 +1213,7 @@ class _CreateChildProfileSheetState extends State<_CreateChildProfileSheet> {
                                 color: Colors.white,
                               ),
                             )
-                                : const Text('Opret'),
+                                : Text(AppLocalizations.of(context).create),
                           ),
                         ),
                       ),
@@ -1250,8 +1238,9 @@ class _FamilyCodeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final hasCode = familyCode != null && familyCode!.trim().isNotEmpty;
-    final displayCode = hasCode ? familyCode!.trim() : 'Ingen kode fundet';
+    final displayCode = hasCode ? familyCode!.trim() : l.noCodeFound;
 
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1279,7 +1268,7 @@ class _FamilyCodeCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Familie kode',
+                  l.familyCodeDisplayLabel,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -1288,7 +1277,7 @@ class _FamilyCodeCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Denne kode bruges sammen med barnets egen login-kode ved børnelogin.',
+                  l.familyCodeDescriptionText,
                   style: TextStyle(
                     fontSize: 13,
                     color: colorScheme.onSurface.withValues(alpha: 0.85),
@@ -1402,7 +1391,7 @@ class _ParentJoinRequestCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Anmodet: ${_formatDateTime(request.createdAt)}',
+                      'Anmodet: ${_formatDateTime(request.createdAt)}', // timestamp format is locale-neutral
                       style: TextStyle(
                         fontSize: 13,
                         color: colorScheme.onSurface.withValues(alpha: 0.6),
@@ -1421,7 +1410,7 @@ class _ParentJoinRequestCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Denne person får fuld forælderadgang, hvis anmodningen godkendes.',
+            AppLocalizations.of(context).parentAccessInfo,
             style: TextStyle(
               fontSize: 13,
               color: colorScheme.onSurface.withValues(alpha: 0.85),
@@ -1435,7 +1424,7 @@ class _ParentJoinRequestCard extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: isProcessing ? null : onReject,
                   icon: const Icon(Icons.close),
-                  label: const Text('Afvis'),
+                  label: Text(AppLocalizations.of(context).reject),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1447,7 +1436,7 @@ class _ParentJoinRequestCard extends StatelessWidget {
                     foregroundColor: Colors.white,
                   ),
                   icon: const Icon(Icons.check),
-                  label: const Text('Godkend'),
+                  label: Text(AppLocalizations.of(context).approve),
                 ),
               ),
             ],
@@ -1618,7 +1607,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
                   : const Icon(Icons.person_remove_outlined),
-              label: const Text('Fjern forælder'),
+              label: Text(AppLocalizations.of(context).removeParentLabel),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.redAccent,
                 side: const BorderSide(
@@ -1648,7 +1637,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Barnets login-kode',
+                      AppLocalizations.of(context).childLoginCodeTitle,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: colorScheme.onSurface,
@@ -1659,7 +1648,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                   if (_isChildCodeVisible)
                     Flexible(
                       child: SelectableText(
-                        hasChildLoginCode ? childLoginCode : 'Ingen kode',
+                        hasChildLoginCode ? childLoginCode : AppLocalizations.of(context).noCodeFound,
                         textAlign: TextAlign.right,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
@@ -1692,7 +1681,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                           : Icons.visibility_outlined,
                       size: 18,
                     ),
-                    label: Text(_isChildCodeVisible ? 'Skjul' : 'Vis'),
+                    label: Text(_isChildCodeVisible ? AppLocalizations.of(context).hideCode : AppLocalizations.of(context).showCode),
                   ),
                 ],
               ),
@@ -1700,18 +1689,18 @@ class _ProfileCardState extends State<_ProfileCard> {
             const SizedBox(height: 12),
             DropdownButtonFormField<ProfileRole>(
               initialValue: profile.role,
-              decoration: const InputDecoration(
-                labelText: 'Adgangsniveau',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: AppLocalizations.of(context).accessLevelLabel,
+                border: const OutlineInputBorder(),
               ),
-              items: const [
+              items: [
                 DropdownMenuItem(
                   value: ProfileRole.childLimited,
-                  child: Text('Begrænset adgang'),
+                  child: Text(AppLocalizations.of(context).limitedAccessOption),
                 ),
                 DropdownMenuItem(
                   value: ProfileRole.childExtended,
-                  child: Text('Udvidet adgang'),
+                  child: Text(AppLocalizations.of(context).extendedAccessOption),
                 ),
               ],
               onChanged: widget.onChangeRole == null
@@ -1729,7 +1718,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                     onPressed:
                     widget.isProcessing ? null : widget.onResetCode,
                     icon: const Icon(Icons.refresh),
-                    label: const Text('Ny kode'),
+                    label: Text(AppLocalizations.of(context).newCodeButton),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1744,7 +1733,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                         : const Icon(Icons.manage_accounts_outlined),
-                    label: const Text('Deaktivér / slet'),
+                    label: Text(AppLocalizations.of(context).deactivateDeleteButton),
                   ),
                 ),
               ],

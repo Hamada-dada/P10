@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/profile.dart';
 import '../models/reward.dart';
 import '../services/profile_service.dart';
@@ -7,7 +8,10 @@ import '../services/reward_service.dart';
 import '../widgets/reward_card.dart';
 
 class RewardsScreen extends StatefulWidget {
-  const RewardsScreen({super.key});
+  final bool readOnly;
+  final String? ownProfileId;
+
+  const RewardsScreen({super.key, this.readOnly = false, this.ownProfileId});
 
   @override
   State<RewardsScreen> createState() => _RewardsScreenState();
@@ -39,7 +43,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
       });
 
       final profiles = await _profileService.getMyFamilyProfiles();
-      final rewards = await _rewardService.getAllRewards();
+      final rewards = widget.ownProfileId != null
+          ? await _rewardService.getRewardsForProfile(widget.ownProfileId!)
+          : await _rewardService.getAllRewards();
 
       if (!mounted) return;
 
@@ -51,11 +57,12 @@ class _RewardsScreenState extends State<RewardsScreen> {
     } catch (e) {
       if (!mounted) return;
 
+      final l = AppLocalizations.of(context);
       setState(() {
         _profiles = [];
         _rewards = [];
         _isLoading = false;
-        _errorMessage = 'Kunne ikke hente belønninger: $e';
+        _errorMessage = l.errorLoadRewards(e);
       });
     }
   }
@@ -92,14 +99,11 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
   Future<void> _openCreateRewardDialog() async {
     final childProfiles = _childProfiles;
+    final l = AppLocalizations.of(context);
 
     if (childProfiles.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Du skal oprette et barn først, før du kan lave en belønning.',
-          ),
-        ),
+        SnackBar(content: Text(l.needChildFirst)),
       );
       return;
     }
@@ -120,42 +124,42 @@ class _RewardsScreenState extends State<RewardsScreen> {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             return AlertDialog(
-              title: const Text('Opret belønning'),
+              title: Text(l.createRewardDialogTitle),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
                       controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Titel',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: l.title,
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: emojiController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Emoji',
-                        hintText: 'f.eks. 🍦',
-                        border: OutlineInputBorder(),
+                        hintText: l.emojiHintReward,
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: descriptionController,
                       maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Beskrivelse',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: l.description,
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       initialValue: selectedProfile.id,
-                      decoration: const InputDecoration(
-                        labelText: 'Tilhører barn',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: l.belongsToChild,
+                        border: const OutlineInputBorder(),
                       ),
                       items: childProfiles.map((profile) {
                         return DropdownMenuItem<String>(
@@ -180,18 +184,18 @@ class _RewardsScreenState extends State<RewardsScreen> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<RewardType>(
                       initialValue: selectedType,
-                      decoration: const InputDecoration(
-                        labelText: 'Belønningstype',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: l.rewardType,
+                        border: const OutlineInputBorder(),
                       ),
-                      items: const [
+                      items: [
                         DropdownMenuItem(
                           value: RewardType.direct,
-                          child: Text('Direkte belønning'),
+                          child: Text(l.directRewardOption),
                         ),
                         DropdownMenuItem(
                           value: RewardType.streak,
-                          child: Text('Langsigtet belønning'),
+                          child: Text(l.streakRewardOption),
                         ),
                       ],
                       onChanged: isSaving
@@ -215,10 +219,10 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
                         labelText: selectedType == RewardType.direct
-                            ? 'Antal gennemførelser'
-                            : 'Udløses efter X gennemførelser',
+                            ? l.completionCountDirect
+                            : l.completionCountStreak,
                         helperText: selectedType == RewardType.direct
-                            ? 'Direkte belønninger udløses efter 1 gang.'
+                            ? l.directRewardHelperText
                             : null,
                         border: const OutlineInputBorder(),
                       ),
@@ -241,7 +245,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   onPressed: isSaving
                       ? null
                       : () => Navigator.pop(dialogContext, false),
-                  child: const Text('Annuller'),
+                  child: Text(l.cancel),
                 ),
                 ElevatedButton(
                   onPressed: isSaving
@@ -258,14 +262,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
                     if (title.isEmpty) {
                       setDialogState(() {
-                        dialogError = 'Skriv en titel til belønningen.';
+                        dialogError = l.rewardTitleRequired;
                       });
                       return;
                     }
 
                     if (targetCount < 1) {
                       setDialogState(() {
-                        dialogError = 'Antal gennemførelser skal være mindst 1.';
+                        dialogError = l.completionCountMin;
                       });
                       return;
                     }
@@ -301,7 +305,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
                       setDialogState(() {
                         isSaving = false;
-                        dialogError = 'Kunne ikke oprette belønning: $e';
+                        dialogError = l.errorCreateReward(e);
                       });
                     }
                   },
@@ -311,7 +315,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                      : const Text('Gem'),
+                      : Text(l.save),
                 ),
               ],
             );
@@ -328,9 +332,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Belønning oprettet'),
-        ),
+        SnackBar(content: Text(AppLocalizations.of(context).rewardCreated)),
       );
     }
   }
@@ -343,16 +345,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Belønning slettet'),
-        ),
+        SnackBar(content: Text(AppLocalizations.of(context).rewardDeleted)),
       );
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke slette belønning: $e'),
+          content: Text(AppLocalizations.of(context).errorDeleteReward(e)),
         ),
       );
     }
@@ -393,7 +393,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: _loadData,
-                  child: const Text('Prøv igen'),
+                  child: Text(AppLocalizations.of(context).retry),
                 ),
               ],
             ),
@@ -402,6 +402,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
       );
     }
 
+    final l = AppLocalizations.of(context);
     final rewards = _filteredRewards;
     final profileFilters = _profileFilterOptions;
 
@@ -416,9 +417,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _TopBar(
-                title: 'Belønninger',
+                title: l.rewardsTitle,
                 onBack: () => Navigator.maybePop(context),
-                onAdd: _openCreateRewardDialog,
+                onAdd: widget.readOnly ? null : _openCreateRewardDialog,
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -441,59 +442,62 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
                       children: [
-                        const _SectionTitle(title: 'Profilfilter'),
-                        const SizedBox(height: 10),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: profileFilters.map((profileName) {
-                              final isSelected =
-                                  profileName == _selectedProfileFilter;
+                        if (widget.ownProfileId == null) ...[
+                          _SectionTitle(title: l.profileFilterTitle),
+                          const SizedBox(height: 10),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: profileFilters.map((profileName) {
+                                final isSelected =
+                                    profileName == _selectedProfileFilter;
 
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: ChoiceChip(
-                                  label: Text(profileName),
-                                  selected: isSelected,
-                                  selectedColor: isDark
-                                      ? colorScheme.primary
-                                      .withValues(alpha: 0.22)
-                                      : colorScheme.primaryContainer,
-                                  backgroundColor: isDark
-                                      ? const Color(0xFF101312)
-                                      : colorScheme.surface,
-                                  side: BorderSide(
-                                    color: isSelected
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ChoiceChip(
+                                    label: Text(profileName == 'Alle' ? l.all : profileName),
+                                    selected: isSelected,
+                                    selectedColor: isDark
                                         ? colorScheme.primary
-                                        : isDark
-                                        ? const Color(0xFF2A2D2C)
-                                        : const Color(0xFFE0E0E0),
+                                        .withValues(alpha: 0.22)
+                                        : colorScheme.primaryContainer,
+                                    backgroundColor: isDark
+                                        ? const Color(0xFF101312)
+                                        : colorScheme.surface,
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? colorScheme.primary
+                                          : isDark
+                                          ? const Color(0xFF2A2D2C)
+                                          : const Color(0xFFE0E0E0),
+                                    ),
+                                    labelStyle: TextStyle(
+                                      color: colorScheme.onSurface,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                    ),
+                                    onSelected: (_) {
+                                      setState(() {
+                                        _selectedProfileFilter = profileName;
+                                      });
+                                    },
                                   ),
-                                  labelStyle: TextStyle(
-                                    color: colorScheme.onSurface,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                  ),
-                                  onSelected: (_) {
-                                    setState(() {
-                                      _selectedProfileFilter = profileName;
-                                    });
-                                  },
-                                ),
-                              );
-                            }).toList(),
+                                );
+                              }).toList(),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 20),
-                        const _SectionTitle(title: 'Oversigt'),
+                          const SizedBox(height: 20),
+                        ],
+                        _SectionTitle(title: l.overviewTitle),
                         const SizedBox(height: 10),
                         _SummaryCard(
-                          totalCount: rewards.length,
-                          selectedProfile: _selectedProfileFilter,
+                          summary: _selectedProfileFilter == 'Alle'
+                              ? l.rewardSummaryAll(rewards.length)
+                              : l.rewardSummaryProfile(rewards.length, _selectedProfileFilter),
                         ),
                         const SizedBox(height: 20),
-                        const _SectionTitle(title: 'Belønningsliste'),
+                        _SectionTitle(title: l.rewardListTitle),
                         const SizedBox(height: 10),
                         if (rewards.isEmpty)
                           const _EmptyRewardsState()
@@ -503,7 +507,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                               padding: const EdgeInsets.only(bottom: 12),
                               child: RewardCard(
                                 reward: reward,
-                                onDelete: () => _deleteReward(reward.id),
+                                onDelete: widget.readOnly ? null : () => _deleteReward(reward.id),
                               ),
                             ),
                           ),
@@ -523,12 +527,12 @@ class _RewardsScreenState extends State<RewardsScreen> {
 class _TopBar extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
-  final VoidCallback onAdd;
+  final VoidCallback? onAdd;
 
   const _TopBar({
     required this.title,
     required this.onBack,
-    required this.onAdd,
+    this.onAdd,
   });
 
   @override
@@ -558,16 +562,19 @@ class _TopBar extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        IconButton(
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: onAdd,
-          icon: Icon(
-            Icons.add_circle_outline,
-            size: 30,
-            color: colorScheme.onSurface,
-          ),
-        ),
+        if (onAdd != null)
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: onAdd,
+            icon: Icon(
+              Icons.add_circle_outline,
+              size: 30,
+              color: colorScheme.onSurface,
+            ),
+          )
+        else
+          const SizedBox(width: 30),
       ],
     );
   }
@@ -594,13 +601,9 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  final int totalCount;
-  final String selectedProfile;
+  final String summary;
 
-  const _SummaryCard({
-    required this.totalCount,
-    required this.selectedProfile,
-  });
+  const _SummaryCard({required this.summary});
 
   @override
   Widget build(BuildContext context) {
@@ -628,9 +631,7 @@ class _SummaryCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              selectedProfile == 'Alle'
-                  ? 'Du har $totalCount belønninger i alt'
-                  : 'Du har $totalCount belønninger til $selectedProfile',
+              summary,
               style: TextStyle(
                 fontSize: 15,
                 color: colorScheme.onSurface,
@@ -674,7 +675,7 @@ class _EmptyRewardsState extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Ingen belønninger endnu',
+            AppLocalizations.of(context).noRewardsYet,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -683,7 +684,7 @@ class _EmptyRewardsState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Opret en belønning for at kunne knytte den til en aktivitet.',
+            AppLocalizations.of(context).noRewardsExplanation,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,

@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 import '../repositories/supabase_activity_repository.dart';
@@ -126,9 +127,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
     return null;
   }
 
-  bool get _showChildHeaderName {
-    return _isChildSession || _currentProfile?.isChild == true;
-  }
+  bool get _showChildHeaderName => _isChildSession;
 
   @override
   void initState() {
@@ -263,7 +262,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke hente ugeaktiviteter: $e'),
+          content: Text(AppLocalizations.of(context).errorLoadWeekActivities(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -466,8 +465,8 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
   Future<void> _openCreateActivityScreen() async {
     if (!_canCreateActivity) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Du har ikke adgang til at oprette aktiviteter.'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).errorNoAccessCreate),
         ),
       );
       return;
@@ -495,7 +494,7 @@ class _WeeklyCalendarScreenState extends State<WeeklyCalendarScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke oprette aktivitet: $e'),
+          content: Text(AppLocalizations.of(context).errorSaveActivity(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -704,6 +703,73 @@ class _TopHeader extends StatelessWidget {
     this.childEmoji,
   });
 
+  void _showChildSheet(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: isDark ? const Color(0xFF101312) : Colors.white,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colorScheme.onSurface.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              CircleAvatar(
+                radius: 36,
+                backgroundColor: isDark
+                    ? colorScheme.primary.withValues(alpha: 0.16)
+                    : colorScheme.primaryContainer,
+                child: Text(childEmoji ?? '🙂', style: const TextStyle(fontSize: 32)),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                displayName ?? AppLocalizations.of(context).child,
+                style: TextStyle(
+                  fontFamily: 'Italiana',
+                  fontSize: 26,
+                  fontWeight: FontWeight.w400,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(sheetContext);
+                    onLogout();
+                  },
+                  icon: const Icon(Icons.logout, size: 20),
+                  label: Text(AppLocalizations.of(context).logout),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(sheetContext).colorScheme.error,
+                    side: BorderSide(color: Theme.of(sheetContext).colorScheme.error),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -715,7 +781,7 @@ class _TopHeader extends StatelessWidget {
         if (showChildHeaderName)
           InkWell(
             borderRadius: BorderRadius.circular(999),
-            onTap: isLoggingOut ? null : onLogout,
+            onTap: isLoggingOut ? null : () => _showChildSheet(context),
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -760,7 +826,7 @@ class _ScreenTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        'Ugekalender',
+        AppLocalizations.of(context).weeklyCalendarTitle,
         style: TextStyle(
           fontFamily: 'Italiana',
           fontSize: fontSize,
@@ -784,20 +850,6 @@ class _WeekDayCard extends StatelessWidget {
     required this.highlightActivity,
     required this.onTap,
   });
-
-  String _weekdayName(int weekday) {
-    const weekdays = [
-      'Mandag',
-      'Tirsdag',
-      'Onsdag',
-      'Torsdag',
-      'Fredag',
-      'Lørdag',
-      'Søndag',
-    ];
-
-    return weekdays[weekday - 1];
-  }
 
   String _formatTime(DateTime dateTime) {
     final hour = dateTime.hour.toString().padLeft(2, '0');
@@ -856,7 +908,7 @@ class _WeekDayCard extends StatelessWidget {
             SizedBox(
               width: 72,
               child: Text(
-                '${_weekdayName(date.weekday)}\n${date.day}/${date.month}',
+                '${AppLocalizations.of(context).weekdayNames[date.weekday - 1]}\n${date.day}/${date.month}',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -871,7 +923,7 @@ class _WeekDayCard extends StatelessWidget {
                   ? Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
-                        'Ingen aktiviteter',
+                        AppLocalizations.of(context).noActivities,
                         style: TextStyle(
                           fontSize: 15,
                           color: colorScheme.onSurface.withValues(alpha: 0.6),

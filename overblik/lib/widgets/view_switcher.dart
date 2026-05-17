@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
+
 enum CalendarScreenType {
   day,
   week,
@@ -54,6 +56,7 @@ class ViewSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l = AppLocalizations.of(context);
 
     return Container(
       height: 44,
@@ -70,17 +73,17 @@ class ViewSwitcher extends StatelessWidget {
       child: Row(
         children: [
           _Segment(
-            label: 'Dag',
+            label: l.viewDay,
             isSelected: selectedView == CalendarScreenType.day,
             onTap: () => _handleTap(context, CalendarScreenType.day),
           ),
           _Segment(
-            label: 'Uge',
+            label: l.viewWeek,
             isSelected: selectedView == CalendarScreenType.week,
             onTap: () => _handleTap(context, CalendarScreenType.week),
           ),
           _Segment(
-            label: 'Måned',
+            label: l.viewMonth,
             isSelected: selectedView == CalendarScreenType.month,
             onTap: () => _handleTap(context, CalendarScreenType.month),
           ),

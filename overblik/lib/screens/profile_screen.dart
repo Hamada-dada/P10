@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import '../main.dart' show themeController;
 import '../models/profile.dart';
 import 'login_screen.dart';
@@ -33,25 +34,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoggingOut = false;
 
   String get _roleLabel {
+    final l = AppLocalizations.of(context);
     switch (widget.profile.role) {
       case ProfileRole.parent:
-        return 'Forælder';
+        return l.roleParentLabel;
       case ProfileRole.childExtended:
-        return 'Barn · udvidet adgang';
+        return l.roleChildExtendedLabel;
       case ProfileRole.childLimited:
-        return 'Barn · begrænset adgang';
+        return l.roleChildLimitedLabel;
     }
   }
 
-  bool get _canOpenSettings => widget.profile.role == ProfileRole.parent;
-  bool get _canOpenRewards => widget.profile.role == ProfileRole.parent;
+  bool get _canOpenSettings => true;
+  bool get _canOpenRewards => true;
 
   void _openSettings() {
-    if (!_canOpenSettings) {
-      _showMessage('Indstillinger er kun tilgængelige for forældre');
-      return;
-    }
-
     if (widget.onOpenSettings != null) {
       widget.onOpenSettings!.call();
       return;
@@ -64,36 +61,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _openRewards() {
-    if (!_canOpenRewards) {
-      _showMessage('Belønninger kan kun administreres af forældre');
-      return;
-    }
-
     if (widget.onOpenRewards != null) {
       widget.onOpenRewards!.call();
       return;
     }
 
+    final isParent = widget.profile.role == ProfileRole.parent;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const RewardsScreen()),
+      MaterialPageRoute(
+        builder: (_) => RewardsScreen(
+          readOnly: !isParent,
+          ownProfileId: isParent ? null : widget.profile.id,
+        ),
+      ),
     );
   }
 
   Future<void> _logout() async {
+    final l = AppLocalizations.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Log ud'),
-        content: const Text('Er du sikker på, at du vil logge ud?'),
+        title: Text(l.logoutDialogTitle),
+        content: Text(l.logoutDialogContent),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Annuller'),
+            child: Text(l.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Log ud'),
+            child: Text(l.logout),
           ),
         ],
       ),
@@ -118,10 +117,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  void _showMessage(String label) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(label)));
-  }
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -138,7 +133,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _TopBar(
-                title: 'Profil',
+                title: AppLocalizations.of(context).profileTitle,
                 onBack: widget.onBack ?? () => Navigator.pop(context),
               ),
               const SizedBox(height: 12),
@@ -158,48 +153,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   clipBehavior: Clip.antiAlias,
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _ProfileHeader(
-                          name: widget.profile.name,
-                          roleLabel: _roleLabel,
-                          emoji: widget.profile.emoji,
-                        ),
-                        const SizedBox(height: 22),
-                        const _SectionTitle(title: 'Hurtige handlinger'),
-                        const SizedBox(height: 10),
-                        Row(
+                    child: Builder(
+                      builder: (ctx) {
+                        final l = AppLocalizations.of(ctx);
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(
-                              child: _ActionCard(
-                                icon: Icons.card_giftcard_outlined,
-                                label: 'Belønninger',
-                                isDisabled: !_canOpenRewards,
-                                onTap: _openRewards,
-                              ),
+                            _ProfileHeader(
+                              name: widget.profile.name,
+                              roleLabel: _roleLabel,
+                              emoji: widget.profile.emoji,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _ActionCard(
-                                icon: Icons.settings_outlined,
-                                label: 'Indstillinger',
-                                isDisabled: !_canOpenSettings,
-                                onTap: _openSettings,
-                              ),
+                            const SizedBox(height: 22),
+                            _SectionTitle(title: l.quickActions),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _ActionCard(
+                                    icon: Icons.card_giftcard_outlined,
+                                    label: l.rewardsLabel,
+                                    isDisabled: !_canOpenRewards,
+                                    onTap: _openRewards,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _ActionCard(
+                                    icon: Icons.settings_outlined,
+                                    label: l.settingsLabel,
+                                    isDisabled: !_canOpenSettings,
+                                    onTap: _openSettings,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 22),
+                            _SectionTitle(title: l.familyAndParticipants),
+                            const SizedBox(height: 10),
+                            _FamilyMembersCard(familyMembers: widget.familyMembers),
+                            const SizedBox(height: 22),
+                            _LogoutButton(
+                              isLoading: _isLoggingOut,
+                              onTap: _logout,
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 22),
-                        const _SectionTitle(title: 'Familie og deltagere'),
-                        const SizedBox(height: 10),
-                        _FamilyMembersCard(familyMembers: widget.familyMembers),
-                        const SizedBox(height: 22),
-                        _LogoutButton(
-                          isLoading: _isLoggingOut,
-                          onTap: _logout,
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -553,7 +553,7 @@ class _LogoutButton extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.logout, size: 20),
-        label: const Text('Log ud'),
+        label: Text(AppLocalizations.of(context).logout),
         style: OutlinedButton.styleFrom(
           foregroundColor: Theme.of(context).colorScheme.error,
           side: BorderSide(color: Theme.of(context).colorScheme.error),

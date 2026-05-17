@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import 'create_family_screen.dart';
 import 'request_parent_join_screen.dart';
 
@@ -30,6 +31,8 @@ class ParentOnboardingChoiceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+
     return Scaffold(
       backgroundColor: const Color(0xFFA2E5AD),
       body: SafeArea(
@@ -51,7 +54,7 @@ class ParentOnboardingChoiceScreen extends StatelessWidget {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: IconButton(
-                      tooltip: 'Tilbage',
+                      tooltip: l.back,
                       onPressed: () => _goBack(context),
                       icon: const Icon(
                         Icons.arrow_back,
@@ -67,10 +70,10 @@ class ParentOnboardingChoiceScreen extends StatelessWidget {
                     color: Colors.black87,
                   ),
                   const SizedBox(height: 18),
-                  const Text(
-                    'Familieadgang',
+                  Text(
+                    l.familyAccessTitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'Italiana',
                       fontSize: 32,
                       fontWeight: FontWeight.w400,
@@ -78,10 +81,10 @@ class ParentOnboardingChoiceScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'Vælg om du vil oprette en ny familie eller anmode om adgang til en eksisterende familie.',
+                  Text(
+                    l.familyAccessDescription,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 14,
                       color: Colors.black54,
                       height: 1.4,
@@ -90,21 +93,21 @@ class ParentOnboardingChoiceScreen extends StatelessWidget {
                   const SizedBox(height: 24),
                   _ChoiceButton(
                     icon: Icons.add_home_outlined,
-                    title: 'Opret ny familie',
-                    subtitle: 'Start en ny familie og administrér profiler.',
+                    title: l.createNewFamilyButton,
+                    subtitle: l.createNewFamilySubtitle,
                     onTap: () => _openCreateFamily(context),
                   ),
                   const SizedBox(height: 12),
                   _ChoiceButton(
                     icon: Icons.group_add_outlined,
-                    title: 'Anmod om adgang',
-                    subtitle: 'Send en anmodning til en eksisterende familie.',
+                    title: l.requestAccessButton,
+                    subtitle: l.requestAccessSubtitle,
                     onTap: () => _openRequestJoin(context),
                   ),
                   const SizedBox(height: 14),
                   TextButton(
                     onPressed: () => _goBack(context),
-                    child: const Text('Tilbage'),
+                    child: Text(l.back),
                   ),
                 ],
               ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/utils/activity_filter.dart';
+import '../l10n/app_localizations.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 import '../repositories/local_activity_cache.dart';
@@ -24,6 +25,7 @@ import 'activity_detail_screen.dart';
 import 'create_activity_screen.dart';
 import 'login_screen.dart';
 import 'monthly_calendar_screen.dart';
+import 'settings_screen.dart';
 import 'weekly_calendar_screen.dart';
 
 class DailyCalendarScreen extends StatefulWidget {
@@ -147,9 +149,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
     return null;
   }
 
-  bool get _showChildHeaderName {
-    return _isChildSession || _currentProfile?.isChild == true;
-  }
+  bool get _showChildHeaderName => _isChildSession;
 
   @override
   void initState() {
@@ -266,7 +266,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Kunne ikke hente aktiviteter: $e'),
+        content: Text(AppLocalizations.of(context).errorLoadActivities(e)),
         duration: const Duration(seconds: 5),
       ),
     );
@@ -392,8 +392,8 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   Future<void> _openCreateActivityScreen() async {
     if (!_canCreateActivity) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Du har ikke adgang til at oprette aktiviteter.'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).errorNoAccessCreate),
         ),
       );
       return;
@@ -416,13 +416,13 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Aktivitet gemt')));
+      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).activitySaved)));
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke gemme aktivitet: $e'),
+          content: Text(AppLocalizations.of(context).errorSaveActivity(e)),
           duration: const Duration(seconds: 6),
         ),
       );
@@ -465,7 +465,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
   Future<void> _openActivityDetail(Activity activity) async {
     if (!_canOpenActivityDetail) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Du er ikke logget ind. Log ind igen.')),
+        SnackBar(content: Text(AppLocalizations.of(context).errorNotLoggedIn)),
       );
       return;
     }
@@ -491,33 +491,11 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Aktivitet opdateret')));
+      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).activityUpdated)));
     }
   }
 
   Future<void> _logout() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Log ud'),
-          content: const Text('Er du sikker på, at du vil logge ud?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Annuller'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Log ud'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldLogout != true) return;
-
     try {
       setState(() {
         _isLoggingOut = true;
@@ -548,7 +526,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Kunne ikke logge ud: $e'),
+          content: Text(AppLocalizations.of(context).errorLogout(e)),
           duration: const Duration(seconds: 5),
         ),
       );
@@ -626,7 +604,7 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Belønning udløst: ${afterReward.emoji} ${afterReward.title}',
+              AppLocalizations.of(context).rewardTriggered(afterReward.emoji, afterReward.title),
             ),
             duration: const Duration(seconds: 5),
           ),
@@ -737,6 +715,7 @@ Widget build(BuildContext context) {
                                     (isCompleted) async {
                                   final scaffoldMessenger =
                                   ScaffoldMessenger.of(context);
+                                  final errorMsg = AppLocalizations.of(context).errorUpdateActivity;
                                   final updatedActivity =
                                   activity.copyWith(
                                     isCompleted: isCompleted,
@@ -784,10 +763,8 @@ Widget build(BuildContext context) {
                                     });
 
                                     scaffoldMessenger.showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Kunne ikke opdatere aktiviteten.',
-                                        ),
+                                      SnackBar(
+                                        content: Text(errorMsg),
                                       ),
                                     );
                                   }
@@ -825,6 +802,91 @@ class _TopHeader extends StatelessWidget {
     this.childEmoji,
   });
 
+  void _showChildSheet(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: isDark ? const Color(0xFF101312) : Colors.white,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colorScheme.onSurface.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              CircleAvatar(
+                radius: 36,
+                backgroundColor: isDark
+                    ? colorScheme.primary.withValues(alpha: 0.16)
+                    : colorScheme.primaryContainer,
+                child: Text(childEmoji ?? '🙂', style: const TextStyle(fontSize: 32)),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                displayName ?? AppLocalizations.of(context).child,
+                style: TextStyle(
+                  fontFamily: 'Italiana',
+                  fontSize: 26,
+                  fontWeight: FontWeight.w400,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    );
+                  },
+                  icon: const Icon(Icons.settings_outlined, size: 20),
+                  label: Text(AppLocalizations.of(sheetContext).settingsLabel),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(sheetContext);
+                    onLogout();
+                  },
+                  icon: const Icon(Icons.logout, size: 20),
+                  label: Text(AppLocalizations.of(sheetContext).logout),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(sheetContext).colorScheme.error,
+                    side: BorderSide(color: Theme.of(sheetContext).colorScheme.error),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -836,7 +898,7 @@ class _TopHeader extends StatelessWidget {
         if (showChildHeaderName)
           InkWell(
             borderRadius: BorderRadius.circular(999),
-            onTap: isLoggingOut ? null : onLogout,
+            onTap: isLoggingOut ? null : () => _showChildSheet(context),
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -879,7 +941,7 @@ class _ScreenTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        'Daglig kalender',
+        AppLocalizations.of(context).dailyCalendarTitle,
         style: TextStyle(
           fontFamily: 'Italiana',
           fontSize: 28,
@@ -923,7 +985,7 @@ class _DailySummaryCard extends StatelessWidget {
       ),
       child: activities.isEmpty
           ? Text(
-        'Ingen aktiviteter planlagt for denne dag',
+        AppLocalizations.of(context).noActivitiesForDay,
         style: TextStyle(
           fontSize: 14,
           color: colorScheme.onSurface.withValues(alpha: 0.6),
@@ -936,7 +998,7 @@ class _DailySummaryCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Dagens overblik',
+                AppLocalizations.of(context).todayOverview,
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -944,7 +1006,7 @@ class _DailySummaryCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${activities.length} aktivitet${activities.length == 1 ? '' : 'er'}',
+                AppLocalizations.of(context).activityCount(activities.length),
                 style: TextStyle(
                   fontSize: 12,
                   color: colorScheme.onSurface.withValues(alpha: 0.55),
@@ -979,12 +1041,13 @@ class _DotLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      (Colors.green, 'Udført'),
-      (Colors.red, 'Vigtig'),
-      (Colors.amber, 'Favorit'),
-      (Colors.purple, 'Familie'),
-      (Colors.blue, 'Personlig'),
+    final l = AppLocalizations.of(context);
+    final items = [
+      (Colors.green, l.completed),
+      (Colors.red, l.important),
+      (Colors.amber, l.favourite),
+      (Colors.purple, l.family),
+      (Colors.blue, l.personal),
     ];
 
     return FittedBox(
@@ -1044,7 +1107,7 @@ class _EmptyActivitiesView extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'Ingen aktiviteter',
+              AppLocalizations.of(context).noActivities,
               style: TextStyle(
                 fontFamily: 'Italiana',
                 fontSize: 24,
