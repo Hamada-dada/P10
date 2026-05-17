@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 import '../models/reward.dart';
@@ -532,11 +533,11 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   }
 
   Future<void> _deleteActivity() async {
+    final l = AppLocalizations.of(context);
+
     if (!_canDeleteActivity) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Du har ikke adgang til at slette denne aktivitet.'),
-        ),
+        SnackBar(content: Text(l.cannotDeleteActivityPermission)),
       );
       return;
     }
@@ -545,16 +546,16 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Slet aktivitet'),
-          content: Text('Vil du slette "${_activity.title}"?'),
+          title: Text(l.deleteActivity),
+          content: Text(l.deleteActivityConfirm(_activity.title)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Annuller'),
+              child: Text(l.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Slet'),
+              child: Text(l.delete),
             ),
           ],
         );
@@ -578,7 +579,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kunne ikke slette aktiviteten.')),
+        SnackBar(content: Text(AppLocalizations.of(context).cannotDeleteActivityError)),
       );
     }
   }
@@ -607,7 +608,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kunne ikke opdatere aktiviteten.')),
+        SnackBar(content: Text(AppLocalizations.of(context).cannotUpdateActivityError)),
       );
     }
   }
@@ -1057,7 +1058,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               child: _canDeleteActivity
                                   ? _BottomActionButton(
                                       icon: Icons.delete_outline,
-                                      label: 'Slet',
+                                      label: AppLocalizations.of(context).delete,
                                       onTap: _deleteActivity,
                                       isDestructive: true,
                                     )
@@ -1071,8 +1072,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                     ? Icons.check_circle
                                     : Icons.radio_button_unchecked,
                                 label: _activity.isCompleted
-                                    ? 'Udført'
-                                    : 'Markér udført',
+                                    ? AppLocalizations.of(context).markedAsDoneButton
+                                    : AppLocalizations.of(context).markAsDoneButton,
                                 onTap: _toggleActivityCompleted,
                                 isDestructive: false,
                               ),
@@ -1084,7 +1085,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                               child: _canEditActivity
                                   ? _BottomActionButton(
                                       icon: Icons.edit_outlined,
-                                      label: 'Rediger',
+                                      label: AppLocalizations.of(context).editLabel,
                                       onTap: _editActivity,
                                       isDestructive: false,
                                     )

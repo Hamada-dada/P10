@@ -601,13 +601,10 @@ class _DailyCalendarScreenState extends State<DailyCalendarScreen>
       final isNowTriggered = afterReward.isTriggered;
 
       if (!wasTriggered && isNowTriggered) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context).rewardTriggered(afterReward.emoji, afterReward.title),
-            ),
-            duration: const Duration(seconds: 5),
-          ),
+        final l = AppLocalizations.of(context);
+        await NotificationService().showImmediateRewardNotification(
+          title: l.rewardEarnedTitle,
+          body: '${afterReward.emoji} ${afterReward.title}',
         );
       }
     }
@@ -739,34 +736,35 @@ Widget build(BuildContext context) {
                                       activityId: activity.id,
                                       isCompleted: isCompleted,
                                     );
-
-                                    if (isCompleted != activity.isCompleted) {
-                                      await _handleRewardProgress(
-                                        activity,
-                                        isCompleted,
-                                      );
-                                    }
                                   } catch (_) {
                                     if (!mounted) return;
 
                                     setState(() {
                                       _activities = _activities.map(
-                                            (existing) {
-                                          if (existing.id !=
-                                              activity.id) {
-                                            return existing;
-                                          }
-
+                                        (existing) {
+                                          if (existing.id != activity.id) return existing;
                                           return activity;
                                         },
                                       ).toList();
                                     });
 
                                     scaffoldMessenger.showSnackBar(
-                                      SnackBar(
-                                        content: Text(errorMsg),
-                                      ),
+                                      SnackBar(content: Text(errorMsg)),
                                     );
+                                    return;
+                                  }
+
+                                  if (isCompleted != activity.isCompleted) {
+                                    try {
+                                      await _handleRewardProgress(
+                                        activity,
+                                        isCompleted,
+                                      );
+                                    } catch (e) {
+                                      debugPrint(
+                                        'DailyCalendarScreen: reward progress update failed: $e',
+                                      );
+                                    }
                                   }
                                 },
                               );

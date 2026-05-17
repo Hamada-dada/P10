@@ -252,6 +252,33 @@ class NotificationService {
     await scheduleActivityReminder(activity);
   }
 
+  Future<void> showImmediateRewardNotification({
+    required String title,
+    required String body,
+  }) async {
+    if (!_initialized) return;
+    try {
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'reward_earned',
+          'Belønninger',
+          channelDescription: 'Notifikationer når en belønning er optjent',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(presentSound: true),
+      );
+      await _plugin.show(
+        id: 0x7FFFFFFF,
+        title: title,
+        body: body,
+        notificationDetails: details,
+      );
+    } catch (e) {
+      debugPrint('NotificationService: showImmediateRewardNotification failed: $e');
+    }
+  }
+
   // ── private ──────────────────────────────────────────────────────────────
 
   Future<AndroidScheduleMode> _resolveAndroidScheduleMode() async {

@@ -156,11 +156,16 @@ void _openNewParentFlow() {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 4),
-              Stack(
-                alignment: Alignment.center,
+              Row(
                 children: [
+                  const Expanded(child: SizedBox()),
                   const _BrandHeader(),
-                  const Positioned(right: 0, child: _LangToggle()),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _LangToggle(),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 14),
@@ -325,16 +330,14 @@ class _BrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Overblik+',
-        style: TextStyle(
-          fontFamily: 'Italiana',
-          fontSize: 36,
-          fontWeight: FontWeight.w400,
-          color: Color(0xFF1A3D1A),
-          letterSpacing: 0.8,
-        ),
+    return const Text(
+      'Overblik+',
+      style: TextStyle(
+        fontFamily: 'Italiana',
+        fontSize: 36,
+        fontWeight: FontWeight.w400,
+        color: Color(0xFF1A3D1A),
+        letterSpacing: 0.8,
       ),
     );
   }
@@ -345,23 +348,27 @@ class _LangToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final current = localeController.locale.languageCode;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _LangChip(
-          label: 'DA',
-          selected: current == 'da',
-          onTap: () => localeController.setLocale(const Locale('da')),
-        ),
-        const SizedBox(width: 2),
-        _LangChip(
-          label: 'EN',
-          selected: current == 'en',
-          onTap: () => localeController.setLocale(const Locale('en')),
-        ),
-      ],
+    return AnimatedBuilder(
+      animation: localeController,
+      builder: (_, _) {
+        final current = localeController.locale.languageCode;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _LangChip(
+              label: 'DA',
+              selected: current == 'da',
+              onTap: () => localeController.setLocale(const Locale('da')),
+            ),
+            const SizedBox(width: 2),
+            _LangChip(
+              label: 'EN',
+              selected: current == 'en',
+              onTap: () => localeController.setLocale(const Locale('en')),
+            ),
+          ],
+        );
+      },
     );
   }
 }

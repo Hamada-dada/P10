@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/profile.dart';
 
 class FilterPanel extends StatefulWidget {
@@ -40,12 +41,12 @@ class _FilterPanelState extends State<FilterPanel> {
         profile.id == widget.currentProfileId;
   }
 
-  String _profileLabel(Profile profile) {
+  String _profileLabel(BuildContext context, Profile profile) {
+    final l = AppLocalizations.of(context);
     if (_isCurrentProfile(profile)) {
-      return 'Mine aktiviteter';
+      return l.myActivities;
     }
-
-    return 'Med ${profile.name}';
+    return l.withProfile(profile.name);
   }
 
   void _selectAll() {
@@ -74,6 +75,7 @@ class _FilterPanelState extends State<FilterPanel> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final l = AppLocalizations.of(context);
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -85,7 +87,7 @@ class _FilterPanelState extends State<FilterPanel> {
             Row(
               children: [
                 Text(
-                  'Filter',
+                  l.filterTitle,
                   style: TextStyle(
                     fontFamily: 'Italiana',
                     fontSize: 26,
@@ -94,7 +96,7 @@ class _FilterPanelState extends State<FilterPanel> {
                 ),
                 const Spacer(),
                 IconButton(
-                  tooltip: 'Luk',
+                  tooltip: l.close,
                   onPressed: () => Navigator.pop(context),
                   icon: Icon(
                     Icons.close,
@@ -111,7 +113,7 @@ class _FilterPanelState extends State<FilterPanel> {
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 title: Text(
-                  _profileLabel(profile),
+                  _profileLabel(context, profile),
                   style: TextStyle(
                     fontSize: 16,
                     color: colorScheme.onSurface,
@@ -135,7 +137,7 @@ class _FilterPanelState extends State<FilterPanel> {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               title: Text(
-                'Familie / andre',
+                l.familyAndOthers,
                 style: TextStyle(
                   fontSize: 16,
                   color: colorScheme.onSurface,
@@ -155,12 +157,12 @@ class _FilterPanelState extends State<FilterPanel> {
               children: [
                 TextButton(
                   onPressed: _clearAll,
-                  child: const Text('Ryd'),
+                  child: Text(l.clearFilter),
                 ),
                 const Spacer(),
                 TextButton(
                   onPressed: _selectAll,
-                  child: const Text('Vis alle'),
+                  child: Text(l.showAllFilter),
                 ),
               ],
             ),
@@ -171,7 +173,7 @@ class _FilterPanelState extends State<FilterPanel> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _apply,
-                child: const Text('Anvend filter'),
+                child: Text(l.applyFilter),
               ),
             ),
           ],

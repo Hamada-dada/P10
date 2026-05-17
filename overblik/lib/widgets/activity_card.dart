@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/activity.dart';
 import '../models/profile.dart';
 
@@ -95,8 +96,8 @@ class ActivityCard extends StatelessWidget {
             children: [
               IconButton(
                 tooltip: activity.isCompleted
-                    ? 'Marker som ikke færdig'
-                    : 'Marker som færdig',
+                    ? AppLocalizations.of(context).markAsNotDone
+                    : AppLocalizations.of(context).markAsDone,
                 onPressed: onCompletedChanged == null
                     ? null
                     : () => onCompletedChanged!(!activity.isCompleted),

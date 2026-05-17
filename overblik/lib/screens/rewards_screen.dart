@@ -497,20 +497,36 @@ class _RewardsScreenState extends State<RewardsScreen> {
                               : l.rewardSummaryProfile(rewards.length, _selectedProfileFilter),
                         ),
                         const SizedBox(height: 20),
-                        _SectionTitle(title: l.rewardListTitle),
+                        _SectionTitle(title: l.inProgressRewardsTitle),
                         const SizedBox(height: 10),
-                        if (rewards.isEmpty)
+                        if (rewards.where((r) => !r.isTriggered).isEmpty)
                           const _EmptyRewardsState()
                         else
-                          ...rewards.map(
-                                (reward) => Padding(
+                          ...rewards.where((r) => !r.isTriggered).map(
+                            (reward) => Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: RewardCard(
                                 reward: reward,
+                                assignedProfileName: _profileById(reward.profileId)?.name,
                                 onDelete: widget.readOnly ? null : () => _deleteReward(reward.id),
                               ),
                             ),
                           ),
+                        if (rewards.any((r) => r.isTriggered)) ...[
+                          const SizedBox(height: 20),
+                          _SectionTitle(title: l.completedRewardsTitle),
+                          const SizedBox(height: 10),
+                          ...rewards.where((r) => r.isTriggered).map(
+                            (reward) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: RewardCard(
+                                reward: reward,
+                                assignedProfileName: _profileById(reward.profileId)?.name,
+                                onDelete: widget.readOnly ? null : () => _deleteReward(reward.id),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

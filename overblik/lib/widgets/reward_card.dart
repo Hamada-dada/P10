@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/reward.dart';
 import 'reward_type_chip.dart';
 
@@ -17,12 +18,6 @@ class RewardCard extends StatelessWidget {
     this.onTap,
   });
 
-  String _profileLabel() {
-    final profile = assignedProfileName?.trim() ?? '';
-    if (profile.isEmpty) return 'Ingen profil valgt';
-    return profile;
-  }
-
   String _emojiLabel() {
     final emoji = reward.emoji.trim();
     if (emoji.isEmpty) return '🎁';
@@ -32,9 +27,10 @@ class RewardCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasDescription = reward.description.trim().isNotEmpty;
-
+    final l = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final profileName = assignedProfileName?.trim() ?? '';
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -84,7 +80,9 @@ class RewardCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Tilhører: ${_profileLabel()}',
+                        profileName.isEmpty
+                            ? l.noProfileSelectedLabel
+                            : l.belongsToProfile(profileName),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -97,7 +95,7 @@ class RewardCard extends StatelessWidget {
                 ),
                 if (onDelete != null)
                   IconButton(
-                    tooltip: 'Slet belønning',
+                    tooltip: l.deleteRewardTooltip,
                     onPressed: onDelete,
                     icon: Icon(
                       Icons.delete_outline,
@@ -123,14 +121,14 @@ class RewardCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 if (reward.isDirectReward)
-                  const RewardTypeChip(
+                  RewardTypeChip(
                     icon: Icons.flash_on_outlined,
-                    label: 'Direkte',
+                    label: l.directRewardLabel,
                   ),
                 if (reward.isStreakReward)
-                  const RewardTypeChip(
+                  RewardTypeChip(
                     icon: Icons.trending_up_outlined,
-                    label: 'Langsigtet',
+                    label: l.streakRewardLabel,
                   ),
               ],
             ),

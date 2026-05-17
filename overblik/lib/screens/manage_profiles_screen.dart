@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../l10n/app_localizations.dart';
@@ -1300,14 +1301,37 @@ class _FamilyCodeCard extends StatelessWidget {
                           : Colors.redAccent.withValues(alpha: 0.35),
                     ),
                   ),
-                  child: SelectableText(
-                    displayCode,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: hasCode ? 24 : 15,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: hasCode ? 2 : 0,
-                      color: hasCode ? colorScheme.onSurface : Colors.redAccent,
+                  child: GestureDetector(
+                    onTap: hasCode
+                        ? () async {
+                            await Clipboard.setData(ClipboardData(text: displayCode));
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(AppLocalizations.of(context).codeCopied),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        : null,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          displayCode,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: hasCode ? 24 : 15,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: hasCode ? 2 : 0,
+                            color: hasCode ? colorScheme.onSurface : Colors.redAccent,
+                          ),
+                        ),
+                        if (hasCode) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.copy_outlined, size: 16, color: colorScheme.onSurface.withValues(alpha: 0.5)),
+                        ],
+                      ],
                     ),
                   ),
                 ),
@@ -1647,15 +1671,38 @@ class _ProfileCardState extends State<_ProfileCard> {
                   const SizedBox(width: 8),
                   if (_isChildCodeVisible)
                     Flexible(
-                      child: SelectableText(
-                        hasChildLoginCode ? childLoginCode : AppLocalizations.of(context).noCodeFound,
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: hasChildLoginCode ? 1.4 : 0,
-                          color: hasChildLoginCode
-                              ? colorScheme.onSurface
-                              : Colors.redAccent,
+                      child: GestureDetector(
+                        onTap: hasChildLoginCode
+                            ? () async {
+                                await Clipboard.setData(ClipboardData(text: childLoginCode));
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(AppLocalizations.of(context).codeCopied),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            : null,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              hasChildLoginCode ? childLoginCode : AppLocalizations.of(context).noCodeFound,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: hasChildLoginCode ? 1.4 : 0,
+                                color: hasChildLoginCode
+                                    ? colorScheme.onSurface
+                                    : Colors.redAccent,
+                              ),
+                            ),
+                            if (hasChildLoginCode) ...[
+                              const SizedBox(width: 4),
+                              Icon(Icons.copy_outlined, size: 14, color: colorScheme.onSurface.withValues(alpha: 0.5)),
+                            ],
+                          ],
                         ),
                       ),
                     )

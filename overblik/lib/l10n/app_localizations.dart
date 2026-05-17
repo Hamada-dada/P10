@@ -197,6 +197,39 @@ class AppLocalizations {
     'Account created, but you may need to confirm your email and log in before the request can be sent.',
   );
 
+  // ── Activity Card / Detail Screen ────────────────────────────────────────
+
+  String get markAsDone => _t('Marker som færdig', 'Mark as done');
+  String get markAsNotDone => _t('Marker som ikke færdig', 'Mark as not done');
+  String get deleteActivity => _t('Slet aktivitet', 'Delete activity');
+  String deleteActivityConfirm(String title) => _t('Vil du slette "$title"?', 'Delete "$title"?');
+  String get markAsDoneButton => _t('Markér udført', 'Mark as done');
+  String get markedAsDoneButton => _t('Udført', 'Done');
+  String get editLabel => _t('Rediger', 'Edit');
+  String get cannotDeleteActivityPermission => _t('Du har ikke adgang til at slette denne aktivitet.', 'You do not have permission to delete this activity.');
+  String get cannotUpdateActivityError => _t('Kunne ikke opdatere aktiviteten.', 'Could not update the activity.');
+  String get cannotDeleteActivityError => _t('Kunne ikke slette aktiviteten.', 'Could not delete the activity.');
+
+  // ── Filter Panel ──────────────────────────────────────────────────────────
+
+  String get filterTitle => _t('Filter', 'Filter');
+  String get myActivities => _t('Mine aktiviteter', 'My activities');
+  String withProfile(String name) => _t('Med $name', 'With $name');
+  String get familyAndOthers => _t('Familie / andre', 'Family / others');
+  String get clearFilter => _t('Ryd', 'Clear');
+  String get showAllFilter => _t('Vis alle', 'Show all');
+  String get applyFilter => _t('Anvend filter', 'Apply filter');
+
+  // ── Reward Card ───────────────────────────────────────────────────────────
+
+  String belongsToProfile(String name) => _t('Tilhører: $name', 'Belongs to: $name');
+  String get noProfileSelectedLabel => _t('Ingen profil valgt', 'No profile selected');
+  String get deleteRewardTooltip => _t('Slet belønning', 'Delete reward');
+  String get completedRewardsTitle => _t('Færdige belønninger', 'Completed rewards');
+  String get inProgressRewardsTitle => _t('I gang', 'In progress');
+  String get rewardEarnedTitle => _t('Belønning optjent!', 'Reward earned!');
+  String get codeCopied => _t('Kode kopieret!', 'Code copied!');
+
   // ── Calendar Screens ──────────────────────────────────────────────────────
 
   String get dailyCalendarTitle => _t('Daglig kalender', 'Daily calendar');
@@ -284,7 +317,7 @@ class AppLocalizations {
   String get titleRequired => _t('Skriv en titel', 'Enter a title');
   String get singleEmojiOnly => _t('Brug kun én emoji', 'Use only one emoji');
   String get fewerSettings => _t('Færre indstillinger', 'Fewer settings');
-  String get moreSettings => _t('Flere indstillinger', 'More settings');
+  String get moreSettings => _t('Flere indstillinger', 'Advanced settings');
   String get notificationsLabel => _t('Notifikationer', 'Notifications');
   String get remindAboutActivity => _t('Påmind mig om denne aktivitet', 'Remind me about this activity');
   String get remindMeLabel => _t('Påmind mig', 'Remind me');
@@ -512,5 +545,5 @@ class _AppLocalizationsDelegate
       AppLocalizations(locale);
 
   @override
-  bool shouldReload(_AppLocalizationsDelegate old) => false;
+  bool shouldReload(_AppLocalizationsDelegate old) => true;
 }
