@@ -10,6 +10,7 @@ import '../models/profile.dart';
 import '../models/reward.dart';
 import '../repositories/supabase_activity_repository.dart';
 import '../services/activity_service.dart';
+import '../services/notification_service.dart';
 import '../services/profile_service.dart';
 import '../services/reward_service.dart';
 import 'create_activity_screen.dart';
@@ -71,6 +72,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   );
 
   bool _isLoading = true;
+  bool _activityWasModified = false;
 
   Profile? _currentProfile;
   Map<String, String> _profileNamesById = {};
@@ -315,18 +317,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     }
   }
 
-  String _formatDate(DateTime dateTime) {
-    const weekdays = [
-      'Mandag',
-      'Tirsdag',
-      'Onsdag',
-      'Torsdag',
-      'Fredag',
-      'Lørdag',
-      'Søndag',
-    ];
-
-    final weekday = weekdays[dateTime.weekday - 1];
+  String _formatDate(DateTime dateTime, AppLocalizations l) {
+    final weekday = l.weekdayNames[dateTime.weekday - 1];
     final day = dateTime.day.toString().padLeft(2, '0');
     final month = dateTime.month.toString().padLeft(2, '0');
     final year = (dateTime.year % 100).toString().padLeft(2, '0');
@@ -354,20 +346,20 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       }
     }
 
-    return 'Ukendt deltager';
+    return AppLocalizations.of(context).unknownParticipant;
   }
 
   String _buildParticipantsText() {
+    final l = AppLocalizations.of(context);
     if (_activity.visibility == ActivityVisibility.family) {
       if (_activity.participants.isEmpty) {
-        return 'Familieaktivitet (ingen specifikke deltagere)';
+        return l.familyActivityNoParticipants;
       }
-
-      return 'Hele familien';
+      return l.wholeFamily;
     }
 
     if (_activity.participants.isEmpty) {
-      return 'Ingen specifikke deltagere';
+      return l.noSpecificParticipants;
     }
 
     return _activity.participants.map(_participantDisplayText).join(', ');
@@ -375,42 +367,32 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   String _buildDescriptionText() {
     if (_activity.description.trim().isEmpty) {
-      return 'Ingen beskrivelse';
+      return AppLocalizations.of(context).noDescription;
     }
-
     return _activity.description;
   }
 
   String _buildRecurrenceText() {
+    final l = AppLocalizations.of(context);
+    final n = _activity.recurrenceInterval;
     switch (_activity.recurrence) {
       case ActivityRecurrence.none:
-        return 'Ingen gentagelse';
+        return l.noRecurrence;
       case ActivityRecurrence.daily:
-        if (_activity.recurrenceInterval == 1) {
-          return 'Gentages hver dag';
-        }
-        return 'Gentages hver ${_activity.recurrenceInterval}. dag';
+        return n == 1 ? l.repeatsEveryDay : l.repeatsEveryNDays(n);
       case ActivityRecurrence.weekly:
-        if (_activity.recurrenceInterval == 1) {
-          return 'Gentages hver uge';
-        }
-        return 'Gentages hver ${_activity.recurrenceInterval}. uge';
+        return n == 1 ? l.repeatsEveryWeek : l.repeatsEveryNWeeks(n);
       case ActivityRecurrence.monthly:
-        if (_activity.recurrenceInterval == 1) {
-          return 'Gentages hver måned';
-        }
-        return 'Gentages hver ${_activity.recurrenceInterval}. måned';
+        return n == 1 ? l.repeatsEveryMonth : l.repeatsEveryNMonths(n);
       case ActivityRecurrence.custom:
-        return 'Brugerdefineret gentagelse';
+        return l.customRecurrenceLabel;
     }
   }
 
   Future<void> _toggleChecklistItem(int index) async {
     if (!_canToggleChecklist) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Du har ikke adgang til at ændre tjeklisten.'),
-        ),
+        SnackBar(content: Text(AppLocalizations.of(context).cannotToggleChecklistPermission)),
       );
       return;
     }
@@ -463,7 +445,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kunne ikke opdatere tjeklisten.')),
+        SnackBar(content: Text(AppLocalizations.of(context).cannotUpdateChecklistError)),
       );
     }
   }
@@ -471,9 +453,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
   Future<void> _editActivity() async {
     if (!_canEditActivity) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Du har ikke adgang til at redigere denne aktivitet.'),
-        ),
+        SnackBar(content: Text(AppLocalizations.of(context).cannotEditActivityPermission)),
       );
       return;
     }
@@ -527,7 +507,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kunne ikke gemme ændringerne.')),
+        SnackBar(content: Text(AppLocalizations.of(context).cannotSaveChangesError)),
       );
     }
   }
@@ -586,6 +566,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   Future<void> _toggleActivityCompleted() async {
     final newValue = !_activity.isCompleted;
+    final activitySnapshot = _activity;
     final previous = _activity;
 
     setState(() {
@@ -597,6 +578,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
         activityId: _activity.id,
         isCompleted: newValue,
       );
+      _activityWasModified = true;
     } catch (e, st) {
       debugPrint('ActivityDetailScreen _toggleActivityCompleted failed: $e');
       debugPrintStack(stackTrace: st);
@@ -610,6 +592,46 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context).cannotUpdateActivityError)),
       );
+      return;
+    }
+
+    try {
+      await _handleRewardProgress(activitySnapshot, newValue);
+    } catch (e) {
+      debugPrint('ActivityDetailScreen reward progress failed: $e');
+    }
+  }
+
+  Future<void> _handleRewardProgress(Activity activity, bool isCompleted) async {
+    final rewardIds = <String>[
+      if (activity.directRewardId != null && activity.directRewardId!.trim().isNotEmpty)
+        activity.directRewardId!,
+      if (activity.streakRewardId != null && activity.streakRewardId!.trim().isNotEmpty)
+        activity.streakRewardId!,
+    ];
+
+    for (final rewardId in rewardIds) {
+      final beforeReward = await _rewardService.getRewardById(rewardId);
+
+      await _rewardService.updateRewardProgress(
+        rewardId: rewardId,
+        delta: isCompleted ? 1 : -1,
+      );
+
+      final afterReward = await _rewardService.getRewardById(rewardId);
+
+      if (!mounted || afterReward == null) continue;
+
+      final wasTriggered = beforeReward?.isTriggered == true;
+      final isNowTriggered = afterReward.isTriggered;
+
+      if (!wasTriggered && isNowTriggered) {
+        final l = AppLocalizations.of(context);
+        await NotificationService().showImmediateRewardNotification(
+          title: l.rewardEarnedTitle,
+          body: '${afterReward.emoji} ${afterReward.title}',
+        );
+      }
     }
   }
 
@@ -620,11 +642,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
     if (kIsWeb && !isRemoteUrl) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Billedvisning understøttes ikke i webversionen endnu.',
-          ),
-        ),
+        SnackBar(content: Text(AppLocalizations.of(context).imagePreviewNotSupportedWeb)),
       );
       return;
     }
@@ -644,9 +662,9 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             _activity.imagePath,
                             fit: BoxFit.contain,
                             errorBuilder: (context, error, stackTrace) {
-                              return const Text(
-                                'Kunne ikke vise billedet',
-                                style: TextStyle(color: Colors.white),
+                              return Text(
+                                AppLocalizations.of(context).couldNotDisplayImage,
+                                style: const TextStyle(color: Colors.white),
                               );
                             },
                           )
@@ -694,7 +712,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
               height: 90,
               alignment: Alignment.center,
               color: const Color(0xFFF1F1F1),
-              child: const Text('Kunne ikke vise billedet'),
+              child: Text(AppLocalizations.of(context).couldNotDisplayImage),
             );
           },
         ),
@@ -711,10 +729,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
           color: const Color(0xFFF1F1F1),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Text(
-          'Billede gemt, men forhåndsvisning understøttes ikke i webversionen endnu.',
+        child: Text(
+          AppLocalizations.of(context).imageSavedPreviewNotSupportedWeb,
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
+          style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
         ),
       );
     }
@@ -731,7 +749,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
             height: 90,
             alignment: Alignment.center,
             color: const Color(0xFFF1F1F1),
-            child: const Text('Kunne ikke vise billedet'),
+            child: Text(AppLocalizations.of(context).couldNotDisplayImage),
           );
         },
       ),
@@ -740,6 +758,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -802,7 +821,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: _TopBar(
                       title: _activity.title,
-                      onBack: () => Navigator.pop(context),
+                      onBack: () => Navigator.pop(context, _activityWasModified ? true : null),
                     ),
                   ),
                   Expanded(
@@ -845,7 +864,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               _TimeInfoCard(
-                                dateText: _formatDate(_activity.startTime),
+                                dateText: _formatDate(_activity.startTime, AppLocalizations.of(context)),
                                 timeText: _formatTime(_activity.startTime),
                               ),
                               Padding(
@@ -863,7 +882,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                 ),
                               ),
                               _TimeInfoCard(
-                                dateText: _formatDate(_activity.endTime),
+                                dateText: _formatDate(_activity.endTime, AppLocalizations.of(context)),
                                 timeText: _formatTime(_activity.endTime),
                               ),
                             ],
@@ -970,13 +989,11 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                   if (directReward != null ||
                                       _activity.directRewardId != null)
                                     _RewardCard(
-                                      title: 'Direkte belønning',
+                                      title: l.directRewardLabel,
                                       emoji: directReward?.emoji ?? '🎁',
                                       rewardTitle:
-                                          directReward?.title ??
-                                          'Ukendt belønning',
-                                      subtitle:
-                                          'Kan opnås efter denne aktivitet',
+                                          directReward?.title ?? l.unknownReward,
+                                      subtitle: l.earnedAfterThisActivity,
                                       icon: Icons.flash_on_outlined,
                                     ),
                                   if ((directReward != null ||
@@ -987,14 +1004,13 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                   if (streakReward != null ||
                                       _activity.streakRewardId != null)
                                     _RewardCard(
-                                      title: 'Langsigtet belønning',
+                                      title: l.streakRewardLabel,
                                       emoji: streakReward?.emoji ?? '🏆',
                                       rewardTitle:
-                                          streakReward?.title ??
-                                          'Ukendt belønning',
+                                          streakReward?.title ?? l.unknownReward,
                                       subtitle: _activity.streakTarget != null
-                                          ? 'Opnås efter ${_activity.streakTarget} gange'
-                                          : 'Langsigtet belønning',
+                                          ? l.earnedAfterNTimes(_activity.streakTarget!)
+                                          : l.streakRewardLabel,
                                       icon: Icons.trending_up_outlined,
                                     ),
                                 ],

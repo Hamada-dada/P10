@@ -1518,9 +1518,7 @@ Widget build(BuildContext context) {
                                             (m) =>
                                             DropdownMenuItem<int?>(
                                               value: m,
-                                              child: Text(
-                                                  NotificationPreferencesService
-                                                      .reminderLabel(m)),
+                                              child: Text(l.reminderLabel(m)),
                                             ),
                                       ),
                                       DropdownMenuItem<int?>(
@@ -1644,8 +1642,7 @@ Widget build(BuildContext context) {
                                           DropdownMenuItem(
                                             value: s,
                                             child: Text(
-                                              NotificationPreferencesService
-                                                  .notificationStyleLabel(s),
+                                              l.notificationStyleLabel(s),
                                             ),
                                           ),
                                     )
@@ -1720,7 +1717,7 @@ Widget build(BuildContext context) {
                                     keyboardType: TextInputType.number,
                                     decoration: InputDecoration(
                                       labelText:
-                                      'Hver X ${l.intervalSuffix(_selectedRecurrence)}',
+                                      '${l.everyXPrefix} ${l.intervalSuffix(_selectedRecurrence)}',
                                       border: const OutlineInputBorder(),
                                       hintText: l.intervalHint,
                                     ),

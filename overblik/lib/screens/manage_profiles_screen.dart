@@ -1357,9 +1357,9 @@ class _ParentJoinRequestCard extends StatelessWidget {
     required this.onReject,
   });
 
-  String _formatDateTime(DateTime? dateTime) {
+  String _formatDateTime(DateTime? dateTime, BuildContext context) {
     if (dateTime == null) {
-      return 'Ukendt tidspunkt';
+      return AppLocalizations.of(context).unknownTime;
     }
 
     final localDateTime = dateTime.toLocal();
@@ -1415,7 +1415,7 @@ class _ParentJoinRequestCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Anmodet: ${_formatDateTime(request.createdAt)}', // timestamp format is locale-neutral
+                      AppLocalizations.of(context).requestedAtLabel(_formatDateTime(request.createdAt, context)),
                       style: TextStyle(
                         fontSize: 13,
                         color: colorScheme.onSurface.withValues(alpha: 0.6),
@@ -1715,20 +1715,25 @@ class _ProfileCardState extends State<_ProfileCard> {
                         color: colorScheme.onSurface,
                       ),
                     ),
-                  const SizedBox(width: 8),
-                  TextButton.icon(
+                  const SizedBox(width: 4),
+                  IconButton(
                     onPressed: () {
                       setState(() {
                         _isChildCodeVisible = !_isChildCodeVisible;
                       });
                     },
+                    tooltip: _isChildCodeVisible
+                        ? AppLocalizations.of(context).hideCode
+                        : AppLocalizations.of(context).showCode,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                     icon: Icon(
                       _isChildCodeVisible
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      size: 18,
+                      size: 20,
+                      color: colorScheme.primary,
                     ),
-                    label: Text(_isChildCodeVisible ? AppLocalizations.of(context).hideCode : AppLocalizations.of(context).showCode),
                   ),
                 ],
               ),

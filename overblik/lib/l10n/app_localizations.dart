@@ -230,6 +230,51 @@ class AppLocalizations {
   String get rewardEarnedTitle => _t('Belønning optjent!', 'Reward earned!');
   String get codeCopied => _t('Kode kopieret!', 'Code copied!');
 
+  // ── Activity Detail Screen ────────────────────────────────────────────────
+
+  String get noDescription => _t('Ingen beskrivelse', 'No description');
+  String get unknownParticipant => _t('Ukendt deltager', 'Unknown participant');
+  String get familyActivityNoParticipants => _t('Familieaktivitet (ingen specifikke deltagere)', 'Family activity (no specific participants)');
+  String get wholeFamily => _t('Hele familien', 'The whole family');
+  String get noSpecificParticipants => _t('Ingen specifikke deltagere', 'No specific participants');
+  String get repeatsEveryDay => _t('Gentages hver dag', 'Repeats every day');
+  String repeatsEveryNDays(int n) => _t('Gentages hver $n. dag', 'Repeats every $n days');
+  String get repeatsEveryWeek => _t('Gentages hver uge', 'Repeats every week');
+  String repeatsEveryNWeeks(int n) => _t('Gentages hver $n. uge', 'Repeats every $n weeks');
+  String get repeatsEveryMonth => _t('Gentages hver måned', 'Repeats every month');
+  String repeatsEveryNMonths(int n) => _t('Gentages hver $n. måned', 'Repeats every $n months');
+  String get customRecurrenceLabel => _t('Brugerdefineret gentagelse', 'Custom recurrence');
+  String get cannotEditActivityPermission => _t('Du har ikke adgang til at redigere denne aktivitet.', 'You do not have permission to edit this activity.');
+  String get cannotSaveChangesError => _t('Kunne ikke gemme ændringerne.', 'Could not save the changes.');
+  String get cannotToggleChecklistPermission => _t('Du har ikke adgang til at ændre tjeklisten.', 'You do not have permission to update the checklist.');
+  String get cannotUpdateChecklistError => _t('Kunne ikke opdatere tjeklisten.', 'Could not update the checklist.');
+  String get imagePreviewNotSupportedWeb => _t('Billedvisning understøttes ikke i webversionen endnu.', 'Image preview is not supported in the web version yet.');
+  String get couldNotDisplayImage => _t('Kunne ikke vise billedet', 'Could not display image');
+  String get imageSavedPreviewNotSupportedWeb => _t('Billede gemt, men forhåndsvisning understøttes ikke i webversionen endnu.', 'Image saved, but preview is not supported in the web version yet.');
+  String get earnedAfterThisActivity => _t('Kan opnås efter denne aktivitet', 'Can be earned after this activity');
+  String earnedAfterNTimes(int n) => _t('Opnås efter $n gange', 'Earned after $n times');
+
+  // ── Calendar Navigation ───────────────────────────────────────────────────
+
+  String weekLabel(int n) => _t('Uge $n', 'Week $n');
+
+  String get everyXPrefix => _t('Hver X', 'Every X');
+
+  List<String> get monthNames => [
+    _t('januar', 'January'),
+    _t('februar', 'February'),
+    _t('marts', 'March'),
+    _t('april', 'April'),
+    _t('maj', 'May'),
+    _t('juni', 'June'),
+    _t('juli', 'July'),
+    _t('august', 'August'),
+    _t('september', 'September'),
+    _t('oktober', 'October'),
+    _t('november', 'November'),
+    _t('december', 'December'),
+  ];
+
   // ── Calendar Screens ──────────────────────────────────────────────────────
 
   String get dailyCalendarTitle => _t('Daglig kalender', 'Daily calendar');
@@ -518,6 +563,8 @@ class AppLocalizations {
   String profileDeleted(String n) => _t('$n blev slettet.', '$n was deleted.');
   String errorDeleteProfile(Object e) => _t('Kunne ikke slette profil: $e', 'Could not delete profile: $e');
   String get parentCannotBeRemovedHere => _t('Forælderprofilen kan ikke fjernes her.', 'The parent profile cannot be removed here.');
+  String get unknownTime => _t('Ukendt tidspunkt', 'Unknown time');
+  String requestedAtLabel(String time) => _t('Anmodet: $time', 'Requested: $time');
   String get noProfilesFound => _t('Der blev ikke fundet nogen profiler.', 'No profiles were found.');
   String get familyProfilesHeader => _t('Familleprofiler', 'Family profiles');
   String get removeParentLabel => _t('Fjern forælder', 'Remove parent');

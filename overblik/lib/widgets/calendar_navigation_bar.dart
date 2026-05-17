@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
+
 enum CalendarViewType {
   day,
   week,
@@ -26,43 +28,20 @@ class CalendarNavigationBar extends StatelessWidget {
     this.showFilter = true,
   });
 
-  String _buildTitle() {
-    const weekdays = [
-      'Mandag',
-      'Tirsdag',
-      'Onsdag',
-      'Torsdag',
-      'Fredag',
-      'Lørdag',
-      'Søndag',
-    ];
-
-    const months = [
-      'januar',
-      'februar',
-      'marts',
-      'april',
-      'maj',
-      'juni',
-      'juli',
-      'august',
-      'september',
-      'oktober',
-      'november',
-      'december',
-    ];
+  String _buildTitle(BuildContext context) {
+    final l = AppLocalizations.of(context);
 
     switch (viewType) {
       case CalendarViewType.day:
-        final weekday = weekdays[focusedDate.weekday - 1];
+        final weekday = l.weekdayNames[focusedDate.weekday - 1];
         return '$weekday ${focusedDate.day}/${focusedDate.month}';
 
       case CalendarViewType.week:
         final weekNumber = _getWeekNumber(focusedDate);
-        return 'Uge $weekNumber';
+        return l.weekLabel(weekNumber);
 
       case CalendarViewType.month:
-        final month = months[focusedDate.month - 1];
+        final month = l.monthNames[focusedDate.month - 1];
         return '${month[0].toUpperCase()}${month.substring(1)} ${focusedDate.year}';
     }
   }
@@ -103,7 +82,7 @@ class CalendarNavigationBar extends StatelessWidget {
           const SizedBox(width: 4),
           Expanded(
             child: Text(
-              _buildTitle(),
+              _buildTitle(context),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
