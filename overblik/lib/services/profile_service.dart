@@ -192,16 +192,34 @@ class ProfileService {
           .maybeSingle();
 
       if (result == null) {
-        debugPrint('ProfileService: no current authenticated profile found');
-        return null;
+        // No profile found by auth_user_id (e.g. child profiles where
+        // auth_user_id is not set). Fall back to cache before giving up.
+        debugPrint('ProfileService: no profile found by auth_user_id, trying cache');
+        return await _getCachedParentProfile(userId);
       }
 
-      return Profile.fromMap(
+      final profile = Profile.fromMap(
         _asMap(result, errorContext: 'getCurrentAuthenticatedProfile'),
       );
+
+      await _cacheParentProfile(userId, profile);
+
+      return profile;
     } catch (e, st) {
       debugPrint('ProfileService: getCurrentAuthenticatedProfile failed: $e');
       debugPrintStack(stackTrace: st);
+
+      // Try cache for any failure — not just recognised network errors.
+      // This prevents sign-outs due to timeouts or unexpected exception
+      // wrappers when the user has a valid cached session.
+      final cached = await _getCachedParentProfile(userId);
+      if (cached != null) {
+        debugPrint(
+          'ProfileService: returning cached profile for user=$userId',
+        );
+        return cached;
+      }
+
       return null;
     }
   }

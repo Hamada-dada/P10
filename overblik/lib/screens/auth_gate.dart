@@ -70,22 +70,33 @@ class _AuthGateState extends State<AuthGate> {
       }
 
       if (profile.isParent) {
-        final state = await _parentJoinService.getParentOnboardingState();
+        try {
+          final state = await _parentJoinService.getParentOnboardingState();
 
-        debugPrint('AuthGate: onboarding state = ${state.state}');
+          debugPrint('AuthGate: onboarding state = ${state.state}');
 
-        switch (state.state) {
-          case ParentOnboardingStateType.activeParent:
-            return const DailyCalendarScreen();
+          switch (state.state) {
+            case ParentOnboardingStateType.activeParent:
+              return const DailyCalendarScreen();
 
-          case ParentOnboardingStateType.pendingParentRequest:
-            return PendingParentRequestScreen(
-              requestId: state.requestId,
-              familyName: state.familyName,
-            );
+            case ParentOnboardingStateType.pendingParentRequest:
+              return PendingParentRequestScreen(
+                requestId: state.requestId,
+                familyName: state.familyName,
+              );
 
-          case ParentOnboardingStateType.needsOnboarding:
-            return const ParentOnboardingChoiceScreen();
+            case ParentOnboardingStateType.needsOnboarding:
+              return const ParentOnboardingChoiceScreen();
+          }
+        } catch (e) {
+          // We have a valid profile — any failure to reach the onboarding
+          // state RPC (network down, timeout, etc.) should not sign the user
+          // out. Fall back to the calendar so cached data remains accessible.
+          debugPrint(
+            'AuthGate: could not fetch onboarding state, '
+            'falling back to calendar: $e',
+          );
+          return const DailyCalendarScreen();
         }
       }
 
@@ -96,12 +107,14 @@ class _AuthGateState extends State<AuthGate> {
       debugPrint('AuthGate: failed to resolve authenticated state: $e');
       debugPrintStack(stackTrace: st);
 
-      // Only sign out on real auth/permission errors.
-      // A network failure at cold start must not destroy a valid session.
-      if (!_isNetworkError(e)) {
-        await Supabase.instance.client.auth.signOut();
+      // Network failure at cold start must not destroy a valid session.
+      // Route to calendar so cached data is still accessible offline.
+      if (_isNetworkError(e)) {
+        debugPrint('AuthGate: offline at startup – routing to calendar with cached data');
+        return const DailyCalendarScreen();
       }
 
+      await Supabase.instance.client.auth.signOut();
       return const LoginScreen();
     }
   }
