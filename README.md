@@ -2,7 +2,7 @@
 
 [![Flutter CI](https://github.com/Hamada-dada/P10/actions/workflows/flutter-ci.yml/badge.svg)](https://github.com/Hamada-dada/P10/actions/workflows/flutter-ci.yml)
 
-Overblik ("Overview") is a family calendar app built with Flutter and Supabase. Parents and children share activities, checklists, and rewards through a single calendar, with role-based access so children get a restricted view.
+Overblik ("Overview") is a family calendar app built with Flutter and Supabase. Parents and children share activities, checklists, and rewards through a single calendar, with role-based access so children get a free or restricted view (dependes on degree of reliance).
 
 ## Features
 
