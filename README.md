@@ -21,7 +21,7 @@ Overblik ("Overview") is a family calendar app built with Flutter and Supabase. 
 |---|---|
 | Client | Flutter (iOS, Android, Web, Desktop) |
 | Backend | [Supabase](https://supabase.com) (PostgreSQL, Auth, RPC functions) |
-| State management | Plain `StatefulWidget` + service singletons + `ChangeNotifier` controllers (no Provider/Riverpod/BLoC) |
+| State management | Flutter's built-in state management: `StatefulWidget`, service classes and `ChangeNotifier` controllers |
 
 ## Project structure
 
@@ -38,9 +38,9 @@ overblik/
 │   ├── core/               # Theme, constants, config, utilities
 │   └── l10n/               # Localization (da/en)
 ├── android/, ios/, web/, macos/, linux/, windows/
-└── test/
-supabase/
-└── migrations/            # Database migrations
+├── test/
+└── supabase/
+    └── functions/         # Supabase edge functions (child login)
 ```
 
 ## Architecture notes
@@ -86,20 +86,9 @@ flutter analyze
 flutter test
 ```
 
-## Database
+## Backend
 
-SQL migrations for the Supabase project live under [`supabase/migrations`](supabase/migrations).
-
-## Unfinished scaffolding
-
-`lib/controllers/activity_controller.dart`, `calendar_controller.dart`, `reward_controller.dart`, and `lib/models/family.dart`, `reminder.dart`, `recurrence_rule.dart` are empty files left over from the project's initial MVC-style scaffold. They are not imported anywhere. Their responsibilities are currently covered elsewhere:
-
-- Activity/calendar/reward state → `services/activity_service.dart`, `calendar_service.dart`, `reward_service.dart` + `StatefulWidget`/`FutureBuilder` in the screens (the `controllers/` pattern used for `theme_controller.dart`/`locale_controller.dart` was never extended to these).
-- Family data → read as raw `familyId`/`familyName`/`familyCode` fields in `FamilyService`/`ProfileService`, no `Family` model class.
-- Reminders → handled as scheduled local notifications in `NotificationService`, no `Reminder` model.
-- Recurrence rules → already implemented via the `ActivityRecurrence` enum and `recurrenceInterval`/`recurrenceEndDate` fields in `models/activity.dart`; `recurrence_rule.dart` is superseded.
-
-Treat these six files as dead scaffolding: either delete them, or pick one up and actually implement it (e.g. migrating activity/calendar/reward state to the controller pattern already used for theme/locale).
+The Supabase edge function for child login lives in [`overblik/supabase/functions/child-login`](overblik/supabase/functions/child-login). Multi-step operations are implemented as Supabase RPC functions with row-level security in the database.
 
 ## CI
 
